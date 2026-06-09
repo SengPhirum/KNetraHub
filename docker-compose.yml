@@ -1,0 +1,39 @@
+# Deploy DockHub itself as a swarm service.
+#   docker stack deploy -c docker-compose.yml dockhub
+#
+# It must be scheduled on a MANAGER node (placement constraint below) so it
+# can reach the swarm control plane via the mounted Docker socket.
+
+version: "3.8"
+
+services:
+  dockhub:
+    image: dockhub:latest          # build locally: docker build -t dockhub:latest .
+    ports:
+      - "3000:3000"
+    environment:
+      NUXT_JWT_SECRET: "change-me-to-a-long-random-string"
+      NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
+      # LDAP (optional)
+      NUXT_LDAP_ENABLED: "false"
+      # GitLab (optional)
+      # NUXT_GITLAB_URL: "https://gitlab.com"
+      # NUXT_GITLAB_TOKEN: "glpat-xxxxx"
+      # NUXT_GITLAB_PROJECT_ID: "12345678"
+      # NUXT_GITLAB_BRANCH: "main"
+      # NUXT_GITLAB_STACKS_PATH: "stacks"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dockhub-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: start-first
+
+volumes:
+  dockhub-data:

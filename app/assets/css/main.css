@@ -1,0 +1,139 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/*
+  DockHub - operator console
+  -----------------------------------------
+  A focused operations hub. Calm, dense, technical.
+  Signature accent: a teal "beacon" used sparingly for the active path,
+  primary actions, and the live manager pulse.
+*/
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* surfaces */
+  --color-ink: #0a0e16;
+  --color-abyss: #0d1320;
+  --color-surface: #131a28;
+  --color-surface-2: #1a2334;
+  --color-hull: #232e42;
+  --color-hull-soft: #1b2434;
+
+  /* text */
+  --color-foam: #e6edf6;
+  --color-muted: #8a99b0;
+  --color-faint: #5a6a82;
+
+  /* signal */
+  --color-beacon: #2dd4bf;
+  --color-depth: #38bdf8;
+  --color-running: #34d399;
+  --color-pending: #fbbf24;
+  --color-down: #f87171;
+  --color-idle: #64748b;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: var(--color-foam);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  /* faint depth gradient - the "ocean floor" */
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(45, 212, 191, 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(56, 189, 248, 0.05), transparent 55%);
+  background-attachment: fixed;
+}
+
+/* Display face for headings and the wordmark */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Hairline panel used throughout the console */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hull);
+  border-radius: 0.75rem;
+}
+.panel-flush {
+  background: var(--color-abyss);
+  border: 1px solid var(--color-hull-soft);
+}
+
+/* status dot */
+.dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex: none;
+}
+.dot-running { background: var(--color-running); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.15); }
+.dot-pending { background: var(--color-pending); box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15); }
+.dot-down    { background: var(--color-down);    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15); }
+.dot-idle    { background: var(--color-idle);    box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12); }
+
+/* The signature: a sonar pulse on the active manager / live indicator */
+.sonar {
+  position: relative;
+}
+.sonar::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-beacon);
+  opacity: 0;
+  animation: sonar 2.4s ease-out infinite;
+}
+@keyframes sonar {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sonar::after { animation: none; }
+}
+
+/* scrollbars - thin, in keeping with the instrument feel */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-hull) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--color-hull); border-radius: 9999px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* console log viewer */
+.logstream {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: #070a11;
+  border: 1px solid var(--color-hull-soft);
+  border-radius: 0.5rem;
+}
+.logstream .line:hover { background: rgba(255, 255, 255, 0.025); }
+
+/* keyboard focus - always visible */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-beacon);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
