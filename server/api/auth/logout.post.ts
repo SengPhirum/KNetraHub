@@ -1,5 +1,5 @@
-import { clearSession } from '~~/server/utils/auth'
+import { clearAuthSession } from '~~/server/utils/auth'
 export default defineEventHandler(async (event) => {
-  clearSession(event)
+  clearAuthSession(event)
   return { ok: true }
 })

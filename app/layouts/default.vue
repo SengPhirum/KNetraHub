@@ -1,17 +1,21 @@
 <script setup lang="ts">
 const { user, logout } = useAuth()
+const { fetchPreferences } = usePreferences()
 const route = useRoute()
 const mobileOpen = ref(false)
 
 // close the mobile drawer on navigation
 watch(() => route.fullPath, () => { mobileOpen.value = false })
 
+// Load user preferences once after auth is hydrated
+watch(user, async (u) => {
+  if (u) await fetchPreferences().catch(() => null)
+}, { immediate: true })
+
 const userMenu = computed(() => [
   [{ label: user.value?.displayName || '', type: 'label' as const }],
-  [
-    { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
-    { label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }
-  ]
+  [{ label: 'Preferences', icon: 'i-lucide-sliders-horizontal', to: '/preferences' }],
+  [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }]
 ])
 
 const config = useRuntimeConfig()
@@ -25,7 +29,7 @@ const config = useRuntimeConfig()
     </aside>
 
     <!-- Mobile drawer -->
-    <USlideover v-model:open="mobileOpen" side="left" :ui="{ content: 'w-[17rem] bg-[var(--color-abyss)] ring-1 ring-[var(--color-hull)]' }">
+    <USlideover v-model:open="mobileOpen" side="left" :ui="{ content: 'w-[17rem] bg-abyss ring-1 ring-hull' }">
       <template #content>
         <SidebarNav @navigate="mobileOpen = false" />
       </template>
@@ -34,7 +38,7 @@ const config = useRuntimeConfig()
     <!-- Main column -->
     <div class="lg:pl-64 flex min-h-dvh flex-col">
       <!-- top bar -->
-      <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[var(--color-hull-soft)] bg-[var(--color-ink)]/85 px-4 backdrop-blur-md sm:px-6">
+      <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
         <UButton
           class="lg:hidden"
           icon="i-lucide-menu"
@@ -46,10 +50,12 @@ const config = useRuntimeConfig()
 
         <div class="flex items-center gap-2 text-sm">
           <span class="dot dot-running" />
-          <span class="font-mono text-xs text-[var(--color-muted)]">{{ config.public.appName }}</span>
+          <span class="font-mono text-xs text-(--color-muted)">{{ config.public.appName }}</span>
         </div>
 
         <div class="flex-1" />
+
+        <ThemeModeControl compact />
 
         <UButton
           to="/stacks"
@@ -60,14 +66,21 @@ const config = useRuntimeConfig()
           label="Deploy stack"
         />
 
-        <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
-          <UButton color="neutral" variant="ghost" trailing-icon="i-lucide-chevron-down">
-            <span class="flex size-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-xs font-semibold ring-1 ring-[var(--color-hull)]">
-              {{ (user?.displayName || '?').charAt(0).toUpperCase() }}
-            </span>
-            <span class="hidden sm:inline text-sm">{{ user?.displayName }}</span>
-          </UButton>
-        </UDropdownMenu>
+        <!-- User menu — skeleton while loading -->
+        <template v-if="user">
+          <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
+            <UButton color="neutral" variant="ghost" trailing-icon="i-lucide-chevron-down">
+              <span class="flex size-7 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold ring-1 ring-hull">
+                {{ (user.displayName || '?').charAt(0).toUpperCase() }}
+              </span>
+              <span class="hidden sm:inline text-sm">{{ user.displayName || user.username }}</span>
+            </UButton>
+          </UDropdownMenu>
+        </template>
+        <template v-else>
+          <!-- Prevents layout shift during auth hydration -->
+          <div class="skeleton h-8 w-28 rounded-lg" />
+        </template>
       </header>
 
       <!-- page -->

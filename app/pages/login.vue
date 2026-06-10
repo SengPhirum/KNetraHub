@@ -30,16 +30,16 @@ async function submit() {
   <div class="w-full max-w-sm">
     <!-- wordmark + thesis -->
     <div class="mb-8 text-center">
-      <span class="sonar mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-[var(--color-beacon)]/15 ring-1 ring-[var(--color-beacon)]/40">
-        <UIcon name="i-lucide-ship-wheel" class="size-7 text-[var(--color-beacon)]" />
+      <span class="sonar mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-beacon/15 ring-1 ring-beacon/40">
+        <UIcon name="i-lucide-ship-wheel" class="size-7 text-beacon" />
       </span>
       <h1 class="font-display text-3xl font-semibold tracking-tight">{{ config.public.appName }}</h1>
-      <p class="mt-1.5 text-sm text-[var(--color-muted)]">Run your Docker Swarm from one hub.</p>
+      <p class="mt-1.5 text-sm text-(--color-muted)">Run your Docker Swarm from one hub.</p>
     </div>
 
     <form class="panel p-6 space-y-4" @submit.prevent="submit">
       <div>
-        <label class="block text-xs font-medium text-[var(--color-muted)] mb-1.5">Username</label>
+        <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Username</label>
         <UInput
           v-model="username"
           icon="i-lucide-user"
@@ -50,7 +50,7 @@ async function submit() {
         />
       </div>
       <div>
-        <label class="block text-xs font-medium text-[var(--color-muted)] mb-1.5">Password</label>
+        <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Password</label>
         <UInput
           v-model="password"
           type="password"
@@ -62,7 +62,7 @@ async function submit() {
         />
       </div>
 
-      <p v-if="error" class="flex items-center gap-2 text-sm text-rose-300">
+      <p v-if="error" class="status-down flex items-center gap-2 text-sm">
         <UIcon name="i-lucide-circle-alert" class="size-4" /> {{ error }}
       </p>
 
@@ -76,7 +76,7 @@ async function submit() {
         trailing-icon="i-lucide-arrow-right"
       />
 
-      <p class="text-center text-xs text-[var(--color-faint)]">
+      <p class="text-center text-xs text-faint">
         <template v-if="config.public.ldapEnabled">
           <UIcon name="i-lucide-shield-check" class="size-3 inline" /> LDAP enabled · local accounts also accepted
         </template>

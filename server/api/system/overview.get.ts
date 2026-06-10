@@ -1,5 +1,5 @@
 import { requireUser } from '~~/server/utils/auth'
-import { useDocker, assertSwarm } from '~~/server/utils/docker'
+import { assertSwarm, useDocker } from '~~/server/utils/docker'
 import { listStacks } from '~~/server/utils/stack'
 
 export default defineEventHandler(async (event) => {
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   const nodeSummary = {
-    total: nodes.length,
+    total: nodes.length || 1, // avoid divide-by-zero
     ready: nodes.filter((n) => n.Status?.State === 'ready').length,
     managers: nodes.filter((n) => n.Spec?.Role === 'manager').length,
     workers: nodes.filter((n) => n.Spec?.Role === 'worker').length,

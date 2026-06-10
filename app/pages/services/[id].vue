@@ -105,37 +105,37 @@ async function remove() {
         <StatCard label="Service ID" :value="short(id)" icon="i-lucide-hash" />
       </div>
 
-      <div class="flex flex-wrap gap-1 mb-5 border-b border-[var(--color-hull)]">
+      <div class="flex flex-wrap gap-1 mb-5 border-b border-hull">
         <button v-for="t in [{k:'tasks',l:'Tasks',i:'i-lucide-list'},{k:'logs',l:'Logs',i:'i-lucide-scroll-text'},{k:'config',l:'Config',i:'i-lucide-settings-2'}]" :key="t.k"
           @click="tab = t.k as any"
           class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition"
-          :class="tab === t.k ? 'border-[var(--color-beacon)] text-[var(--color-foam)]' : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-foam)]'">
+          :class="tab === t.k ? 'border-beacon text-foam' : 'border-transparent text-(--color-muted) hover:text-foam'">
           <UIcon :name="t.i" class="size-4" /> {{ t.l }}
         </button>
       </div>
 
       <!-- tasks -->
       <div v-if="tab === 'tasks'" class="space-y-2">
-        <div v-if="!data?.tasks?.length" class="panel p-10 text-center text-sm text-[var(--color-muted)]">No tasks.</div>
+        <div v-if="!data?.tasks?.length" class="panel p-10 text-center text-sm text-(--color-muted)">No tasks.</div>
         <div v-for="t in data?.tasks" :key="t.ID" class="panel-flush p-3 grid grid-cols-2 gap-2 sm:grid-cols-12 sm:items-center text-sm">
-          <div class="sm:col-span-1 font-mono text-[var(--color-muted)]">#{{ t.Slot ?? '—' }}</div>
+          <div class="sm:col-span-1 font-mono text-(--color-muted)">#{{ t.Slot ?? '—' }}</div>
           <div class="sm:col-span-3"><StatusBadge :state="t.Status?.State" /></div>
-          <div class="sm:col-span-3 font-mono text-xs text-[var(--color-muted)] truncate">{{ short(t.NodeID) }}</div>
-          <div class="sm:col-span-3 text-xs text-[var(--color-faint)]">{{ relative(t.Status?.Timestamp) }}</div>
-          <div class="col-span-2 sm:col-span-2 truncate text-xs text-[var(--color-faint)]" :title="t.Status?.Err || t.Status?.Message">{{ t.Status?.Err || t.Status?.Message || '—' }}</div>
+          <div class="sm:col-span-3 font-mono text-xs text-(--color-muted) truncate">{{ short(t.NodeID) }}</div>
+          <div class="sm:col-span-3 text-xs text-faint">{{ relative(t.Status?.Timestamp) }}</div>
+          <div class="col-span-2 sm:col-span-2 truncate text-xs text-faint" :title="t.Status?.Err || t.Status?.Message">{{ t.Status?.Err || t.Status?.Message || '—' }}</div>
         </div>
       </div>
 
       <!-- logs -->
       <div v-else-if="tab === 'logs'" class="panel p-0 overflow-hidden">
-        <div class="flex items-center justify-between gap-2 border-b border-[var(--color-hull)] px-4 py-2.5">
-          <span class="flex items-center gap-2 text-xs text-[var(--color-muted)]"><UIcon name="i-lucide-scroll-text" class="size-4" /> Last {{ tail }} lines</span>
+        <div class="flex items-center justify-between gap-2 border-b border-hull px-4 py-2.5">
+          <span class="flex items-center gap-2 text-xs text-(--color-muted)"><UIcon name="i-lucide-scroll-text" class="size-4" /> Last {{ tail }} lines</span>
           <div class="flex gap-2">
             <USelect v-model="tail" :items="[100, 200, 500, 1000]" size="xs" @update:model-value="loadLogs" />
             <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-refresh-cw" :loading="logsLoading" @click="loadLogs" />
           </div>
         </div>
-        <div v-if="logsLoading && !logs" class="flex items-center justify-center py-16 text-[var(--color-muted)]">
+        <div v-if="logsLoading && !logs" class="flex items-center justify-center py-16 text-(--color-muted)">
           <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Streaming…
         </div>
         <pre v-else class="logstream max-h-[60vh] overflow-auto px-4 py-3 text-xs whitespace-pre-wrap">{{ logs || 'No log output.' }}</pre>
@@ -144,24 +144,24 @@ async function remove() {
       <!-- config -->
       <div v-else-if="tab === 'config'" class="space-y-4">
         <div v-if="ports.length" class="panel p-4">
-          <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Published ports</h3>
+          <h3 class="font-display text-sm font-semibold text-foam mb-3">Published ports</h3>
           <div class="flex flex-wrap gap-2">
-            <span v-for="(p, i) in ports" :key="i" class="font-mono text-xs rounded bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-muted)]">
+            <span v-for="(p, i) in ports" :key="i" class="font-mono text-xs rounded bg-surface-2 px-2 py-1 text-(--color-muted)">
               {{ p.PublishedPort }}:{{ p.TargetPort }}/{{ p.Protocol }}
             </span>
           </div>
         </div>
         <div v-if="networks.length" class="panel p-4">
-          <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Networks</h3>
+          <h3 class="font-display text-sm font-semibold text-foam mb-3">Networks</h3>
           <div class="flex flex-wrap gap-2">
-            <span v-for="(n, i) in networks" :key="i" class="font-mono text-xs rounded bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-muted)]">{{ n.Target }}</span>
+            <span v-for="(n, i) in networks" :key="i" class="font-mono text-xs rounded bg-surface-2 px-2 py-1 text-(--color-muted)">{{ n.Target }}</span>
           </div>
         </div>
         <div v-if="envs.length" class="panel p-4">
-          <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Environment</h3>
+          <h3 class="font-display text-sm font-semibold text-foam mb-3">Environment</h3>
           <div class="space-y-1 font-mono text-xs">
-            <p v-for="(e, i) in envs" :key="i" class="text-[var(--color-muted)] break-all">
-              <span class="text-[var(--color-beacon)]">{{ e.split('=')[0] }}</span>=<span class="text-[var(--color-faint)]">{{ e.split('=').slice(1).join('=') }}</span>
+            <p v-for="(e, i) in envs" :key="i" class="text-(--color-muted) break-all">
+              <span class="text-beacon">{{ e.split('=')[0] }}</span>=<span class="text-faint">{{ e.split('=').slice(1).join('=') }}</span>
             </p>
           </div>
         </div>
@@ -171,7 +171,7 @@ async function remove() {
     <!-- scale modal -->
     <UModal v-model:open="scaleOpen" title="Scale service">
       <template #body>
-        <p class="text-sm text-[var(--color-muted)] mb-4">Replica count for <span class="font-mono text-[var(--color-foam)]">{{ name }}</span>.</p>
+        <p class="text-sm text-(--color-muted) mb-4">Replica count for <span class="font-mono text-foam">{{ name }}</span>.</p>
         <UInput v-model="scaleValue" type="number" min="0" size="lg" class="w-full" icon="i-lucide-scaling" />
       </template>
       <template #footer>
@@ -185,7 +185,7 @@ async function remove() {
     <!-- image modal -->
     <UModal v-model:open="imageOpen" title="Update image">
       <template #body>
-        <p class="text-sm text-[var(--color-muted)] mb-4">Set a new image. The service performs a rolling update.</p>
+        <p class="text-sm text-(--color-muted) mb-4">Set a new image. The service performs a rolling update.</p>
         <UInput v-model="newImage" size="lg" class="w-full font-mono" icon="i-lucide-container" placeholder="nginx:1.27" />
       </template>
       <template #footer>

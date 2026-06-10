@@ -131,3 +131,17 @@ This is a real, runnable foundation that implements the core of every area above
 ## Tech
 
 Nuxt 4 (Nitro server + Vue 3) · Nuxt UI 4 · Tailwind v4 · dockerode · ldapts · jose (JWT) · lowdb · GitLab REST v4. Single deployable Node server - no external database required.
+
+---
+
+## Author
+
+**Seng Phirum** — [sengphirum143@gmail.com](mailto:sengphirum143@gmail.com)
+
+---
+
+## License
+
+MIT © 2026 Seng Phirum
+
+See [LICENSE](./LICENSE) for the full text.

@@ -1,38 +1,48 @@
 <script setup lang="ts">
 const { can } = useAuth()
-const { relative, short } = useFormat()
+const { prefs } = usePreferences()
 const toast = useToast()
-const { data, status, error, refresh } = await useFetch('/api/containers', { lazy: true })
+
+const { data, status, error, refreshing, refresh } = useApiCache('containers', () => $fetch<any[]>('/api/containers'))
+onMounted(refresh)
+
+const { connected } = useDockerEvents((evt) => {
+  if (evt.type === 'container') refresh()
+})
+useIntervalFn(() => {
+  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
+}, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
 const search = ref('')
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
-  return (data.value || []).filter((c: any) => !q || c.name?.toLowerCase().includes(q) || c.image?.toLowerCase().includes(q))
+  return (data.value ?? []).filter((c: any) => !q || c.name?.toLowerCase().includes(q) || c.image?.toLowerCase().includes(q))
 })
 
-// logs
 const logsOpen = ref(false)
 const logsName = ref('')
 const logs = ref('')
 const logsLoading = ref(false)
 async function viewLogs(c: any) {
-  logsName.value = c.name
-  logsOpen.value = true
-  logsLoading.value = true
-  logs.value = ''
+  logsName.value = c.name; logsOpen.value = true; logsLoading.value = true; logs.value = ''
   try {
     const res: any = await $fetch(`/api/containers/${c.id}/logs`, { query: { tail: 300 } })
     logs.value = res.logs || ''
-  } catch (e: any) { logs.value = `Failed: ${e?.data?.statusMessage || e?.message}` } finally { logsLoading.value = false }
+  } catch (e: any) { logs.value = `Failed: ${e?.data?.statusMessage || e?.message}` }
+  finally { logsLoading.value = false }
 }
 
 async function remove(c: any) {
   if (!confirm(`Remove container "${c.name}"?`)) return
+  const saved = [...(data.value ?? [])]
+  data.value = saved.filter((x) => x.id !== c.id)
   try {
     await $fetch(`/api/containers/${c.id}?force=true`, { method: 'DELETE' })
     toast.add({ title: `Removed ${c.name}`, color: 'primary' })
-    refresh()
-  } catch (e: any) { toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' }) }
+  } catch (e: any) {
+    data.value = saved
+    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
+  }
 }
 
 function menu(c: any) {
@@ -46,27 +56,31 @@ function menu(c: any) {
   <div>
     <PageHeader title="Containers" subtitle="Raw containers across reachable nodes" icon="i-lucide-container">
       <template #actions>
+        <div class="flex items-center gap-1.5 text-xs text-faint select-none">
+          <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
+          {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
+        </div>
         <UInput v-model="search" icon="i-lucide-search" placeholder="Filter containers" class="w-40 sm:w-52" />
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" @click="refresh()" />
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
       </template>
     </PageHeader>
 
-    <DataState :status="status" :error="error" :empty="!filtered.length" empty-label="No containers." empty-icon="i-lucide-container">
-      <div class="space-y-2">
+    <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No containers." empty-icon="i-lucide-container">
+      <TransitionGroup name="list" tag="div" class="space-y-2">
         <div v-for="c in filtered" :key="c.id" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
           <div class="col-span-2 sm:col-span-4 min-w-0">
             <div class="flex items-center gap-2">
               <span class="dot" :class="c.state === 'running' ? 'dot-running' : c.state === 'exited' || c.state === 'dead' ? 'dot-down' : 'dot-idle'" />
-              <span class="truncate font-medium text-[var(--color-foam)]">{{ c.name }}</span>
+              <span class="truncate font-medium text-foam">{{ c.name || '—' }}</span>
             </div>
-            <p class="mt-1 truncate pl-4 font-mono text-xs text-[var(--color-faint)]">{{ c.image }}</p>
+            <p class="mt-1 truncate pl-4 font-mono text-xs text-faint">{{ c.image || '—' }}</p>
           </div>
-          <div class="sm:col-span-3 font-mono text-xs text-[var(--color-muted)] truncate">{{ c.status }}</div>
+          <div class="sm:col-span-3 font-mono text-xs text-(--color-muted) truncate">{{ c.status || '—' }}</div>
           <div class="sm:col-span-3 min-w-0">
             <div v-if="c.ports?.length" class="flex flex-wrap gap-1">
-              <span v-for="(p, i) in c.ports.filter((x: any) => x.PublicPort).slice(0, 2)" :key="i" class="font-mono text-xs text-[var(--color-muted)]">{{ p.PublicPort }}:{{ p.PrivatePort }}</span>
+              <span v-for="(p, i) in c.ports.filter((x: any) => x.PublicPort).slice(0, 2)" :key="i" class="font-mono text-xs text-(--color-muted)">{{ p.PublicPort }}:{{ p.PrivatePort }}</span>
             </div>
-            <span v-else class="text-xs text-[var(--color-faint)]">—</span>
+            <span v-else class="text-xs text-faint">—</span>
           </div>
           <div class="col-span-2 sm:col-span-2 flex justify-end">
             <UDropdownMenu :items="menu(c)" :content="{ align: 'end' }">
@@ -74,12 +88,14 @@ function menu(c: any) {
             </UDropdownMenu>
           </div>
         </div>
-      </div>
+      </TransitionGroup>
     </DataState>
 
     <UModal v-model:open="logsOpen" :title="`Logs · ${logsName}`" :ui="{ content: 'max-w-2xl' }">
       <template #body>
-        <div v-if="logsLoading" class="flex items-center justify-center py-12 text-[var(--color-muted)]"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Loading…</div>
+        <div v-if="logsLoading" class="flex items-center justify-center py-12 text-(--color-muted)">
+          <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Loading…
+        </div>
         <pre v-else class="logstream max-h-[55vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">{{ logs || 'No output.' }}</pre>
       </template>
     </UModal>

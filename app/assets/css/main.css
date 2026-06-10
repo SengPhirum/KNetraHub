@@ -5,30 +5,41 @@
   DockHub - operator console
   -----------------------------------------
   A focused operations hub. Calm, dense, technical.
-  Signature accent: a teal "beacon" used sparingly for the active path,
-  primary actions, and the live manager pulse.
+  Signature accent: Docker "Moby Blue" (#2496ED) used sparingly for the
+  active path, primary actions, and the live manager pulse.
 */
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* Prefer the original faces when installed locally, then fall back to
+     dependable OS fonts so the app stays fully offline-friendly. */
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, SFMono-Regular, monospace;
 
-  /* surfaces */
+  /* Moby Blue — Docker's official brand blue, used as the primary color scale */
+  --color-moby-50:  #EFF7FE;
+  --color-moby-100: #DAEDFB;
+  --color-moby-200: #B5DBFA;
+  --color-moby-300: #7ABEF5;
+  --color-moby-400: #3EA3F0;
+  --color-moby-500: #2496ED;
+  --color-moby-600: #1179CB;
+  --color-moby-700: #0E5EA3;
+  --color-moby-800: #0C4E84;
+  --color-moby-900: #0C3F65;
+  --color-moby-950: #082944;
+
+  /* Original dark theme remains the baseline */
   --color-ink: #0a0e16;
   --color-abyss: #0d1320;
   --color-surface: #131a28;
   --color-surface-2: #1a2334;
   --color-hull: #232e42;
   --color-hull-soft: #1b2434;
-
-  /* text */
   --color-foam: #e6edf6;
   --color-muted: #8a99b0;
   --color-faint: #5a6a82;
-
-  /* signal */
-  --color-beacon: #2dd4bf;
+  --color-beacon: #2496ED;
   --color-depth: #38bdf8;
   --color-running: #34d399;
   --color-pending: #fbbf24;
@@ -37,7 +48,205 @@
 }
 
 :root {
+  color-scheme: dark light;
+
+  --color-ink: #0a0e16;
+  --color-abyss: #0d1320;
+  --color-surface: #131a28;
+  --color-surface-2: #1a2334;
+  --color-hull: #232e42;
+  --color-hull-soft: #1b2434;
+
+  --color-foam: #e6edf6;
+  --color-muted: #8a99b0;
+  --color-faint: #5a6a82;
+
+  --color-beacon: #2496ED;
+  --color-depth: #38bdf8;
+  --color-running: #34d399;
+  --color-pending: #fbbf24;
+  --color-down: #f87171;
+  --color-idle: #64748b;
+
+  --color-running-ink: #9de9c3;
+  --color-pending-ink: #f6d36b;
+  --color-down-ink: #f5a1a1;
+  --color-idle-ink: #a8b5c7;
+
+  --color-running-soft: rgba(52, 211, 153, 0.15);
+  --color-pending-soft: rgba(251, 191, 36, 0.15);
+  --color-down-soft: rgba(248, 113, 113, 0.12);
+  --color-idle-soft: rgba(100, 116, 139, 0.12);
+  --color-pending-border: rgba(251, 191, 36, 0.22);
+
+  --color-veil: rgba(255, 255, 255, 0.05);
+  --page-glow-1: rgba(36, 150, 237, 0.07);
+  --page-glow-2: rgba(56, 189, 248, 0.05);
+  --panel-shadow: 0 20px 42px rgba(0, 0, 0, 0.28);
+  --panel-shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.2);
+  --log-bg: #070a11;
+  --log-hover: rgba(255, 255, 255, 0.025);
+  --selection: rgba(36, 150, 237, 0.22);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-ink: #edf3f7;
+    --color-abyss: #f8fbfd;
+    --color-surface: #ffffff;
+    --color-surface-2: #ecf3f7;
+    --color-hull: #d4e0e8;
+    --color-hull-soft: #e2ebf1;
+
+    --color-foam: #132030;
+    --color-muted: #516173;
+    --color-faint: #7b8999;
+
+    --color-beacon: #0B72C0;
+    --color-depth: #0284c7;
+    --color-running: #059669;
+    --color-pending: #d97706;
+    --color-down: #dc2626;
+    --color-idle: #64748b;
+
+    --color-running-ink: #047857;
+    --color-pending-ink: #b45309;
+    --color-down-ink: #b91c1c;
+    --color-idle-ink: #475569;
+
+    --color-running-soft: rgba(5, 150, 105, 0.12);
+    --color-pending-soft: rgba(217, 119, 6, 0.12);
+    --color-down-soft: rgba(220, 38, 38, 0.1);
+    --color-idle-soft: rgba(100, 116, 139, 0.1);
+    --color-pending-border: rgba(217, 119, 6, 0.24);
+
+    --color-veil: rgba(15, 23, 42, 0.045);
+    --page-glow-1: rgba(11, 114, 192, 0.10);
+    --page-glow-2: rgba(14, 165, 233, 0.12);
+    --panel-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    --panel-shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.06);
+    --log-bg: #f6f9fc;
+    --log-hover: rgba(15, 23, 42, 0.03);
+    --selection: rgba(11, 114, 192, 0.18);
+  }
+}
+
+.dark {
   color-scheme: dark;
+
+  --color-ink: #0a0e16;
+  --color-abyss: #0d1320;
+  --color-surface: #131a28;
+  --color-surface-2: #1a2334;
+  --color-hull: #232e42;
+  --color-hull-soft: #1b2434;
+
+  --color-foam: #e6edf6;
+  --color-muted: #8a99b0;
+  --color-faint: #5a6a82;
+
+  --color-beacon: #2496ED;
+  --color-depth: #38bdf8;
+  --color-running: #34d399;
+  --color-pending: #fbbf24;
+  --color-down: #f87171;
+  --color-idle: #64748b;
+
+  --color-running-ink: #9de9c3;
+  --color-pending-ink: #f6d36b;
+  --color-down-ink: #f5a1a1;
+  --color-idle-ink: #a8b5c7;
+
+  --color-running-soft: rgba(52, 211, 153, 0.15);
+  --color-pending-soft: rgba(251, 191, 36, 0.15);
+  --color-down-soft: rgba(248, 113, 113, 0.12);
+  --color-idle-soft: rgba(100, 116, 139, 0.12);
+  --color-pending-border: rgba(251, 191, 36, 0.22);
+
+  --color-veil: rgba(255, 255, 255, 0.05);
+  --page-glow-1: rgba(36, 150, 237, 0.07);
+  --page-glow-2: rgba(56, 189, 248, 0.05);
+  --panel-shadow: 0 20px 42px rgba(0, 0, 0, 0.28);
+  --panel-shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.2);
+  --log-bg: #070a11;
+  --log-hover: rgba(255, 255, 255, 0.025);
+  --selection: rgba(36, 150, 237, 0.22);
+}
+
+.light {
+  color-scheme: light;
+
+  --color-ink: #edf3f7;
+  --color-abyss: #f8fbfd;
+  --color-surface: #ffffff;
+  --color-surface-2: #ecf3f7;
+  --color-hull: #d4e0e8;
+  --color-hull-soft: #e2ebf1;
+
+  --color-foam: #132030;
+  --color-muted: #516173;
+  --color-faint: #7b8999;
+
+  --color-beacon: #0B72C0;
+  --color-depth: #0284c7;
+  --color-running: #059669;
+  --color-pending: #d97706;
+  --color-down: #dc2626;
+  --color-idle: #64748b;
+
+  --color-running-ink: #047857;
+  --color-pending-ink: #b45309;
+  --color-down-ink: #b91c1c;
+  --color-idle-ink: #475569;
+
+  --color-running-soft: rgba(5, 150, 105, 0.12);
+  --color-pending-soft: rgba(217, 119, 6, 0.12);
+  --color-down-soft: rgba(220, 38, 38, 0.1);
+  --color-idle-soft: rgba(100, 116, 139, 0.1);
+  --color-pending-border: rgba(217, 119, 6, 0.24);
+
+  --color-veil: rgba(15, 23, 42, 0.045);
+  --page-glow-1: rgba(11, 114, 192, 0.10);
+  --page-glow-2: rgba(14, 165, 233, 0.12);
+  --panel-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --panel-shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.06);
+  --log-bg: #f6f9fc;
+  --log-hover: rgba(15, 23, 42, 0.03);
+  --selection: rgba(11, 114, 192, 0.18);
+}
+
+/* ─── Moby Blue primary — direct Nuxt UI variable override ─────────────────── */
+/* Unlayered CSS beats @layer (Nuxt UI colors plugin uses @layer theme), so     */
+/* these values are guaranteed to win regardless of app.config resolution.      */
+:root {
+  --ui-color-primary-50:  #EFF7FE;
+  --ui-color-primary-100: #DAEDFB;
+  --ui-color-primary-200: #B5DBFA;
+  --ui-color-primary-300: #7ABEF5;
+  --ui-color-primary-400: #3EA3F0;
+  --ui-color-primary-500: #2496ED;
+  --ui-color-primary-600: #1179CB;
+  --ui-color-primary-700: #0E5EA3;
+  --ui-color-primary-800: #0C4E84;
+  --ui-color-primary-900: #0C3F65;
+  --ui-color-primary-950: #082944;
+}
+/* Light mode: moby-600 (#1179CB) gives ~4.4:1 contrast with white text */
+:root, .light {
+  --ui-primary: #1179CB;
+}
+/* Dark mode: moby-500 (#2496ED) is vivid against dark surfaces */
+.dark {
+  --ui-primary: #2496ED;
+}
+
+/* All interactive elements show a pointer — browsers omit this for <button> by default */
+button,
+[role="button"],
+a,
+label[for],
+select {
+  cursor: pointer;
 }
 
 html,
@@ -52,9 +261,13 @@ body {
 body {
   /* faint depth gradient - the "ocean floor" */
   background-image:
-    radial-gradient(1200px 600px at 80% -10%, rgba(45, 212, 191, 0.06), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(56, 189, 248, 0.05), transparent 55%);
+    radial-gradient(1200px 600px at 80% -10%, var(--page-glow-1), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--page-glow-2), transparent 55%);
   background-attachment: fixed;
+}
+
+::selection {
+  background: var(--selection);
 }
 
 /* Display face for headings and the wordmark */
@@ -71,10 +284,12 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-hull);
   border-radius: 0.75rem;
+  box-shadow: var(--panel-shadow);
 }
 .panel-flush {
   background: var(--color-abyss);
   border: 1px solid var(--color-hull-soft);
+  box-shadow: var(--panel-shadow-soft);
 }
 
 /* status dot */
@@ -125,15 +340,81 @@ body {
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.55;
-  background: #070a11;
+  background: var(--log-bg);
   border: 1px solid var(--color-hull-soft);
   border-radius: 0.5rem;
 }
-.logstream .line:hover { background: rgba(255, 255, 255, 0.025); }
+.logstream .line:hover { background: var(--log-hover); }
+
+.status-running { color: var(--color-running-ink); }
+.status-pending { color: var(--color-pending-ink); }
+.status-down { color: var(--color-down-ink); }
+.status-idle { color: var(--color-idle-ink); }
+
+.notice-warning {
+  background: var(--color-pending-soft);
+  border: 1px solid var(--color-pending-border);
+  color: var(--color-pending-ink);
+}
+
+.status-current {
+  background: var(--color-running-soft);
+  color: var(--color-running-ink);
+}
 
 /* keyboard focus - always visible */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-beacon);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ─── skeleton loader ──────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-2) 25%,
+    var(--color-hull) 50%,
+    var(--color-surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: var(--color-surface-2); }
+}
+
+/* ─── page transitions (NuxtPage) ──────────────────────────────────────────── */
+.page-enter-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.page-leave-active {
+  transition: opacity 0.12s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+
+/* ─── list item transitions (TransitionGroup) ──────────────────────────────── */
+.list-enter-active,
+.list-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.list-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.list-leave-to {
+  opacity: 0;
+}
+.list-move {
+  transition: transform 0.3s ease;
 }

@@ -27,7 +27,8 @@ export function useFormat() {
     return new Date(iso).toLocaleDateString()
   }
 
-  function cpus(n: number): string {
+  function cpus(n: number | undefined | null): string {
+    if (n == null || !isFinite(n)) return '—'
     return `${n.toFixed(n % 1 === 0 ? 0 : 1)} vCPU`
   }
 

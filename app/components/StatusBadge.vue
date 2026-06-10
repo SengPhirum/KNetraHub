@@ -1,23 +1,23 @@
 <script setup lang="ts">
 const props = defineProps<{ state?: string | null }>()
 const map: Record<string, { dot: string; label: string; cls: string }> = {
-  ready:    { dot: 'dot-running', label: 'Ready',    cls: 'text-emerald-300' },
-  running:  { dot: 'dot-running', label: 'Running',  cls: 'text-emerald-300' },
-  active:   { dot: 'dot-running', label: 'Active',   cls: 'text-emerald-300' },
-  complete: { dot: 'dot-running', label: 'Complete', cls: 'text-emerald-300' },
-  pending:  { dot: 'dot-pending', label: 'Pending',  cls: 'text-amber-300' },
-  starting: { dot: 'dot-pending', label: 'Starting', cls: 'text-amber-300' },
-  preparing:{ dot: 'dot-pending', label: 'Preparing',cls: 'text-amber-300' },
-  new:      { dot: 'dot-pending', label: 'New',      cls: 'text-amber-300' },
-  updating: { dot: 'dot-pending', label: 'Updating', cls: 'text-amber-300' },
-  paused:   { dot: 'dot-idle',    label: 'Paused',   cls: 'text-slate-300' },
-  drain:    { dot: 'dot-idle',    label: 'Drained',  cls: 'text-slate-300' },
-  down:     { dot: 'dot-down',    label: 'Down',     cls: 'text-rose-300' },
-  failed:   { dot: 'dot-down',    label: 'Failed',   cls: 'text-rose-300' },
-  rejected: { dot: 'dot-down',    label: 'Rejected', cls: 'text-rose-300' },
-  shutdown: { dot: 'dot-idle',    label: 'Shutdown', cls: 'text-slate-300' }
+  ready:    { dot: 'dot-running', label: 'Ready',    cls: 'status-running' },
+  running:  { dot: 'dot-running', label: 'Running',  cls: 'status-running' },
+  active:   { dot: 'dot-running', label: 'Active',   cls: 'status-running' },
+  complete: { dot: 'dot-running', label: 'Complete', cls: 'status-running' },
+  pending:  { dot: 'dot-pending', label: 'Pending',  cls: 'status-pending' },
+  starting: { dot: 'dot-pending', label: 'Starting', cls: 'status-pending' },
+  preparing:{ dot: 'dot-pending', label: 'Preparing',cls: 'status-pending' },
+  new:      { dot: 'dot-pending', label: 'New',      cls: 'status-pending' },
+  updating: { dot: 'dot-pending', label: 'Updating', cls: 'status-pending' },
+  paused:   { dot: 'dot-idle',    label: 'Paused',   cls: 'status-idle' },
+  drain:    { dot: 'dot-idle',    label: 'Drained',  cls: 'status-idle' },
+  down:     { dot: 'dot-down',    label: 'Down',     cls: 'status-down' },
+  failed:   { dot: 'dot-down',    label: 'Failed',   cls: 'status-down' },
+  rejected: { dot: 'dot-down',    label: 'Rejected', cls: 'status-down' },
+  shutdown: { dot: 'dot-idle',    label: 'Shutdown', cls: 'status-idle' }
 }
-const s = computed(() => map[(props.state || '').toLowerCase()] || { dot: 'dot-idle', label: props.state || 'Unknown', cls: 'text-slate-300' })
+const s = computed(() => map[(props.state || '').toLowerCase()] || { dot: 'dot-idle', label: props.state || 'Unknown', cls: 'status-idle' })
 </script>
 <template>
   <span class="inline-flex items-center gap-2 text-xs font-medium" :class="s.cls">

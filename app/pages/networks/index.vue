@@ -1,29 +1,49 @@
 <script setup lang="ts">
 const { can } = useAuth()
 const { short } = useFormat()
+const { prefs } = usePreferences()
 const toast = useToast()
-const { data, status, error, refresh } = await useFetch('/api/networks', { lazy: true })
+
+const { data, status, error, refreshing, refresh } = useApiCache('networks', () => $fetch<any[]>('/api/networks'))
+onMounted(refresh)
+
+const { connected } = useDockerEvents((evt) => {
+  if (evt.type === 'network') refresh()
+})
+useIntervalFn(() => {
+  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
+}, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
 const open = ref(false)
 const form = reactive({ name: '', driver: 'overlay', subnet: '', attachable: true, internal: false })
 function openCreate() { Object.assign(form, { name: '', driver: 'overlay', subnet: '', attachable: true, internal: false }); open.value = true }
+
 async function create() {
   if (!form.name) { toast.add({ title: 'Name required', color: 'warning' }); return }
   try {
-    await $fetch('/api/networks', { method: 'POST', body: { ...form } })
+    const newNet = await $fetch<any>('/api/networks', { method: 'POST', body: { ...form } })
+    data.value = [...(data.value ?? []), newNet]
     toast.add({ title: `Created ${form.name}`, color: 'primary', icon: 'i-lucide-network' })
     open.value = false
-    setTimeout(refresh, 500)
-  } catch (e: any) { toast.add({ title: 'Create failed', description: e?.data?.statusMessage, color: 'error' }) }
+  } catch (e: any) {
+    toast.add({ title: 'Create failed', description: e?.data?.statusMessage, color: 'error' })
+    refresh()
+  }
 }
+
 async function remove(n: any) {
   if (!confirm(`Delete network "${n.name}"?`)) return
+  const saved = [...(data.value ?? [])]
+  data.value = saved.filter((x) => x.id !== n.id)
   try {
     await $fetch(`/api/networks/${n.id}`, { method: 'DELETE' })
     toast.add({ title: `Deleted ${n.name}`, color: 'primary' })
-    refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
+  } catch (e: any) {
+    data.value = saved
+    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+  }
 }
+
 const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
 </script>
 
@@ -31,30 +51,34 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
   <div>
     <PageHeader title="Networks" subtitle="Overlay and bridge networks" icon="i-lucide-network">
       <template #actions>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" @click="refresh()" />
+        <div class="flex items-center gap-1.5 text-xs text-faint select-none">
+          <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
+          {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
+        </div>
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
         <UButton v-if="can('operator')" icon="i-lucide-plus" color="primary" label="Create" @click="openCreate" />
       </template>
     </PageHeader>
 
-    <DataState :status="status" :error="error" :empty="!data?.length" empty-label="No networks." empty-icon="i-lucide-network">
-      <div class="space-y-2">
+    <DataState :status="status" :error="error" :empty="!data?.length" :refreshing="refreshing" empty-label="No networks." empty-icon="i-lucide-network">
+      <TransitionGroup name="list" tag="div" class="space-y-2">
         <div v-for="n in data" :key="n.id" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
           <div class="col-span-2 sm:col-span-4 min-w-0">
             <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-network" class="size-4 text-[var(--color-muted)]" />
-              <span class="truncate font-medium text-[var(--color-foam)]">{{ n.name }}</span>
-              <span v-if="n.stack" class="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-faint)]">{{ n.stack }}</span>
+              <UIcon name="i-lucide-network" class="size-4 text-(--color-muted)" />
+              <span class="truncate font-medium text-foam">{{ n.name || '—' }}</span>
+              <span v-if="n.stack" class="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-faint">{{ n.stack }}</span>
             </div>
-            <p class="mt-1 truncate pl-6 font-mono text-xs text-[var(--color-faint)]">{{ short(n.id) }}</p>
+            <p class="mt-1 truncate pl-6 font-mono text-xs text-faint">{{ short(n.id) || '—' }}</p>
           </div>
-          <div class="sm:col-span-2 font-mono text-xs text-[var(--color-muted)]">{{ n.driver }}</div>
-          <div class="sm:col-span-2 text-xs text-[var(--color-muted)]">{{ n.scope }}</div>
-          <div class="sm:col-span-3 font-mono text-xs text-[var(--color-faint)]">{{ n.subnet || '—' }}</div>
+          <div class="sm:col-span-2 font-mono text-xs text-(--color-muted)">{{ n.driver || '—' }}</div>
+          <div class="sm:col-span-2 text-xs text-(--color-muted)">{{ n.scope || '—' }}</div>
+          <div class="sm:col-span-3 font-mono text-xs text-faint">{{ n.subnet || '—' }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
             <UButton v-if="can('operator') && !SYSTEM.includes(n.name)" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(n)" />
           </div>
         </div>
-      </div>
+      </TransitionGroup>
     </DataState>
 
     <UModal v-model:open="open" title="Create network">

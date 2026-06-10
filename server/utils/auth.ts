@@ -1,5 +1,5 @@
-import { SignJWT, jwtVerify } from 'jose'
 import type { H3Event } from 'h3'
+import { SignJWT, jwtVerify } from 'jose'
 import type { Role } from './store'
 
 export interface SessionUser {
@@ -11,7 +11,7 @@ export interface SessionUser {
 }
 
 // Keep the legacy cookie name so existing sessions survive the DockHub rebrand.
-const COOKIE = 'helmsman_token'
+const COOKIE = 'dockhub_token'
 
 function secret() {
   return new TextEncoder().encode(useRuntimeConfig().jwtSecret)
@@ -36,7 +36,7 @@ export async function setSession(event: H3Event, user: SessionUser) {
   })
 }
 
-export function clearSession(event: H3Event) {
+export function clearAuthSession(event: H3Event) {
   deleteCookie(event, COOKIE, { path: '/' })
 }
 

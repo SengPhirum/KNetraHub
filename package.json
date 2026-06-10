@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "DockHub - a convenient, GitLab-backed Docker Swarm management console",
+  "author": "Seng Phirum <sengphirum143@gmail.com>",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "nuxt dev",
@@ -12,14 +14,14 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@nuxt/fonts": "^0.11.4",
     "@nuxt/icon": "^1.10.3",
     "@nuxt/ui": "^4.8.2",
     "@vueuse/nuxt": "^13.1.0",
     "bcryptjs": "^3.0.2",
-    "dockerode": "^4.0.4",
+    "better-sqlite3": "^12.10.0",
+    "dockerode": "^5.0.0",
     "jose": "^6.0.11",
-    "ldapts": "^7.3.1",
+    "ldapts": "^8.1.8",
     "lowdb": "^7.0.1",
     "nanoid": "^5.1.5",
     "nuxt": "^4.4.7",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.111",
-    "@types/dockerode": "^3.3.39"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/dockerode": "^4.0.1"
   }
 }

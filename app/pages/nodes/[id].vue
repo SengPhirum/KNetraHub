@@ -64,33 +64,33 @@ async function remove() {
 
       <div class="grid gap-4 lg:grid-cols-2 mb-5">
         <div class="panel p-4">
-          <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Engine</h3>
+          <h3 class="font-display text-sm font-semibold text-foam mb-3">Engine</h3>
           <dl class="space-y-2 text-sm">
-            <div class="flex justify-between gap-3"><dt class="text-[var(--color-faint)]">Address</dt><dd class="font-mono text-[var(--color-muted)]">{{ node?.Status?.Addr || '—' }}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-[var(--color-faint)]">Engine</dt><dd class="font-mono text-[var(--color-muted)]">{{ desc?.Engine?.EngineVersion || '—' }}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-[var(--color-faint)]">Platform</dt><dd class="font-mono text-[var(--color-muted)]">{{ desc?.Platform?.OS }}/{{ desc?.Platform?.Architecture }}</dd></div>
-            <div v-if="node?.ManagerStatus" class="flex justify-between gap-3"><dt class="text-[var(--color-faint)]">Reachability</dt><dd class="font-mono text-[var(--color-muted)]">{{ node.ManagerStatus.Reachability }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-faint">Address</dt><dd class="font-mono text-(--color-muted)">{{ node?.Status?.Addr || '—' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-faint">Engine</dt><dd class="font-mono text-(--color-muted)">{{ desc?.Engine?.EngineVersion || '—' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-faint">Platform</dt><dd class="font-mono text-(--color-muted)">{{ desc?.Platform?.OS }}/{{ desc?.Platform?.Architecture }}</dd></div>
+            <div v-if="node?.ManagerStatus" class="flex justify-between gap-3"><dt class="text-faint">Reachability</dt><dd class="font-mono text-(--color-muted)">{{ node.ManagerStatus.Reachability }}</dd></div>
           </dl>
         </div>
         <div class="panel p-4">
-          <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Labels</h3>
+          <h3 class="font-display text-sm font-semibold text-foam mb-3">Labels</h3>
           <div v-if="Object.keys(labels).length" class="flex flex-wrap gap-2">
-            <span v-for="(v, k) in labels" :key="k" class="font-mono text-xs rounded bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-muted)]">{{ k }}=<span class="text-[var(--color-foam)]">{{ v }}</span></span>
+            <span v-for="(v, k) in labels" :key="k" class="font-mono text-xs rounded bg-surface-2 px-2 py-1 text-(--color-muted)">{{ k }}=<span class="text-foam">{{ v }}</span></span>
           </div>
-          <p v-else class="text-sm text-[var(--color-faint)]">No labels set.</p>
+          <p v-else class="text-sm text-faint">No labels set.</p>
         </div>
       </div>
 
-      <h3 class="font-display text-sm font-semibold text-[var(--color-foam)] mb-3">Tasks on this node</h3>
-      <div v-if="!data?.tasks?.length" class="panel p-8 text-center text-sm text-[var(--color-muted)]">No tasks scheduled here.</div>
+      <h3 class="font-display text-sm font-semibold text-foam mb-3">Tasks on this node</h3>
+      <div v-if="!data?.tasks?.length" class="panel p-8 text-center text-sm text-(--color-muted)">No tasks scheduled here.</div>
       <div v-else class="space-y-2">
         <div v-for="t in data.tasks" :key="t.ID" class="panel-flush p-3 flex items-center justify-between gap-3 text-sm">
           <div class="min-w-0">
-            <p class="truncate font-mono text-xs text-[var(--color-muted)]">{{ (t.Spec?.ContainerSpec?.Image || '').split('@')[0] }}</p>
+            <p class="truncate font-mono text-xs text-(--color-muted)">{{ (t.Spec?.ContainerSpec?.Image || '').split('@')[0] }}</p>
           </div>
           <div class="flex items-center gap-4 shrink-0">
             <StatusBadge :state="t.Status?.State" />
-            <span class="text-xs text-[var(--color-faint)]">{{ relative(t.Status?.Timestamp) }}</span>
+            <span class="text-xs text-faint">{{ relative(t.Status?.Timestamp) }}</span>
           </div>
         </div>
       </div>

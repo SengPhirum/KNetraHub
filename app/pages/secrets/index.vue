@@ -35,8 +35,8 @@ async function remove(s: any) {
       </template>
     </PageHeader>
 
-    <div class="panel p-3 mb-4 border-[var(--color-hull)] flex items-center gap-2 text-xs text-[var(--color-muted)]">
-      <UIcon name="i-lucide-shield" class="size-4 shrink-0 text-[var(--color-beacon)]" />
+    <div class="panel p-3 mb-4 border-hull flex items-center gap-2 text-xs text-(--color-muted)">
+      <UIcon name="i-lucide-shield" class="size-4 shrink-0 text-beacon" />
       Secret values are write-only — Docker never exposes them after creation.
     </div>
 
@@ -45,13 +45,13 @@ async function remove(s: any) {
         <div v-for="s in data" :key="s.id" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
           <div class="col-span-2 sm:col-span-6 min-w-0">
             <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-key-round" class="size-4 text-[var(--color-muted)]" />
-              <span class="truncate font-medium text-[var(--color-foam)]">{{ s.name }}</span>
-              <span v-if="s.stack" class="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-faint)]">{{ s.stack }}</span>
+              <UIcon name="i-lucide-key-round" class="size-4 text-(--color-muted)" />
+              <span class="truncate font-medium text-foam">{{ s.name }}</span>
+              <span v-if="s.stack" class="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-faint">{{ s.stack }}</span>
             </div>
-            <p class="mt-1 truncate pl-6 font-mono text-xs text-[var(--color-faint)]">{{ short(s.id) }}</p>
+            <p class="mt-1 truncate pl-6 font-mono text-xs text-faint">{{ short(s.id) }}</p>
           </div>
-          <div class="sm:col-span-5 text-xs text-[var(--color-faint)]">Created {{ relative(s.created) }}</div>
+          <div class="sm:col-span-5 text-xs text-faint">Created {{ relative(s.created) }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
             <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(s)" />
           </div>

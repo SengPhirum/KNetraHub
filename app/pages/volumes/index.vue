@@ -40,14 +40,14 @@ async function remove(v: any) {
         <div v-for="v in data" :key="v.name" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
           <div class="col-span-2 sm:col-span-5 min-w-0">
             <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-database" class="size-4 text-[var(--color-muted)]" />
-              <span class="truncate font-medium text-[var(--color-foam)]">{{ v.name }}</span>
+              <UIcon name="i-lucide-database" class="size-4 text-(--color-muted)" />
+              <span class="truncate font-medium text-foam">{{ v.name }}</span>
             </div>
-            <p class="mt-1 truncate pl-6 font-mono text-xs text-[var(--color-faint)]">{{ v.mountpoint }}</p>
+            <p class="mt-1 truncate pl-6 font-mono text-xs text-faint">{{ v.mountpoint }}</p>
           </div>
-          <div class="sm:col-span-2 font-mono text-xs text-[var(--color-muted)]">{{ v.driver }}</div>
-          <div class="sm:col-span-2 text-xs text-[var(--color-muted)]">{{ v.scope }}</div>
-          <div class="sm:col-span-2 text-xs text-[var(--color-faint)]">{{ relative(v.created) }}</div>
+          <div class="sm:col-span-2 font-mono text-xs text-(--color-muted)">{{ v.driver }}</div>
+          <div class="sm:col-span-2 text-xs text-(--color-muted)">{{ v.scope }}</div>
+          <div class="sm:col-span-2 text-xs text-faint">{{ relative(v.created) }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
             <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(v)" />
           </div>
