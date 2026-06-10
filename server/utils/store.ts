@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { nanoid } from 'nanoid'
 
 export type Role = 'admin' | 'operator' | 'viewer'
+export type UserSource = 'local' | 'ldap' | 'oidc'
 
 export interface User {
   id: string
@@ -9,7 +10,7 @@ export interface User {
   displayName: string
   email?: string
   role: Role
-  source: 'local' | 'ldap'
+  source: UserSource
   passwordHash?: string
   createdAt: string
   lastLogin?: string
@@ -47,7 +48,7 @@ function rowToUser(row: any): User {
     displayName: row.display_name,
     email: row.email ?? undefined,
     role: row.role as Role,
-    source: row.source as 'local' | 'ldap',
+    source: row.source as UserSource,
     passwordHash: row.password_hash ?? undefined,
     createdAt: row.created_at,
     lastLogin: row.last_login ?? undefined
@@ -98,11 +99,12 @@ export async function verifyLocalUser(username: string, password: string): Promi
   return user
 }
 
-export async function upsertLdapUser(input: {
+export async function upsertExternalUser(input: {
   username: string
   displayName: string
   email?: string
   role: Role
+  source: Exclude<UserSource, 'local'>
 }): Promise<User> {
   const db = getDb()
   const existing = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(input.username) as any
@@ -110,12 +112,12 @@ export async function upsertLdapUser(input: {
   if (existing) {
     db.prepare(
       'UPDATE users SET display_name = ?, email = ?, role = ?, source = ? WHERE id = ?'
-    ).run(input.displayName, input.email ?? null, input.role, 'ldap', existing.id)
+    ).run(input.displayName, input.email ?? null, input.role, input.source, existing.id)
   } else {
     const id = nanoid()
     db.prepare(
       'INSERT INTO users (id, username, display_name, email, role, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, input.username, input.displayName, input.email ?? null, input.role, 'ldap', new Date().toISOString())
+    ).run(id, input.username, input.displayName, input.email ?? null, input.role, input.source, new Date().toISOString())
   }
 
   const row = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(input.username)
@@ -292,4 +294,8 @@ export async function setAppSetting(key: string, value: string, actor: string): 
   getDb().prepare(
     'INSERT OR REPLACE INTO app_settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)'
   ).run(key, value, new Date().toISOString(), actor)
+}
+
+export async function deleteAppSetting(key: string): Promise<void> {
+  getDb().prepare('DELETE FROM app_settings WHERE key = ?').run(key)
 }

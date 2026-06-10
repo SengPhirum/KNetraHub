@@ -86,6 +86,12 @@ Everything is configured through environment variables (full list in [`.env.exam
 
 Set `NUXT_LDAP_ENABLED=true` and provide your directory details (`NUXT_LDAP_URL`, `BIND_DN`, `BIND_CREDENTIALS`, `SEARCH_BASE`, and an optional `SEARCH_FILTER`, default `(uid={{username}})`). Login then tries LDAP first and falls back to local accounts. Map directory groups to roles with `NUXT_LDAP_ADMIN_GROUP` and `NUXT_LDAP_OPERATOR_GROUP`; everyone else becomes a `viewer`. LDAP users are upserted into the local store on first login so they appear in the Users page.
 
+### OIDC single sign-on
+
+Set `NUXT_OIDC_ENABLED=true` and point DockHub at your provider (`NUXT_OIDC_ISSUER`, `NUXT_OIDC_CLIENT_ID`, `NUXT_OIDC_CLIENT_SECRET`). DockHub runs the standard authorization-code flow with PKCE and discovers endpoints from `{issuer}/.well-known/openid-configuration`, so it works with Keycloak, Authentik, Entra ID, Okta, Google, and friends. Register `{your-dockhub-url}/api/auth/oidc/callback` as an allowed redirect URI (override with `NUXT_OIDC_REDIRECT_URI` if DockHub sits behind a proxy that rewrites the origin).
+
+Group mapping works like LDAP: the claim named by `NUXT_OIDC_GROUPS_CLAIM` (default `groups`, dot-paths like `realm_access.roles` supported) is matched against `NUXT_OIDC_ADMIN_GROUP` and `NUXT_OIDC_OPERATOR_GROUP`; everyone else becomes a `viewer`. Roles are re-evaluated on every login. The username comes from `NUXT_OIDC_USERNAME_CLAIM` (default `preferred_username`), and OIDC users are upserted into the local store so they appear in the Users page. A "Continue with SSO" button appears on the login page (label via `NUXT_OIDC_PROVIDER_NAME`); local accounts keep working alongside.
+
 ### GitLab stack versioning
 
 Provide a GitLab token with **`api`** scope and a target project:

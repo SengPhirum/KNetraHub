@@ -173,7 +173,7 @@ async function confirmDelete() {
           <UFormField v-if="editTarget?.source === 'local'" label="New password" hint="Leave blank to keep current">
             <UInput v-model="editForm.password" type="password" class="w-full" />
           </UFormField>
-          <p v-else class="text-xs text-faint">LDAP user — password is managed by your directory.</p>
+          <p v-else class="text-xs text-faint">{{ (editTarget?.source || 'external').toUpperCase() }} user — password is managed by your identity provider.</p>
         </div>
       </template>
       <template #footer>

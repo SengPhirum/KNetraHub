@@ -1,5 +1,7 @@
 import { Client } from 'ldapts'
 import type { Role } from './store'
+import { getLdapSettings } from './authSettings'
+import type { LdapSettings } from './authSettings'
 
 export interface LdapResult {
   username: string
@@ -16,7 +18,7 @@ export interface LdapResult {
  * Group membership maps to a DockHub role.
  */
 export async function ldapAuthenticate(username: string, password: string): Promise<LdapResult> {
-  const cfg = useRuntimeConfig().ldap
+  const cfg = await getLdapSettings()
   if (!cfg.enabled) {
     throw createError({ statusCode: 400, statusMessage: 'LDAP is not enabled' })
   }
@@ -55,7 +57,7 @@ export async function ldapAuthenticate(username: string, password: string): Prom
     }
 
     // 4. resolve role from group membership
-    const role = await resolveRole(entry, userDN)
+    const role = resolveRole(entry, cfg)
 
     const displayName =
       str(entry.displayName) || str(entry.cn) || username
@@ -67,8 +69,7 @@ export async function ldapAuthenticate(username: string, password: string): Prom
   }
 }
 
-async function resolveRole(entry: any, userDN: string): Promise<Role> {
-  const cfg = useRuntimeConfig().ldap
+function resolveRole(entry: any, cfg: LdapSettings): Role {
   // Use memberOf attribute when present (typical for AD)
   const memberOf = ([] as string[]).concat(entry.memberOf || []).map((g: string) => g.toLowerCase())
   const admin = cfg.adminGroup?.toLowerCase()

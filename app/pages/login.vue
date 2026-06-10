@@ -4,11 +4,16 @@ definePageMeta({ layout: 'auth' })
 const { login } = useAuth()
 const config = useRuntimeConfig()
 const toast = useToast()
+const route = useRoute()
+
+// Provider availability is runtime state (env defaults + DB overrides)
+const { data: providers } = useFetch('/api/auth/providers')
 
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
-const error = ref('')
+// The OIDC callback redirects here with ?error=... on failure
+const error = ref(typeof route.query.error === 'string' ? route.query.error : '')
 
 async function submit() {
   if (!username.value || !password.value) return
@@ -77,9 +82,28 @@ async function submit() {
         trailing-icon="i-lucide-arrow-right"
       />
 
+      <template v-if="providers?.oidcEnabled">
+        <div class="flex items-center gap-3 text-xs text-faint">
+          <span class="h-px flex-1 bg-(--ui-border)" /> or <span class="h-px flex-1 bg-(--ui-border)" />
+        </div>
+        <UButton
+          block
+          size="lg"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-key-round"
+          :label="`Continue with ${providers.oidcProviderName}`"
+          to="/api/auth/oidc/login"
+          external
+        />
+      </template>
+
       <p class="text-center text-xs text-faint">
-        <template v-if="config.public.ldapEnabled">
+        <template v-if="providers?.ldapEnabled">
           <UIcon name="i-lucide-shield-check" class="size-3 inline" /> LDAP enabled · local accounts also accepted
+        </template>
+        <template v-else-if="providers?.oidcEnabled">
+          <UIcon name="i-lucide-shield-check" class="size-3 inline" /> SSO enabled · local accounts also accepted
         </template>
         <template v-else>
           Local accounts · default <span class="font-mono">admin / admin</span>

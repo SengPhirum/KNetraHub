@@ -1,13 +1,13 @@
 import type { H3Event } from 'h3'
 import { SignJWT, jwtVerify } from 'jose'
-import type { Role } from './store'
+import type { Role, UserSource } from './store'
 
 export interface SessionUser {
   id: string
   username: string
   displayName: string
   role: Role
-  source: 'local' | 'ldap'
+  source: UserSource
 }
 
 // Keep the legacy cookie name so existing sessions survive the DockHub rebrand.
@@ -50,7 +50,7 @@ export async function readSession(event: H3Event): Promise<SessionUser | null> {
       username: String(payload.username),
       displayName: String(payload.displayName),
       role: payload.role as Role,
-      source: payload.source as 'local' | 'ldap'
+      source: payload.source as UserSource
     }
   } catch {
     return null

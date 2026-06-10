@@ -16,6 +16,13 @@ services:
       NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
       # LDAP (optional)
       NUXT_LDAP_ENABLED: "false"
+      # OIDC SSO (optional)
+      NUXT_OIDC_ENABLED: "false"
+      # NUXT_OIDC_ISSUER: "https://keycloak.example.com/realms/main"
+      # NUXT_OIDC_CLIENT_ID: "dockhub"
+      # NUXT_OIDC_CLIENT_SECRET: "client-secret"
+      # NUXT_OIDC_ADMIN_GROUP: "swarm-admins"
+      # NUXT_OIDC_OPERATOR_GROUP: "swarm-operators"
       # GitLab (optional)
       # NUXT_GITLAB_URL: "https://gitlab.com"
       # NUXT_GITLAB_TOKEN: "glpat-xxxxx"

@@ -3,7 +3,7 @@ interface SessionUser {
   username: string
   displayName: string
   role: 'admin' | 'operator' | 'viewer'
-  source: 'local' | 'ldap'
+  source: 'local' | 'ldap' | 'oidc'
 }
 
 export function useAuth() {

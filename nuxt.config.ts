@@ -56,6 +56,28 @@ export default defineNuxtConfig({
       operatorGroup: process.env.NUXT_LDAP_OPERATOR_GROUP || ''
     },
 
+    // OIDC / OAuth2 single sign-on (authorization code + PKCE)
+    oidc: {
+      enabled: process.env.NUXT_OIDC_ENABLED === 'true',
+      // e.g. https://keycloak.example.com/realms/main or https://login.microsoftonline.com/{tenant}/v2.0
+      issuer: process.env.NUXT_OIDC_ISSUER || '',
+      clientId: process.env.NUXT_OIDC_CLIENT_ID || '',
+      clientSecret: process.env.NUXT_OIDC_CLIENT_SECRET || '',
+      // Defaults to {request origin}/api/auth/oidc/callback when empty
+      redirectUri: process.env.NUXT_OIDC_REDIRECT_URI || '',
+      scope: process.env.NUXT_OIDC_SCOPE || 'openid profile email groups',
+      // Claims used to build the DockHub user
+      usernameClaim: process.env.NUXT_OIDC_USERNAME_CLAIM || 'preferred_username',
+      displayNameClaim: process.env.NUXT_OIDC_DISPLAY_NAME_CLAIM || 'name',
+      // Claim holding group names; dot-paths supported (e.g. "realm_access.roles")
+      groupsClaim: process.env.NUXT_OIDC_GROUPS_CLAIM || 'groups',
+      // group -> DockHub role mapping; unmatched users become viewers
+      adminGroup: process.env.NUXT_OIDC_ADMIN_GROUP || '',
+      operatorGroup: process.env.NUXT_OIDC_OPERATOR_GROUP || '',
+      // Label shown on the login button
+      providerName: process.env.NUXT_OIDC_PROVIDER_NAME || 'SSO'
+    },
+
     // GitLab - used to version stack compose files
     gitlab: {
       url: process.env.NUXT_GITLAB_URL || 'https://gitlab.com',
@@ -72,7 +94,6 @@ export default defineNuxtConfig({
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'DockHub',
-      ldapEnabled: process.env.NUXT_LDAP_ENABLED === 'true',
       gitlabEnabled: !!process.env.NUXT_GITLAB_TOKEN
     }
   },

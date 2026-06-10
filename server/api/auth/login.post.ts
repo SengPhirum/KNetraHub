@@ -1,5 +1,6 @@
 import { ldapAuthenticate } from '~~/server/utils/ldap'
-import { verifyLocalUser, upsertLdapUser, touchLogin, audit } from '~~/server/utils/store'
+import { getLdapSettings } from '~~/server/utils/authSettings'
+import { verifyLocalUser, upsertExternalUser, touchLogin, audit } from '~~/server/utils/store'
 import { setSession } from '~~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -8,14 +9,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Username and password are required' })
   }
 
-  const cfg = useRuntimeConfig()
+  const ldapCfg = await getLdapSettings()
   let session
 
   // 1. Try LDAP first when enabled
-  if (cfg.ldap.enabled) {
+  if (ldapCfg.enabled) {
     try {
       const ldapUser = await ldapAuthenticate(username, password)
-      const stored = await upsertLdapUser(ldapUser)
+      const stored = await upsertExternalUser({ ...ldapUser, source: 'ldap' })
       session = {
         id: stored.id,
         username: stored.username,
