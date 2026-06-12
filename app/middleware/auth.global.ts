@@ -7,8 +7,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   const isLogin = to.path === '/login'
+  const isPublicDocs = to.path === '/documentation'
 
-  if (!user.value && !isLogin) {
+  if (!user.value && !isLogin && !isPublicDocs) {
     return navigateTo('/login')
   }
   if (user.value && isLogin) {

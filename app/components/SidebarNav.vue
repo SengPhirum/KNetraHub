@@ -15,7 +15,9 @@ const primaryGroups = computed(() => visibleGroups.value.filter((g) => g.label !
 const documentationGroup = computed(() => visibleGroups.value.find((g) => g.label === 'Documentation'))
 
 function isActive(to: string) {
-  return to === '/' ? route.path === '/' : route.path.startsWith(to)
+  if (to === '/') return route.path === '/'
+  if (to.includes('#')) return route.path + route.hash === to
+  return route.path.startsWith(to)
 }
 </script>
 

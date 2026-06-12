@@ -1,7 +1,24 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+//
+// Two build modes:
+//   npm run build       → full SSR app (Docker Swarm console)
+//   npm run build:docs  → static docs only  (NUXT_STATIC_DOCS=true nuxt generate)
+//
+const isDocsBuild = process.env.NUXT_STATIC_DOCS === 'true'
+// Set NUXT_DOCS_BASE_URL to your GitHub Pages subdirectory, e.g. /dockhub/
+// Leave empty (/) for a custom domain or user/org site.
+const docsBaseURL = process.env.NUXT_DOCS_BASE_URL || '/'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-06-01',
   devtools: { enabled: process.env.NODE_ENV === 'development' },
+
+  // Docs-only static build: redirect root → /documentation, prerender that single route
+  ...(isDocsBuild ? {
+    routeRules: {
+      '/': { redirect: { to: '/documentation', statusCode: 301 } }
+    }
+  } : {}),
 
   modules: [
     '@nuxt/ui',
@@ -94,7 +111,8 @@ export default defineNuxtConfig({
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'DockHub',
-      gitlabEnabled: !!process.env.NUXT_GITLAB_TOKEN
+      gitlabEnabled: !!process.env.NUXT_GITLAB_TOKEN,
+      staticDocs: isDocsBuild
     }
   },
 
@@ -115,10 +133,19 @@ export default defineNuxtConfig({
 
   nitro: {
     // better-sqlite3 has native bindings — must not be bundled by Nitro
-    externals: { external: ['better-sqlite3'] }
+    externals: { external: ['better-sqlite3'] },
+    // Docs build: only prerender /documentation (and root redirect)
+    ...(isDocsBuild ? {
+      prerender: {
+        routes: ['/', '/documentation'],
+        crawlLinks: false,
+      }
+    } : {})
   },
 
   app: {
+    // Docs build: apply GitHub Pages base URL so asset paths resolve correctly
+    baseURL: isDocsBuild ? docsBaseURL : undefined,
     pageTransition: { name: 'page', mode: 'out-in' },
     head: {
       title: 'DockHub - Swarm Console',

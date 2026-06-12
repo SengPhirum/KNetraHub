@@ -11,6 +11,8 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "start": "node .output/server/index.mjs",
+    "build:docs": "NUXT_STATIC_DOCS=true nuxt generate",
+    "preview:docs": "npx serve .output/public",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
