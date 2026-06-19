@@ -1,6 +1,6 @@
 {
   "name": "dockhub",
-  "version": "0.1.5",
+  "version": "0.1.1",
   "private": true,
   "description": "DockHub - a convenient, GitLab-backed Docker Swarm management console",
   "author": "Seng Phirum <sengphirum143@gmail.com>",

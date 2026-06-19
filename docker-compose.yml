@@ -4,14 +4,13 @@
 #
 # It must be scheduled on a MANAGER node (placement constraint below) so it
 # can reach the swarm control plane via the mounted Docker socket.
-
-version: "3.8"
-
 services:
-  dockhub:
-    image: registry.kdsb.com.kh/dockhub:latest
+  app:
+    image: registry.kdsb.com.kh/dockhub/app:latest
     ports:
       - "3000:3000"
+    networks:
+      - net
     environment:
       NUXT_JWT_SECRET: "change-me-to-a-long-random-string"
       NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
@@ -34,23 +33,49 @@ services:
       # NUXT_GITLAB_STACKS_PATH: "stacks"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - dockhub-data:/data
+      - data:/data
     deploy:
-      replicas: 1
+      mode: replicated
+      replicas: 1             # >=2 for rolling, zero-downtime updates
+      endpoint_mode: vip
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 30s
+        max_failure_ratio: 0.2
+        order: start-first     # key for zero-downtime
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 30s
+        max_failure_ratio: 0.2
+        order: start-first
+      restart_policy:
+        condition: on-failure  # or "any" if you want auto-restart on unhealthy
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+        limits:
+          cpus: '0.50'
+          memory: 2048M
       placement:
         constraints:
           - node.role == manager
-      restart_policy:
-        condition: on-failure
-      update_config:
-        order: start-first
 
   # Reports live CPU/memory/disk usage for the node it runs on. Deployed
   # globally (one task per node, managers included) since dockhub only has
   # direct Docker API access to its own node - this is how it learns the
   # usage of every other node without exposing the Docker API over TCP.
-  dockhub-agent:
-    image: registry.kdsb.com.kh/dockhub-agent:latest
+  agent:
+    image: registry.kdsb.com.kh/dockhub/agent:latest
+    networks:
+      - net
     environment:
       DOCKHUB_AGENT_URL: "http://dockhub:3000/api/agent/report"
       DOCKHUB_AGENT_TOKEN: "change-me-to-a-long-random-string"
@@ -58,8 +83,32 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     deploy:
       mode: global
+      labels:
+        dockhub.agent: 'true'
+      update_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: continue
+        monitor: 20s
+        max_failure_ratio: 0.2
+        order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
 
 volumes:
-  dockhub-data:
+  data:
+
+networks:
+  net:
+    driver: overlay
+    attachable: true

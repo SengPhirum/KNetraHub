@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
 REGISTRY="${REGISTRY:-registry.kdsb.com.kh}"
-IMAGE_NAME="${IMAGE_NAME:-dockhub}"
+IMAGE_NAME="${IMAGE_NAME:-dockhub/app}"
 AGENT_IMAGE_NAME="${AGENT_IMAGE_NAME:-}"
 VERSION_TAG_PREFIX="${VERSION_TAG_PREFIX:-}"
 RELEASE_NOTES_DIR="${RELEASE_NOTES_DIR:-release-notes}"
@@ -26,8 +26,8 @@ Default behavior:
   - bump package version by patch
   - generate release notes
   - build the app and agent Docker images
-  - push registry.kdsb.com.kh/dockhub:<version> and :latest
-  - push registry.kdsb.com.kh/dockhub-agent:<version> and :latest
+  - push registry.kdsb.com.kh/dockhub/app:<version> and :latest
+  - push registry.kdsb.com.kh/dockhub/agent:<version> and :latest
 
 Options:
   --patch                 Bump patch version (default)
@@ -38,15 +38,15 @@ Options:
   --no-bump               Keep the current package version for test publishes
   --no-push               Build and tag locally without pushing
   --registry host         Docker registry host (default: registry.kdsb.com.kh)
-  --image name            Image name inside the registry (default: dockhub)
-  --agent-image name      Agent image name inside the registry (default: <image>-agent)
+  --image name            Image name inside the registry (default: dockhub/app)
+  --agent-image name      Agent image name inside the registry (default: dockhub/agent)
   --tag-prefix value      Prefix the version Docker tag, e.g. "v" for :v1.2.3
   -h, --help              Show this help
 
 Environment overrides:
   REGISTRY=registry.kdsb.com.kh
-  IMAGE_NAME=dockhub
-  AGENT_IMAGE_NAME=dockhub-agent
+  IMAGE_NAME=dockhub/app
+  AGENT_IMAGE_NAME=dockhub/agent
   VERSION_TAG_PREFIX=
   RELEASE_NOTES_DIR=release-notes
   LATEST_RELEASE_NOTES=RELEASE_NOTES.md
@@ -258,7 +258,13 @@ else
   write_version "${next_version}"
 fi
 
-AGENT_IMAGE_NAME="${AGENT_IMAGE_NAME:-${IMAGE_NAME}-agent}"
+if [[ -z "${AGENT_IMAGE_NAME}" ]]; then
+  if [[ "${IMAGE_NAME}" == */app ]]; then
+    AGENT_IMAGE_NAME="${IMAGE_NAME%/app}/agent"
+  else
+    AGENT_IMAGE_NAME="${IMAGE_NAME}-agent"
+  fi
+fi
 
 image="${REGISTRY}/${IMAGE_NAME}"
 agent_image="${REGISTRY}/${AGENT_IMAGE_NAME}"

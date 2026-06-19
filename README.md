@@ -90,8 +90,10 @@ DockHub ships with a `Dockerfile` and a `docker-compose.yml` that runs it as a s
 By default this bumps the patch version, writes release notes to `release-notes/v<version>.md` and `RELEASE_NOTES.md`, then pushes:
 
 ```text
-registry.kdsb.com.kh/dockhub:<version>
-registry.kdsb.com.kh/dockhub:latest
+registry.kdsb.com.kh/dockhub/app:<version>
+registry.kdsb.com.kh/dockhub/app:latest
+registry.kdsb.com.kh/dockhub/agent:<version>
+registry.kdsb.com.kh/dockhub/agent:latest
 ```
 
 Useful release variants:
@@ -111,7 +113,7 @@ Then deploy the published image:
 docker stack deploy -c docker-compose.yml dockhub
 ```
 
-The compose file uses `registry.kdsb.com.kh/dockhub:latest`, mounts the Docker socket read-only, and keeps a named volume for DockHub's own database, with a `node.role == manager` placement constraint.
+The compose file uses `registry.kdsb.com.kh/dockhub/app:latest` and `registry.kdsb.com.kh/dockhub/agent:latest`, mounts the Docker socket read-only, and keeps a named volume for DockHub's own database, with a `node.role == manager` placement constraint for the app service.
 
 If your network injects an internal or self-signed root CA, pass that CA into the build so npm can trust it:
 
@@ -122,7 +124,7 @@ docker build --secret id=npm_ca,src=company-root-ca.crt -t dockhub:latest .
 On networks that intercept TLS, the Docker build defaults to relaxed npm/Node certificate validation so the image can still be built. If you want to force strict validation during the build, use:
 
 ```bash
-docker build --build-arg NPM_CONFIG_STRICT_SSL=true --build-arg NODE_TLS_REJECT_UNAUTHORIZED=1 -t registry.kdsb.com.kh/dockhub:latest .
+docker build --build-arg NPM_CONFIG_STRICT_SSL=true --build-arg NODE_TLS_REJECT_UNAUTHORIZED=1 -t registry.kdsb.com.kh/dockhub/app:latest .
 ```
 
 Keeping strict validation disabled is convenient on trusted corporate networks, but the CA-secret approach above is the safer long-term option.
