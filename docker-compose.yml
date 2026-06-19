@@ -77,7 +77,7 @@ services:
     networks:
       - net
     environment:
-      DOCKHUB_AGENT_URL: "http://dockhub:3000/api/agent/report"
+      DOCKHUB_AGENT_URL: "http://dockhub_app:3000/api/agent/report"
       DOCKHUB_AGENT_TOKEN: "change-me-to-a-long-random-string"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

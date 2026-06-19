@@ -7,7 +7,7 @@
 import http from 'node:http'
 
 const SOCKET_PATH = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock'
-const TARGET_URL = process.env.DOCKHUB_AGENT_URL || 'http://dockhub:3000/api/agent/report'
+const TARGET_URL = process.env.DOCKHUB_AGENT_URL || 'http://dockhub_app:3000/api/agent/report'
 const TOKEN = process.env.DOCKHUB_AGENT_TOKEN || ''
 const INTERVAL_MS = Number(process.env.DOCKHUB_AGENT_INTERVAL_MS) || 5000
 const REQUEST_TIMEOUT_MS = 5000
