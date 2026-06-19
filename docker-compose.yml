@@ -16,6 +16,14 @@ services:
       NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
       # Shared secret with the dockhub-agent service below - keep them in sync.
       NUXT_AGENT_TOKEN: "change-me-to-a-long-random-string"
+      # Postgres + TimescaleDB - app data and metrics history, one instance.
+      # Keep credentials in sync with the timescaledb service below.
+      NUXT_DB_HOST: "timescaledb"
+      NUXT_DB_PORT: "5432"
+      NUXT_DB_NAME: "dockhub"
+      NUXT_DB_USER: "dockhub"
+      NUXT_DB_PASSWORD: "change-me-to-a-long-random-string"
+      NUXT_METRICS_RETENTION_DAYS: "30"
       # LDAP (optional)
       NUXT_LDAP_ENABLED: "false"
       # OIDC SSO (optional)
@@ -33,7 +41,6 @@ services:
       # NUXT_GITLAB_STACKS_PATH: "stacks"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - data:/data
     deploy:
       mode: replicated
       replicas: 1             # >=2 for rolling, zero-downtime updates
@@ -105,8 +112,41 @@ services:
           cpus: '0.05'
           memory: 32M
 
+  # Single Postgres + TimescaleDB instance: plain tables for app data
+  # (users/settings/audit/...) and Timescale hypertables for node/container
+  # metrics history (queried by the app's /api/*/metrics routes).
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    networks:
+      - net
+    environment:
+      POSTGRES_DB: dockhub
+      POSTGRES_USER: dockhub
+      # Keep in sync with the app service's NUXT_DB_PASSWORD above.
+      POSTGRES_PASSWORD: "change-me-to-a-long-random-string"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 30s
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+        limits:
+          cpus: '1.00'
+          memory: 2048M
+
 volumes:
-  data:
+  timescale-data:
 
 networks:
   net:

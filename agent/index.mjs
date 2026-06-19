@@ -4,8 +4,8 @@
 // Docker socket (raw HTTP, no dependencies, no remote TCP API) and posts a
 // stats snapshot back to the DockHub app, which is how it learns the usage
 // of nodes it isn't running on. Mirrors swarmpit-agent's role, kept minimal.
-import http from 'node:http'
 import { statfs } from 'node:fs/promises'
+import http from 'node:http'
 
 const SOCKET_PATH = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock'
 const TARGET_URL = process.env.DOCKHUB_AGENT_URL || 'http://dockhub_app:3000/api/agent/report'
@@ -53,6 +53,16 @@ function containerMemoryBytes(stats) {
   const usage = stats.memory_stats?.usage || 0
   const inactiveFile = stats.memory_stats?.stats?.total_inactive_file || stats.memory_stats?.stats?.cache || 0
   return Math.max(0, usage - inactiveFile)
+}
+
+function containerNetworkBytes(stats) {
+  let rx = 0
+  let tx = 0
+  for (const iface of Object.values(stats.networks || {})) {
+    rx += Number(iface?.rx_bytes) || 0
+    tx += Number(iface?.tx_bytes) || 0
+  }
+  return { rx, tx }
 }
 
 function dockerDfUsedBytes(df) {
@@ -127,13 +137,33 @@ async function collect() {
   const dockerUsedBytes = dockerDfUsedBytes(df)
   const disk = await collectDiskUsage([info.DockerRootDir, '/', '/var/lib/docker'], dockerUsedBytes)
 
+  // Per-container breakdown for history graphs - built from the same stats
+  // already fetched above for the aggregate, so no extra Docker API calls.
+  const containerList = (containers || []).map((container, i) => {
+    const s = stats[i]
+    if (!s) return null
+    const net = containerNetworkBytes(s)
+    return {
+      id: container.Id,
+      name: (container.Names?.[0] || '').replace(/^\//, ''),
+      taskId: container.Labels?.['com.docker.swarm.task.id'],
+      serviceId: container.Labels?.['com.docker.swarm.service.id'],
+      cpuPercent: round(containerCpuPercent(s), 1),
+      memoryUsedBytes: containerMemoryBytes(s),
+      memoryLimitBytes: Number(s.memory_stats?.limit) || 0,
+      networkRxBytes: net.rx,
+      networkTxBytes: net.tx,
+      state: container.State
+    }
+  }).filter(Boolean)
+
   return {
     nodeId,
     hostname: info.Name,
     cpu: { cores: round(cpuCores, 3), percent: round(cpuPercent, 1) },
     memory: { usedBytes: memoryUsedBytes, totalBytes: memoryTotal, percent: round(memoryPercent, 1) },
     disk,
-    containers: { running: (containers || []).length, sampled: stats.filter(Boolean).length }
+    containers: { running: (containers || []).length, sampled: stats.filter(Boolean).length, list: containerList }
   }
 }
 
@@ -152,7 +182,7 @@ async function tick() {
       console.error(`[dockhub-agent] report rejected: ${res.status} ${await res.text().catch(() => '')}`)
     }
   } catch (err) {
-    console.error(`[dockhub-agent] report failed: ${err?.message || err}`)
+    console.error(`[dockhub-agent] requested to: ${TARGET_URL}, report failed: ${err?.message || err}`)
   }
 }
 

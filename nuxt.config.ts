@@ -112,8 +112,22 @@ export default defineNuxtConfig({
       stacksPath: process.env.NUXT_GITLAB_STACKS_PATH || 'stacks'
     },
 
-    // data dir for the local user/settings store
-    dataDir: process.env.NUXT_DATA_DIR || './.data',
+    // Postgres + TimescaleDB - one instance: plain tables for app data
+    // (users/settings/audit/...), Timescale hypertables for metrics history.
+    db: {
+      host: process.env.NUXT_DB_HOST || 'localhost',
+      port: Number(process.env.NUXT_DB_PORT || 5432),
+      database: process.env.NUXT_DB_NAME || 'dockhub',
+      user: process.env.NUXT_DB_USER || 'dockhub',
+      password: process.env.NUXT_DB_PASSWORD || 'dockhub',
+      ssl: process.env.NUXT_DB_SSL === 'true',
+      poolMax: Number(process.env.NUXT_DB_POOL_MAX || 10)
+    },
+
+    // How long node/container metrics history is retained (Timescale retention policy)
+    metrics: {
+      retentionDays: Number(process.env.NUXT_METRICS_RETENTION_DAYS || 30)
+    },
 
     // --- Exposed to the client (safe values only) ---
     public: {
@@ -139,8 +153,9 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    // better-sqlite3 has native bindings — must not be bundled by Nitro
-    externals: { external: ['better-sqlite3'] },
+    // pg dynamically requires a few optional deps in ways Nitro's bundler
+    // can trip on — keep it external rather than bundled.
+    externals: { external: ['pg'] },
     // Docs build: only prerender /documentation (and root redirect)
     ...(isDocsBuild ? {
       prerender: {

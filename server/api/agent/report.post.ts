@@ -1,4 +1,5 @@
 import { recordAgentReport } from '~~/server/utils/agentReports'
+import { recordMetrics } from '~~/server/utils/metrics'
 
 /**
  * Ingest endpoint for the dockhub-agent task running on every swarm node
@@ -21,6 +22,18 @@ export default defineEventHandler(async (event) => {
     nodeId: body.nodeId,
     hostname: body.hostname,
     receivedAt: Date.now(),
+    cpu: body.cpu,
+    memory: body.memory,
+    disk: body.disk,
+    containers: body.containers
+  })
+
+  // Fire-and-forget: recordMetrics already try/catches internally, and a
+  // slow/down Postgres must never add latency to the agent's report cycle
+  // or break the live in-memory dashboard above.
+  void recordMetrics({
+    nodeId: body.nodeId,
+    hostname: body.hostname,
     cpu: body.cpu,
     memory: body.memory,
     disk: body.disk,

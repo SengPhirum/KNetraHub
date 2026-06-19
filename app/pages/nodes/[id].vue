@@ -8,6 +8,26 @@ const toast = useToast()
 const { data, status, error, refresh } = await useFetch(`/api/nodes/${id}`, { lazy: true })
 
 const node = computed(() => data.value?.node)
+
+// resource history
+const range = ref<'1h' | '6h' | '24h' | '7d'>('1h')
+const { data: metricsData, refresh: refreshMetrics } = await useFetch(`/api/nodes/${id}/metrics`, {
+  query: { range }, lazy: true
+})
+watch(range, () => refreshMetrics())
+
+function timeLabel(iso: string) {
+  const d = new Date(iso)
+  return range.value === '7d' || range.value === '24h'
+    ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
+const cpuSeries = computed(() => metricsData.value?.series?.cpu || [])
+const memorySeries = computed(() => metricsData.value?.series?.memory || [])
+const diskSeries = computed(() => metricsData.value?.series?.disk || [])
+const networkSeries = computed(() => metricsData.value?.series?.network || [])
+const historyLabels = computed(() => cpuSeries.value.map((p: any) => timeLabel(p.time)))
 const desc = computed(() => node.value?.Description)
 const hostname = computed(() => desc.value?.Hostname)
 const labels = computed<Record<string, string>>(() => node.value?.Spec?.Labels || {})
@@ -91,6 +111,52 @@ async function remove() {
           </div>
           <p v-else class="text-sm text-faint">No labels set.</p>
         </div>
+      </div>
+
+      <div class="panel p-4 mb-5">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 class="font-display text-sm font-semibold text-foam">Resource history</h3>
+          <USelect v-model="range" :items="['1h', '6h', '24h', '7d']" size="xs" class="w-24" />
+        </div>
+        <ClientOnly>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="text-xs text-faint mb-1">CPU %</p>
+              <MetricsChart
+                :labels="historyLabels"
+                :datasets="[{ label: 'CPU', data: cpuSeries.map((p: any) => p.percent) }]"
+                :format-value="(n) => `${n.toFixed(1)}%`"
+              />
+            </div>
+            <div>
+              <p class="text-xs text-faint mb-1">Memory</p>
+              <MetricsChart
+                :labels="historyLabels"
+                :datasets="[{ label: 'Used', data: memorySeries.map((p: any) => p.used) }]"
+                :format-value="bytes"
+              />
+            </div>
+            <div>
+              <p class="text-xs text-faint mb-1">Disk %</p>
+              <MetricsChart
+                :labels="historyLabels"
+                :datasets="[{ label: 'Disk', data: diskSeries.map((p: any) => p.percent) }]"
+                :format-value="(n) => `${n.toFixed(1)}%`"
+              />
+            </div>
+            <div>
+              <p class="text-xs text-faint mb-1">Network</p>
+              <MetricsChart
+                :labels="historyLabels"
+                :datasets="[
+                  { label: 'Rx/s', data: networkSeries.map((p: any) => p.rxBytesPerSec) },
+                  { label: 'Tx/s', data: networkSeries.map((p: any) => p.txBytesPerSec) }
+                ]"
+                :format-value="bytes"
+              />
+            </div>
+          </div>
+        </ClientOnly>
       </div>
 
       <h3 class="font-display text-sm font-semibold text-foam mb-3">Tasks on this node</h3>

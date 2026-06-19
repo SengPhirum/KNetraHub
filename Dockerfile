@@ -3,7 +3,7 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates python3 make g++
+RUN apk add --no-cache ca-certificates
 
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
@@ -31,13 +31,11 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 ENV NODE_ENV=production
-ENV NUXT_DATA_DIR=/data
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /usr/local/share/ca-certificates /usr/local/share/ca-certificates
 COPY --from=build /app/.output ./.output
 
-VOLUME /data
 EXPOSE 3000
 CMD ["node", ".output/server/index.mjs"]

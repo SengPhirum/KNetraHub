@@ -2,6 +2,8 @@
 withDefaults(defineProps<{ compact?: boolean; showMeta?: boolean }>(), { compact: false, showMeta: false })
 
 const colorMode = useColorMode()
+const { user } = useAuth()
+const { updatePreferences } = usePreferences()
 
 const CYCLE = ['system', 'dark', 'light'] as const
 type ThemePreference = typeof CYCLE[number]
@@ -14,7 +16,13 @@ const options: Array<{ value: ThemePreference; label: string; icon: string; hint
 
 const preference = computed<ThemePreference>({
   get:  () => CYCLE.includes(colorMode.preference as ThemePreference) ? colorMode.preference as ThemePreference : 'system',
-  set:  (v) => { colorMode.preference = v }
+  set:  (v) => {
+    // Set immediately so the click feels instant, then persist. Without
+    // persisting, the next page load's fetchPreferences() re-pulls the old
+    // DB value and silently reverts whatever was chosen here.
+    colorMode.preference = v
+    if (user.value) void updatePreferences({ theme: v }).catch(() => null)
+  }
 })
 
 const current = computed(() => options.find((o) => o.value === preference.value) ?? options[0])

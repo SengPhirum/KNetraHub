@@ -27,12 +27,31 @@ x-worker-node: &worker-node
     # against this node's local Docker socket, reporting to the manager's
     # app - same role as the dockhub-agent global service in prod.
     DOCKHUB_AGENT_URL: "http://swarm-manager:3000/api/agent/report"
+    # Shared secret with the manager's NUXT_AGENT_TOKEN below - keep in sync.
+    DOCKHUB_AGENT_TOKEN: "change-me-to-a-long-random-string"
   volumes:
     - ./docker/dev/swarm-entrypoint.sh:/usr/local/bin/dockhub-swarm-dev:ro
     - ./agent:/agent:ro
     - dockhub-swarm-state:/swarm
 
 services:
+  # Single Postgres + TimescaleDB instance for app data + metrics history -
+  # plain compose service (not part of the nested swarm), reachable from
+  # swarm-manager by hostname on the dockhub-dev network.
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    hostname: timescaledb
+    networks:
+      - dockhub-dev
+    environment:
+      POSTGRES_DB: dockhub
+      POSTGRES_USER: dockhub
+      POSTGRES_PASSWORD: dockhub
+    volumes:
+      - dockhub-timescale-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   swarm-manager:
     <<: *swarm-common
     build:
@@ -42,6 +61,8 @@ services:
         DOCKER_DIND_IMAGE: ${DOCKER_DIND_IMAGE:-docker:29-dind}
     hostname: swarm-manager
     command: ["manager"]
+    depends_on:
+      - timescaledb
     env_file:
       - .env
     environment:
@@ -62,6 +83,16 @@ services:
       WATCHPACK_POLLING: "true"
       # The manager's dockhub-agent process talks to the app in the same container.
       DOCKHUB_AGENT_URL: "http://localhost:3000/api/agent/report"
+      DOCKHUB_AGENT_TOKEN: "change-me-to-a-long-random-string"
+      # Shared secret the report endpoint checks against - keep in sync with
+      # DOCKHUB_AGENT_TOKEN above and on every worker node.
+      NUXT_AGENT_TOKEN: "change-me-to-a-long-random-string"
+      # Postgres + TimescaleDB - app data and metrics history, one instance.
+      NUXT_DB_HOST: "timescaledb"
+      NUXT_DB_PORT: "5432"
+      NUXT_DB_NAME: "dockhub"
+      NUXT_DB_USER: "dockhub"
+      NUXT_DB_PASSWORD: "dockhub"
     ports:
       - "3000:3000"
     volumes:
@@ -98,3 +129,4 @@ volumes:
   dockhub-swarm-state:
   dockhub-node-modules:
   dockhub-nuxt:
+  dockhub-timescale-data:

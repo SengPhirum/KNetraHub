@@ -29,7 +29,19 @@ const { items: filteredTasks, search, sortBy, sortDir, sortOptions } = useListCo
   defaultSortBy: 'Slot'
 })
 
-const tab = ref<'tasks' | 'logs' | 'config'>('tasks')
+const tab = ref<'tasks' | 'logs' | 'config' | 'history'>('tasks')
+
+// status history
+const statusEvents = ref<any[]>([])
+const historyLoading = ref(false)
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res: any = await $fetch(`/api/services/${id}/status-events`)
+    statusEvents.value = res.events || []
+  } finally { historyLoading.value = false }
+}
+watch(tab, (t) => { if (t === 'history' && !statusEvents.value.length) loadHistory() })
 
 // logs
 const logs = ref('')
@@ -118,7 +130,7 @@ async function remove() {
       </div>
 
       <div class="flex flex-wrap gap-1 mb-5 border-b border-hull">
-        <button v-for="t in [{k:'tasks',l:'Tasks',i:'i-lucide-list'},{k:'logs',l:'Logs',i:'i-lucide-scroll-text'},{k:'config',l:'Config',i:'i-lucide-settings-2'}]" :key="t.k"
+        <button v-for="t in [{k:'tasks',l:'Tasks',i:'i-lucide-list'},{k:'logs',l:'Logs',i:'i-lucide-scroll-text'},{k:'config',l:'Config',i:'i-lucide-settings-2'},{k:'history',l:'History',i:'i-lucide-history'}]" :key="t.k"
           @click="tab = t.k as any"
           class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition"
           :class="tab === t.k ? 'border-beacon text-foam' : 'border-transparent text-(--color-muted) hover:text-foam'">
@@ -183,6 +195,22 @@ async function remove() {
               <span class="text-beacon">{{ e.split('=')[0] }}</span>=<span class="text-faint">{{ e.split('=').slice(1).join('=') }}</span>
             </p>
           </div>
+        </div>
+      </div>
+
+      <!-- history -->
+      <div v-else-if="tab === 'history'" class="space-y-2">
+        <div v-if="historyLoading && !statusEvents.length" class="flex items-center justify-center py-16 text-(--color-muted)">
+          <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Loading…
+        </div>
+        <div v-else-if="!statusEvents.length" class="panel p-10 text-center text-sm text-(--color-muted)">No status history yet.</div>
+        <div v-else v-for="(e, i) in statusEvents" :key="i" class="panel-flush p-3 flex items-center justify-between gap-3 text-sm">
+          <div class="flex items-center gap-3 min-w-0">
+            <StatusBadge :state="e.status" />
+            <span v-if="e.taskId" class="font-mono text-xs text-faint truncate">task {{ short(e.taskId) }}</span>
+            <span v-if="e.message" class="text-xs text-faint truncate">{{ e.message }}</span>
+          </div>
+          <span class="text-xs text-faint shrink-0">{{ relative(e.time) }}</span>
         </div>
       </div>
     </DataState>

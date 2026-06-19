@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { nanoid } from 'nanoid'
 import { createHash, randomBytes } from 'node:crypto'
+import { migrate } from './db'
 
 export type Role = 'admin' | 'operator' | 'viewer'
 export type UserSource = 'local' | 'ldap' | 'oidc'
@@ -57,30 +58,38 @@ function rowToUser(row: any): User {
   }
 }
 
-function ensureAdmin() {
+async function ensureAdmin() {
+  // Defensive: Nitro doesn't await plugins before it starts accepting
+  // requests (server/plugins/db.ts's migrate() may still be in flight), so a
+  // request landing in the first moment after a fresh deploy could otherwise
+  // hit "relation users does not exist". migrate() is memoized, so this is a
+  // no-op once the plugin's own call has completed.
+  await migrate()
   const db = getDb()
-  const { n } = db.prepare('SELECT COUNT(*) as n FROM users').get() as { n: number }
-  if (n > 0) return
+  const { rows } = await db.query('SELECT COUNT(*) as n FROM users')
+  if (rows[0].n > 0) return
   const password = process.env.NUXT_ADMIN_PASSWORD || 'admin'
-  db.prepare(
-    'INSERT INTO users (id, username, display_name, role, source, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(
-    nanoid(),
-    process.env.NUXT_ADMIN_USERNAME || 'admin',
-    'Administrator',
-    'admin',
-    'local',
-    bcrypt.hashSync(password, 10),
-    new Date().toISOString()
+  await db.query(
+    'INSERT INTO users (id, username, display_name, role, source, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [
+      nanoid(),
+      process.env.NUXT_ADMIN_USERNAME || 'admin',
+      'Administrator',
+      'admin',
+      'local',
+      bcrypt.hashSync(password, 10),
+      new Date().toISOString()
+    ]
   )
 }
 
 // ─── users ────────────────────────────────────────────────────────────────────
 
 export async function listUsers(): Promise<User[]> {
-  ensureAdmin()
+  await ensureAdmin()
   const db = getDb()
-  return (db.prepare('SELECT * FROM users ORDER BY created_at').all() as any[]).map((r) => {
+  const { rows } = await db.query('SELECT * FROM users ORDER BY created_at')
+  return rows.map((r: any) => {
     const u = rowToUser(r)
     delete u.passwordHash
     return u
@@ -88,10 +97,10 @@ export async function listUsers(): Promise<User[]> {
 }
 
 export async function findUser(username: string): Promise<User | undefined> {
-  ensureAdmin()
+  await ensureAdmin()
   const db = getDb()
-  const row = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username)
-  return row ? rowToUser(row as any) : undefined
+  const { rows } = await db.query('SELECT * FROM users WHERE lower(username) = lower($1)', [username])
+  return rows[0] ? rowToUser(rows[0]) : undefined
 }
 
 export async function verifyLocalUser(username: string, password: string): Promise<User | null> {
@@ -109,21 +118,24 @@ export async function upsertExternalUser(input: {
   source: Exclude<UserSource, 'local'>
 }): Promise<User> {
   const db = getDb()
-  const existing = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(input.username) as any
+  const { rows: existingRows } = await db.query('SELECT * FROM users WHERE lower(username) = lower($1)', [input.username])
+  const existing = existingRows[0]
 
   if (existing) {
-    db.prepare(
-      'UPDATE users SET display_name = ?, email = ?, role = ?, source = ? WHERE id = ?'
-    ).run(input.displayName, input.email ?? null, input.role, input.source, existing.id)
+    await db.query(
+      'UPDATE users SET display_name = $1, email = $2, role = $3, source = $4 WHERE id = $5',
+      [input.displayName, input.email ?? null, input.role, input.source, existing.id]
+    )
   } else {
     const id = nanoid()
-    db.prepare(
-      'INSERT INTO users (id, username, display_name, email, role, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, input.username, input.displayName, input.email ?? null, input.role, input.source, new Date().toISOString())
+    await db.query(
+      'INSERT INTO users (id, username, display_name, email, role, source, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, input.username, input.displayName, input.email ?? null, input.role, input.source, new Date().toISOString()]
+    )
   }
 
-  const row = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(input.username)
-  return rowToUser(row as any)
+  const { rows } = await db.query('SELECT * FROM users WHERE lower(username) = lower($1)', [input.username])
+  return rowToUser(rows[0])
 }
 
 export async function createLocalUser(input: {
@@ -134,25 +146,26 @@ export async function createLocalUser(input: {
   password: string
 }): Promise<User> {
   const db = getDb()
-  const clash = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(input.username)
-  if (clash) throw createError({ statusCode: 409, statusMessage: 'A user with that name already exists' })
+  const { rows: clashRows } = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [input.username])
+  if (clashRows[0]) throw createError({ statusCode: 409, statusMessage: 'A user with that name already exists' })
 
   const id = nanoid()
-  db.prepare(
-    'INSERT INTO users (id, username, display_name, email, role, source, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(
-    id,
-    input.username,
-    input.displayName || input.username,
-    input.email ?? null,
-    input.role,
-    'local',
-    bcrypt.hashSync(input.password, 10),
-    new Date().toISOString()
+  await db.query(
+    'INSERT INTO users (id, username, display_name, email, role, source, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+    [
+      id,
+      input.username,
+      input.displayName || input.username,
+      input.email ?? null,
+      input.role,
+      'local',
+      bcrypt.hashSync(input.password, 10),
+      new Date().toISOString()
+    ]
   )
 
-  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
-  const user = rowToUser(row)
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id])
+  const user = rowToUser(rows[0])
   delete user.passwordHash
   return user
 }
@@ -162,46 +175,46 @@ export async function updateUser(
   patch: Partial<Pick<User, 'role' | 'displayName' | 'email'>> & { password?: string }
 ): Promise<User> {
   const db = getDb()
-  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id])
+  const row = rows[0]
   if (!row) throw createError({ statusCode: 404, statusMessage: 'User not found' })
 
   const fields: string[] = []
   const vals: any[] = []
 
-  if (patch.role !== undefined) { fields.push('role = ?'); vals.push(patch.role) }
-  if (patch.displayName !== undefined) { fields.push('display_name = ?'); vals.push(patch.displayName) }
-  if (patch.email !== undefined) { fields.push('email = ?'); vals.push(patch.email) }
+  if (patch.role !== undefined) { fields.push(`role = $${fields.length + 1}`); vals.push(patch.role) }
+  if (patch.displayName !== undefined) { fields.push(`display_name = $${fields.length + 1}`); vals.push(patch.displayName) }
+  if (patch.email !== undefined) { fields.push(`email = $${fields.length + 1}`); vals.push(patch.email) }
   if (patch.password && row.source === 'local') {
-    fields.push('password_hash = ?')
+    fields.push(`password_hash = $${fields.length + 1}`)
     vals.push(bcrypt.hashSync(patch.password, 10))
   }
 
   if (fields.length) {
     vals.push(id)
-    db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...vals)
+    await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals)
   }
 
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
-  const user = rowToUser(updated)
+  const { rows: updatedRows } = await db.query('SELECT * FROM users WHERE id = $1', [id])
+  const user = rowToUser(updatedRows[0])
   delete user.passwordHash
   return user
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  getDb().prepare('DELETE FROM users WHERE id = ?').run(id)
+  await getDb().query('DELETE FROM users WHERE id = $1', [id])
 }
 
 export async function touchLogin(username: string): Promise<void> {
-  getDb().prepare('UPDATE users SET last_login = ? WHERE username = ? COLLATE NOCASE').run(
-    new Date().toISOString(), username
-  )
+  await getDb().query('UPDATE users SET last_login = $1 WHERE lower(username) = lower($2)', [new Date().toISOString(), username])
 }
 
 // ─── user preferences ─────────────────────────────────────────────────────────
 
 export async function getUserPreferences(userId: string): Promise<UserPreferences> {
   const db = getDb()
-  const row = db.prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any
+  const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
+  const row = rows[0]
   if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {} }
   const data = parsePreferenceData(row.data)
   return {
@@ -234,26 +247,28 @@ function sanitizeListPreferences(input: any): UserPreferences['lists'] {
 
 export async function updateUserPreferences(userId: string, patch: Partial<UserPreferences>): Promise<UserPreferences> {
   const db = getDb()
-  const existing = db.prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any
+  const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
+  const existing = rows[0]
   const currentData = parsePreferenceData(existing?.data)
   const nextData = patch.lists !== undefined
     ? { ...currentData, lists: sanitizeListPreferences(patch.lists) }
     : currentData
 
   if (!existing) {
-    db.prepare(
-      'INSERT INTO user_preferences (user_id, theme, refresh_interval, density, data) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, patch.theme ?? 'system', patch.refreshInterval ?? 0, patch.density ?? 'default', JSON.stringify(nextData))
+    await db.query(
+      'INSERT INTO user_preferences (user_id, theme, refresh_interval, density, data) VALUES ($1, $2, $3, $4, $5)',
+      [userId, patch.theme ?? 'system', patch.refreshInterval ?? 0, patch.density ?? 'default', JSON.stringify(nextData)]
+    )
   } else {
     const fields: string[] = []
     const vals: any[] = []
-    if (patch.theme !== undefined) { fields.push('theme = ?'); vals.push(patch.theme) }
-    if (patch.refreshInterval !== undefined) { fields.push('refresh_interval = ?'); vals.push(patch.refreshInterval) }
-    if (patch.density !== undefined) { fields.push('density = ?'); vals.push(patch.density) }
-    if (patch.lists !== undefined) { fields.push('data = ?'); vals.push(JSON.stringify(nextData)) }
+    if (patch.theme !== undefined) { fields.push(`theme = $${fields.length + 1}`); vals.push(patch.theme) }
+    if (patch.refreshInterval !== undefined) { fields.push(`refresh_interval = $${fields.length + 1}`); vals.push(patch.refreshInterval) }
+    if (patch.density !== undefined) { fields.push(`density = $${fields.length + 1}`); vals.push(patch.density) }
+    if (patch.lists !== undefined) { fields.push(`data = $${fields.length + 1}`); vals.push(JSON.stringify(nextData)) }
     if (fields.length) {
       vals.push(userId)
-      db.prepare(`UPDATE user_preferences SET ${fields.join(', ')} WHERE user_id = ?`).run(...vals)
+      await db.query(`UPDATE user_preferences SET ${fields.join(', ')} WHERE user_id = $${vals.length}`, vals)
     }
   }
 
@@ -263,21 +278,31 @@ export async function updateUserPreferences(userId: string, patch: Partial<UserP
 // ─── audit ────────────────────────────────────────────────────────────────────
 
 export async function audit(entry: Omit<AuditEntry, 'id' | 'ts'>): Promise<void> {
-  const db = getDb()
-  db.prepare(
-    'INSERT INTO audit (id, ts, actor, action, target, detail) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(nanoid(), new Date().toISOString(), entry.actor, entry.action, entry.target ?? null, entry.detail ?? null)
-
-  // Keep only 1000 most recent entries
-  db.prepare(`
-    DELETE FROM audit WHERE id NOT IN (
-      SELECT id FROM audit ORDER BY ts DESC LIMIT 1000
+  const client = await getDb().connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      'INSERT INTO audit (id, ts, actor, action, target, detail) VALUES ($1, $2, $3, $4, $5, $6)',
+      [nanoid(), new Date().toISOString(), entry.actor, entry.action, entry.target ?? null, entry.detail ?? null]
     )
-  `).run()
+    // Keep only the 1000 most recent entries
+    await client.query(`
+      DELETE FROM audit WHERE id NOT IN (
+        SELECT id FROM audit ORDER BY ts DESC LIMIT 1000
+      )
+    `)
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 export async function listAudit(limit = 200): Promise<AuditEntry[]> {
-  return (getDb().prepare('SELECT * FROM audit ORDER BY ts DESC LIMIT ?').all(limit) as any[]).map((r) => ({
+  const { rows } = await getDb().query('SELECT * FROM audit ORDER BY ts DESC LIMIT $1', [limit])
+  return rows.map((r: any) => ({
     id: r.id,
     ts: r.ts,
     actor: r.actor,
@@ -290,7 +315,8 @@ export async function listAudit(limit = 200): Promise<AuditEntry[]> {
 // ─── registries ───────────────────────────────────────────────────────────────
 
 export async function listRegistries(): Promise<Registry[]> {
-  return (getDb().prepare('SELECT * FROM registries ORDER BY name').all() as any[]).map((r) => ({
+  const { rows } = await getDb().query('SELECT * FROM registries ORDER BY name')
+  return rows.map((r: any) => ({
     id: r.id,
     name: r.name,
     url: r.url,
@@ -302,31 +328,34 @@ export async function listRegistries(): Promise<Registry[]> {
 export async function addRegistry(input: Omit<Registry, 'id'>): Promise<Registry> {
   const db = getDb()
   const id = nanoid()
-  db.prepare(
-    'INSERT INTO registries (id, name, url, username, auth) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, input.name, input.url, input.username, input.auth ?? null)
+  await db.query(
+    'INSERT INTO registries (id, name, url, username, auth) VALUES ($1, $2, $3, $4, $5)',
+    [id, input.name, input.url, input.username, input.auth ?? null]
+  )
   return { id, ...input }
 }
 
 export async function deleteRegistry(id: string): Promise<void> {
-  getDb().prepare('DELETE FROM registries WHERE id = ?').run(id)
+  await getDb().query('DELETE FROM registries WHERE id = $1', [id])
 }
 
 // ─── app settings ─────────────────────────────────────────────────────────────
 
 export async function getAppSetting(key: string): Promise<string | null> {
-  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as any
-  return row?.value ?? null
+  const { rows } = await getDb().query('SELECT value FROM app_settings WHERE key = $1', [key])
+  return rows[0]?.value ?? null
 }
 
 export async function setAppSetting(key: string, value: string, actor: string): Promise<void> {
-  getDb().prepare(
-    'INSERT OR REPLACE INTO app_settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)'
-  ).run(key, value, new Date().toISOString(), actor)
+  await getDb().query(
+    `INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+    [key, value, new Date().toISOString(), actor]
+  )
 }
 
 export async function deleteAppSetting(key: string): Promise<void> {
-  getDb().prepare('DELETE FROM app_settings WHERE key = ?').run(key)
+  await getDb().query('DELETE FROM app_settings WHERE key = $1', [key])
 }
 
 // ─── api tokens ───────────────────────────────────────────────────────────────
@@ -341,7 +370,8 @@ export interface ApiToken {
 }
 
 export async function listApiTokens(userId: string): Promise<ApiToken[]> {
-  return (getDb().prepare('SELECT * FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[]).map((r) => ({
+  const { rows } = await getDb().query('SELECT * FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC', [userId])
+  return rows.map((r: any) => ({
     id: r.id,
     userId: r.user_id,
     name: r.name,
@@ -357,29 +387,31 @@ export async function createApiToken(userId: string, name: string): Promise<ApiT
   const prefix = raw.slice(5, 13)
   const id = nanoid()
   const createdAt = new Date().toISOString()
-  getDb().prepare(
-    'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, userId, name, hash, prefix, createdAt)
+  await getDb().query(
+    'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [id, userId, name, hash, prefix, createdAt]
+  )
   return { id, userId, name, prefix, createdAt, token: raw }
 }
 
 export async function deleteApiToken(id: string, userId: string): Promise<void> {
-  const result = getDb().prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, userId)
-  if ((result as any).changes === 0) throw createError({ statusCode: 404, statusMessage: 'Token not found' })
+  const result = await getDb().query('DELETE FROM api_tokens WHERE id = $1 AND user_id = $2', [id, userId])
+  if (result.rowCount === 0) throw createError({ statusCode: 404, statusMessage: 'Token not found' })
 }
 
 export async function lookupApiTokenUser(raw: string): Promise<{ id: string; username: string; displayName: string; role: Role; source: UserSource } | null> {
   if (!raw.startsWith('dhub_')) return null
   const hash = createHash('sha256').update(raw).digest('hex')
   const db = getDb()
-  const row = db.prepare(`
+  const { rows } = await db.query(`
     SELECT t.user_id, u.username, u.display_name, u.role, u.source
     FROM api_tokens t
     JOIN users u ON u.id = t.user_id
-    WHERE t.token_hash = ?
-  `).get(hash) as any
+    WHERE t.token_hash = $1
+  `, [hash])
+  const row = rows[0]
   if (!row) return null
-  db.prepare('UPDATE api_tokens SET last_used = ? WHERE token_hash = ?').run(new Date().toISOString(), hash)
+  await db.query('UPDATE api_tokens SET last_used = $1 WHERE token_hash = $2', [new Date().toISOString(), hash])
   return {
     id: row.user_id,
     username: row.username,

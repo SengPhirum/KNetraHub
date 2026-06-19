@@ -1,27 +1,70 @@
-import Database from 'better-sqlite3'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { Pool, types } from 'pg'
 
-let _db: Database.Database | null = null
+// Postgres returns BIGINT (oid 20, e.g. byte counters and COUNT(*)) as JS
+// strings by default to avoid silent precision loss above
+// Number.MAX_SAFE_INTEGER. Nothing in this app approaches that range, so
+// coerce to Number globally rather than at every call site.
+types.setTypeParser(20, (val: string) => Number(val))
 
-export function getDb(): Database.Database {
-  if (_db) return _db
-  const dir = resolve(useRuntimeConfig().dataDir)
-  mkdirSync(dir, { recursive: true })
-  _db = new Database(join(dir, 'dockhub.db'))
-  _db.pragma('journal_mode = WAL')
-  _db.pragma('foreign_keys = ON')
-  _db.pragma('synchronous = NORMAL')
-  runMigrations(_db)
-  seedFromJson(_db, dir)
-  return _db
+let _pool: Pool | null = null
+let _migrated: Promise<void> | null = null
+
+export function getDb(): Pool {
+  if (!_pool) {
+    const cfg = useRuntimeConfig().db
+    _pool = new Pool({
+      host: cfg.host,
+      port: cfg.port,
+      database: cfg.database,
+      user: cfg.user,
+      password: cfg.password,
+      ssl: cfg.ssl ? { rejectUnauthorized: false } : false,
+      max: cfg.poolMax
+    })
+    _pool.on('error', (err) => {
+      console.error('[db] idle pool client error', err)
+    })
+  }
+  return _pool
 }
 
-function runMigrations(db: Database.Database) {
-  db.exec(`
+/** Waits for Postgres to accept connections, retrying with backoff. The
+ * Postgres/Timescale container may not be ready when the app container
+ * starts - there's no reliable depends_on health-gating in a swarm stack
+ * deploy, and Timescale's own first-boot init can itself take 10-30s. */
+export async function waitForDb(maxAttempts = 30, delayMs = 2000): Promise<void> {
+  const db = getDb()
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await db.query('SELECT 1')
+      return
+    } catch (err) {
+      if (attempt === maxAttempts) throw err
+      console.warn(`[db] not ready yet (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms`)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+}
+
+/** Runs all app-data DDL migrations. Idempotent (IF NOT EXISTS everywhere)
+ * and memoized so repeated calls (from multiple Nitro plugins) are cheap and
+ * don't depend on plugin execution order. */
+export async function migrate(): Promise<void> {
+  if (!_migrated) _migrated = runMigrations()
+  return _migrated
+}
+
+async function runMigrations(): Promise<void> {
+  const db = getDb()
+
+  // App-data tables keep TEXT ISO8601 timestamps (identical to the old
+  // SQLite schema) since they're only ever stored/displayed/sorted as
+  // strings, never range-queried - only the metrics hypertables (see
+  // metrics.ts) need real TIMESTAMPTZ columns for Timescale partitioning.
+  await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+      username TEXT UNIQUE NOT NULL,
       display_name TEXT NOT NULL,
       email TEXT,
       role TEXT NOT NULL DEFAULT 'viewer',
@@ -30,6 +73,9 @@ function runMigrations(db: Database.Database) {
       created_at TEXT NOT NULL,
       last_login TEXT
     );
+
+    -- replaces SQLite's COLLATE NOCASE: case-insensitive uniqueness + lookup
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));
 
     CREATE TABLE IF NOT EXISTS user_preferences (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -63,7 +109,7 @@ function runMigrations(db: Database.Database) {
       detail TEXT
     );
 
-    CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit (ts DESC);
 
     CREATE TABLE IF NOT EXISTS api_tokens (
       id TEXT PRIMARY KEY,
@@ -75,42 +121,6 @@ function runMigrations(db: Database.Database) {
       last_used TEXT
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);
   `)
-
-  const preferenceColumns = db.prepare('PRAGMA table_info(user_preferences)').all() as Array<{ name: string }>
-  if (!preferenceColumns.some((column) => column.name === 'data')) {
-    db.prepare('ALTER TABLE user_preferences ADD COLUMN data TEXT NOT NULL DEFAULT "{}"').run()
-  }
-}
-
-function seedFromJson(db: Database.Database, dir: string) {
-  const jsonFile = join(dir, 'dockhub.json')
-  if (!existsSync(jsonFile)) return
-
-  const { n } = db.prepare('SELECT COUNT(*) as n FROM users').get() as { n: number }
-  if (n > 0) return
-
-  try {
-    const data = JSON.parse(readFileSync(jsonFile, 'utf-8'))
-    const iUser = db.prepare(
-      'INSERT OR IGNORE INTO users (id, username, display_name, email, role, source, password_hash, created_at, last_login) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    )
-    const iReg = db.prepare('INSERT OR IGNORE INTO registries (id, name, url, username, auth) VALUES (?, ?, ?, ?, ?)')
-    const iAudit = db.prepare('INSERT OR IGNORE INTO audit (id, ts, actor, action, target, detail) VALUES (?, ?, ?, ?, ?, ?)')
-
-    db.transaction(() => {
-      for (const u of (data.users ?? [])) {
-        iUser.run(u.id, u.username, u.displayName, u.email ?? null, u.role, u.source, u.passwordHash ?? null, u.createdAt, u.lastLogin ?? null)
-      }
-      for (const r of (data.registries ?? [])) {
-        iReg.run(r.id, r.name, r.url, r.username, r.auth ?? null)
-      }
-      for (const a of (data.audit ?? [])) {
-        iAudit.run(a.id, a.ts, a.actor, a.action, a.target ?? null, a.detail ?? null)
-      }
-    })()
-  } catch {
-    // best-effort JSON migration
-  }
 }
