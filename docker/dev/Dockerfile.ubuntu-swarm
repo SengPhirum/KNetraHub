@@ -14,7 +14,9 @@ ENV DOCKER_TLS_CERTDIR=""
 
 SHELL ["/bin/sh", "-c"]
 
-RUN apt-get update \
+# Docker Desktop/WSL clocks can drift after sleep, causing apt to reject a
+# freshly published Release file as "not valid yet" during local dev builds.
+RUN apt-get -o Acquire::Max-FutureTime=86400 update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     docker.io \

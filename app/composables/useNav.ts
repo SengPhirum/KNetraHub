@@ -50,9 +50,7 @@ export function useNav(): NavGroup[] {
     {
       label: 'Documentation',
       items: [
-        { label: 'User Manual',    to: '/documentation#manual',        icon: 'i-lucide-book-open' },
-        { label: 'Configuration',  to: '/documentation#configuration', icon: 'i-lucide-sliders-horizontal' },
-        { label: 'API Reference',  to: '/documentation#api',           icon: 'i-lucide-braces' }
+        { label: 'Documentation and API', to: '/documentation', icon: 'i-lucide-book-open-text' }
       ]
     }
   ]

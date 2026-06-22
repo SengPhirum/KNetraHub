@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const props = defineProps<{ collapsed?: boolean }>()
+defineProps<{ collapsed?: boolean }>()
 const emit = defineEmits<{ navigate: [] }>()
 
 const groups = useNav()
-const { user, can } = useAuth()
+const { can } = useAuth()
 const route = useRoute()
 
 const visibleGroups = computed(() =>
@@ -67,9 +67,6 @@ function isActive(to: string) {
       </div>
 
       <div v-if="documentationGroup" class="mt-auto pt-6">
-        <p class="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
-          {{ documentationGroup.label }}
-        </p>
         <ul class="space-y-0.5">
           <li v-for="item in documentationGroup.items" :key="item.to">
             <NuxtLink
@@ -95,19 +92,22 @@ function isActive(to: string) {
       </div>
     </nav>
 
-    <!-- account -->
-    <div class="border-t border-hull-soft p-3">
-      <div class="flex items-center gap-3 rounded-lg px-2 py-1.5">
-        <span class="flex size-9 items-center justify-center rounded-full bg-surface-2 text-sm font-semibold text-foam ring-1 ring-hull">
-          {{ (user?.displayName || '?').charAt(0).toUpperCase() }}
-        </span>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-foam">{{ user?.displayName || user?.username || '—' }}</p>
-          <p class="truncate text-xs text-faint capitalize">
-            {{ user?.role || '' }}<template v-if="user?.role && user?.source"> · {{ user.source }}</template>
-          </p>
-        </div>
-      </div>
+    <!-- credit -->
+    <div class="border-t border-hull-soft px-3 py-3">
+      <p class="flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[11px] text-faint">
+        <span>Made with</span>
+        <span class="font-medium text-running">&#9829;</span>
+        <span>by</span>
+        <a
+          href="https://github.com/sengphirum"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 font-semibold text-beacon transition-colors hover:text-foam"
+        >
+          <UIcon name="i-lucide-github" class="size-3.5" />
+          <span>Seng Phirum</span>
+        </a>
+      </p>
     </div>
   </div>
 </template>
