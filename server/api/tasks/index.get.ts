@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
     state: t.Status?.State,
     message: t.Status?.Err || t.Status?.Message,
     timestamp: t.Status?.Timestamp,
+    createdAt: t.CreatedAt,
     metrics: metricsByTask.get(t.ID!) || null
   })).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
 })

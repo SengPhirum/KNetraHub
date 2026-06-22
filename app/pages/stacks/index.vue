@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { can } = useAuth()
 const { prefs } = usePreferences()
+const { relative } = useFormat()
 const toast = useToast()
 
 const { data, status, error, refreshing, refresh } = useApiCache('stacks', () => $fetch<any[]>('/api/stacks'))
@@ -20,6 +21,10 @@ const stackSortOptions = [
   { label: 'Running tasks', value: 'runningTasks' },
   { label: 'Desired tasks', value: 'desiredTasks' },
   { label: 'Networks', value: 'networks' },
+  { label: 'Volumes', value: 'volumes' },
+  { label: 'Configs', value: 'configs' },
+  { label: 'Secrets', value: 'secrets' },
+  { label: 'Updated', value: 'updatedAt' },
   { label: 'Git tracked', value: 'inGit' }
 ]
 const stackFilterOptions = [
@@ -30,6 +35,11 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
   defaultSortBy: 'name',
   filterOptions: stackFilterOptions
 })
+
+function stackStatus(s: any) {
+  if (!s.services) return 'defined'
+  return s.runningTasks >= s.desiredTasks && s.desiredTasks > 0 ? 'deployed' : 'partial'
+}
 
 const open = ref(false)
 const form = reactive({ name: '', compose: '', message: '' })
@@ -75,6 +85,16 @@ async function deploy() {
   <div>
     <PageHeader title="Stacks" subtitle="Compose-defined application stacks, versioned in GitLab" icon="i-lucide-layers">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search stacks"
+        />
         <div class="flex items-center gap-1.5 text-xs text-faint select-none">
           <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
           {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
@@ -84,57 +104,64 @@ async function deploy() {
       </template>
     </PageHeader>
 
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search stacks"
-    />
-
     <div v-if="gl && !gl.enabled" class="notice-warning panel p-3 mb-4 flex items-center gap-2 text-sm">
       <UIcon name="i-lucide-info" class="size-4 shrink-0" />
       GitLab is not configured — stacks deploy fine, but compose files won't be versioned. Set <span class="font-mono text-xs">NUXT_GITLAB_*</span> to enable history.
     </div>
 
     <DataState :status="status" :error="error" :empty="filtered.length === 0" :refreshing="refreshing" empty-label="No stacks deployed yet." empty-icon="i-lucide-layers">
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <NuxtLink v-for="s in filtered" :key="s.name" :to="`/stacks/${s.name}`"
-          class="panel p-4 hover:ring-1 hover:ring-beacon/40 transition group">
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="flex size-9 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-hull">
-                <UIcon name="i-lucide-layers" class="size-4 text-beacon" />
-              </span>
-              <span class="truncate font-display font-semibold text-foam group-hover:text-beacon">{{ s.name }}</span>
-            </div>
-            <span v-if="s.inGit" class="inline-flex items-center gap-1 rounded bg-beacon/10 px-1.5 py-0.5 text-[10px] font-medium text-beacon ring-1 ring-beacon/20" title="Tracked in GitLab">
-              <UIcon name="i-lucide-git-branch" class="size-3" /> git
-            </span>
-          </div>
-          <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p class="font-mono text-lg text-foam">{{ s.services }}</p>
-              <p class="text-[11px] uppercase tracking-wide text-faint">services</p>
-            </div>
-            <div>
-              <p class="font-mono text-lg" :class="s.runningTasks >= s.desiredTasks && s.desiredTasks > 0 ? 'status-running' : 'status-pending'">
-                {{ s.runningTasks ?? 0 }}<span class="text-faint text-sm">/{{ s.desiredTasks ?? 0 }}</span>
-              </p>
-              <p class="text-[11px] uppercase tracking-wide text-faint">tasks</p>
-            </div>
-            <div>
-              <p class="font-mono text-lg text-foam">{{ s.networks }}</p>
-              <p class="text-[11px] uppercase tracking-wide text-faint">networks</p>
-            </div>
-          </div>
-          <div v-if="s.services === 0 && s.inGit" class="mt-3 text-center text-xs text-faint">
-            Defined in GitLab, not currently deployed
-          </div>
-        </NuxtLink>
-      </div>
+      <section class="panel p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="border-y border-hull text-xs uppercase tracking-wide text-faint">
+              <tr>
+                <th class="px-4 py-3 font-medium">Name</th>
+                <th class="px-4 py-3 font-medium">Services</th>
+                <th class="px-4 py-3 font-medium">Networks</th>
+                <th class="px-4 py-3 font-medium">Volumes</th>
+                <th class="px-4 py-3 font-medium">Configs</th>
+                <th class="px-4 py-3 font-medium">Secrets</th>
+                <th class="px-4 py-3 font-medium">Updated</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-hull">
+              <tr v-if="!filtered.length">
+                <td colspan="8" class="px-4 py-8 text-center text-(--color-muted)">No stacks deployed yet.</td>
+              </tr>
+              <tr
+                v-for="s in filtered"
+                :key="s.name"
+                class="cursor-pointer align-top transition hover:bg-surface-2/60"
+                tabindex="0"
+                role="link"
+                :aria-label="`Open stack ${s.name}`"
+                @click="navigateTo(`/stacks/${s.name}`)"
+                @keydown.enter="navigateTo(`/stacks/${s.name}`)"
+              >
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-layers" class="size-4 shrink-0 text-beacon" />
+                    <span class="truncate font-medium text-foam">{{ s.name }}</span>
+                    <span v-if="s.inGit" class="inline-flex shrink-0 items-center gap-1 rounded bg-beacon/10 px-1.5 py-0.5 text-[10px] font-medium text-beacon ring-1 ring-beacon/20" title="Tracked in GitLab">
+                      <UIcon name="i-lucide-git-branch" class="size-3" /> git
+                    </span>
+                  </div>
+                  <p v-if="s.services" class="mt-0.5 truncate font-mono text-xs text-faint">{{ s.runningTasks ?? 0 }}/{{ s.desiredTasks ?? 0 }} tasks running</p>
+                  <p v-else-if="s.inGit" class="mt-0.5 truncate text-xs text-faint">Defined in GitLab, not currently deployed</p>
+                </td>
+                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.services }}</td>
+                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.networks }}</td>
+                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.volumes ?? 0 }}</td>
+                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.configs }}</td>
+                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.secrets }}</td>
+                <td class="px-4 py-3 text-xs text-faint">{{ s.updatedAt ? relative(s.updatedAt) : '—' }}</td>
+                <td class="px-4 py-3"><StatusBadge :state="stackStatus(s)" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </DataState>
 
     <UModal v-model:open="open" title="Deploy stack" :ui="{ content: 'max-w-2xl' }">

@@ -48,6 +48,16 @@ function openSecret(s: any) {
   <div>
     <PageHeader title="Secrets" subtitle="Encrypted secrets distributed to services" icon="i-lucide-key-round">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search secrets"
+        />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" @click="refresh()" />
         <UButton v-if="can('operator')" icon="i-lucide-plus" color="primary" label="Create" @click="openCreate" />
       </template>
@@ -57,16 +67,6 @@ function openSecret(s: any) {
       <UIcon name="i-lucide-shield" class="size-4 shrink-0 text-beacon" />
       Secret values are write-only — Docker never exposes them after creation.
     </div>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search secrets"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" empty-label="No secrets." empty-icon="i-lucide-key-round">
       <div class="space-y-2">

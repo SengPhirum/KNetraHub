@@ -50,20 +50,20 @@ function openVolume(v: any) {
   <div>
     <PageHeader title="Volumes" subtitle="Persistent data volumes" icon="i-lucide-database">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search volumes"
+        />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" @click="refresh()" />
         <UButton v-if="can('operator')" icon="i-lucide-plus" color="primary" label="Create" @click="openCreate" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search volumes"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" empty-label="No volumes." empty-icon="i-lucide-database">
       <div class="space-y-2">

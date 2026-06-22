@@ -48,18 +48,18 @@ async function remove(r: any) {
   <div>
     <PageHeader title="Registries" subtitle="Private image registry credentials" icon="i-lucide-container">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          :sort-options="sortOptions"
+          placeholder="Search registries"
+        />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
         <UButton icon="i-lucide-plus" color="primary" label="Add registry" @click="openCreate" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      :sort-options="sortOptions"
-      placeholder="Search registries"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No registries configured." empty-icon="i-lucide-container">
       <TransitionGroup name="list" tag="div" class="space-y-2">

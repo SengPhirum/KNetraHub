@@ -2,6 +2,7 @@ import { requireUser } from '~~/server/utils/auth'
 import { getDb } from '~~/server/utils/db'
 import { useDocker } from '~~/server/utils/docker'
 import { STACK_LABEL } from '~~/server/utils/stack'
+import { AUTOREDEPLOY_LABEL } from '~~/server/utils/registryClient'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)
@@ -101,6 +102,8 @@ export default defineEventHandler(async (event) => {
       registry: imageInfo.registry,
       repository: imageInfo.repository,
       tag: imageInfo.tag,
+      imageRepository: imageInfo.registry === 'Docker Hub' ? imageInfo.repository : `${imageInfo.registry}/${imageInfo.repository}`,
+      command: (container.Args || []).join(' '),
       mode: isGlobal ? 'global' : 'replicated',
       replicas: isGlobal ? null : replicas ?? 0,
       desired,
@@ -142,7 +145,9 @@ export default defineEventHandler(async (event) => {
     placement: taskTemplate.Placement || {},
     restartPolicy: taskTemplate.RestartPolicy || null,
     updateConfig: spec.UpdateConfig || null,
-    rollbackConfig: spec.RollbackConfig || null
+    rollbackConfig: spec.RollbackConfig || null,
+    logDriver: taskTemplate.LogDriver ? { name: taskTemplate.LogDriver.Name, options: taskTemplate.LogDriver.Options || {} } : null,
+    autoredeploy: spec.Labels?.[AUTOREDEPLOY_LABEL] === 'true'
   }
 })
 

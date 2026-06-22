@@ -129,6 +129,14 @@ export default defineNuxtConfig({
       retentionDays: Number(process.env.NUXT_METRICS_RETENTION_DAYS || 30)
     },
 
+    // Background poller that redeploys services opted into the
+    // dockhub.autoredeploy label when their registry's image digest changes.
+    autoredeploy: {
+      enabled: process.env.NUXT_AUTOREDEPLOY_ENABLED !== 'false',
+      intervalMinutes: Number(process.env.NUXT_AUTOREDEPLOY_INTERVAL_MINUTES || 15),
+      timeoutMs: Number(process.env.NUXT_AUTOREDEPLOY_TIMEOUT_MS || 10000)
+    },
+
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'DockHub',
@@ -193,6 +201,19 @@ export default defineNuxtConfig({
 
   pwa: {
     registerType: 'autoUpdate',
+    workbox: {
+      // DockHub is server-rendered and auth-gated - every route's HTML comes
+      // fresh from Nitro per request. vite-plugin-pwa's generateSW strategy
+      // defaults navigateFallback to "/", which registers a Workbox
+      // NavigationRoute that intercepts ALL navigations (any URL, not just
+      // "/") and serves the precached/cached "/" response instead of
+      // letting them reach the server - the classic SPA app-shell fallback,
+      // which is wrong here and was the actual cause of "PWA broken on
+      // staging" (installed app stuck showing stale/wrong pages on reload
+      // or deep link). Disabling it makes every navigation always hit the
+      // network; only static build assets are still precached for speed.
+      navigateFallback: null
+    },
     includeAssets: [
       'favicon.ico',
       'favicon-16x16.png',

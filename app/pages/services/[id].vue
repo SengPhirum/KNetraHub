@@ -111,40 +111,18 @@ async function loadLogs() {
 }
 watch(tab, (t) => { if (t === 'logs' && !logs.value) loadLogs() })
 
-const editOpen = ref(false)
-const editSaving = ref(false)
-const editImage = ref('')
-const editReplicas = ref(1)
-function openEdit() {
-  editImage.value = image.value
-  editReplicas.value = replicas.value ?? 1
-  editOpen.value = true
+// Single Swarmpit-style tabbed "Edit service" wizard (General / Network /
+// Environment / Resources / Deployment / Logs) - every pencil icon and the
+// header's main Edit button all open the same modal, just defaulting to the
+// tab relevant to whichever card was clicked.
+const editModalOpen = ref(false)
+const editModalTab = ref('general')
+function openEditModal(tab: string) {
+  editModalTab.value = tab
+  editModalOpen.value = true
 }
-async function saveEdit() {
-  editSaving.value = true
-  try {
-    const actions: string[] = []
-    if (editImage.value && editImage.value !== image.value) {
-      await $fetch(`/api/services/${id}/image`, { method: 'POST', body: { image: editImage.value } })
-      actions.push('image')
-    }
-    if (mode.value === 'replicated' && Number(editReplicas.value) !== replicas.value) {
-      await $fetch(`/api/services/${id}/scale`, { method: 'POST', body: { replicas: Number(editReplicas.value) } })
-      actions.push('replicas')
-    }
-    toast.add({
-      title: actions.length ? 'Service updated' : 'No changes',
-      description: actions.join(', '),
-      color: 'primary',
-      icon: 'i-lucide-pencil'
-    })
-    editOpen.value = false
-    setTimeout(refresh, 700)
-  } catch (e: any) {
-    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally {
-    editSaving.value = false
-  }
+function onServiceSaved() {
+  setTimeout(refresh, 700)
 }
 
 async function redeploy() {
@@ -290,11 +268,28 @@ function listLabel(items: string[] = []) {
   return items.length ? items.join(', ') : '-'
 }
 
+const DURATION_KEYS = new Set(['Delay', 'Window', 'Monitor'])
+
+function prettyKey(key: string) {
+  const spaced = key.replace(/([a-z])([A-Z])/g, '$1 $2')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
+}
+
+function formatConfigValue(key: string, value: any) {
+  if (DURATION_KEYS.has(key)) {
+    const seconds = Math.round((Number(value) / 1e9) * 100) / 100
+    return `${seconds}s`
+  }
+  if (key === 'MaxFailureRatio') return `${Math.round(Number(value) * 100)}%`
+  if (key === 'MaxAttempts') return Number(value) > 0 ? String(value) : 'Unlimited'
+  return String(value)
+}
+
 function configRows(config: any) {
   if (!config) return []
   return Object.entries(config)
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
-    .map(([key, value]) => ({ key, value: String(value) }))
+    .map(([key, value]) => ({ key: prettyKey(key), value: formatConfigValue(key, value) }))
 }
 </script>
 
@@ -310,7 +305,7 @@ function configRows(config: any) {
           <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/services" label="Back" />
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
           <template v-if="can('operator')">
-            <UButton icon="i-lucide-pencil" color="primary" label="Edit" @click="openEdit" />
+            <UButton icon="i-lucide-pencil" color="primary" label="Edit" @click="openEditModal('general')" />
             <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" label="Redeploy" @click="redeploy" />
             <UButton icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="remove" />
           </template>
@@ -391,7 +386,10 @@ function configRows(config: any) {
           </section>
 
           <section class="panel p-4">
-            <h2 class="font-display text-lg font-semibold text-foam">Extra hosts</h2>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="font-display text-lg font-semibold text-foam">Extra hosts</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('network')" />
+            </div>
             <div v-if="!extraHosts.length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
               No extra hosts defined for this service.
             </div>
@@ -401,7 +399,10 @@ function configRows(config: any) {
           </section>
 
           <section class="panel p-4">
-            <h2 class="font-display text-lg font-semibold text-foam">Environment variables</h2>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="font-display text-lg font-semibold text-foam">Environment variables</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('environment')" />
+            </div>
             <div v-if="!envs.length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
               No environment variables defined.
             </div>
@@ -414,21 +415,28 @@ function configRows(config: any) {
 
           <section class="panel p-4">
             <h2 class="font-display text-lg font-semibold text-foam">Labels</h2>
-            <div v-if="!labelEntries(serviceLabels).length && !labelEntries(containerLabels).length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
+            <div v-if="!labelEntries(serviceLabels).length && !labelEntries(containerLabels).length && !can('operator')" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
               No custom labels defined.
             </div>
             <div v-else class="mt-4 space-y-3">
-              <div v-if="labelEntries(serviceLabels).length">
-                <p class="mb-2 text-xs font-semibold uppercase text-faint">Service</p>
-                <div class="flex flex-wrap gap-2">
+              <div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold uppercase text-faint">Service</p>
+                  <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xs" @click="openEditModal('deployment')" />
+                </div>
+                <div v-if="labelEntries(serviceLabels).length" class="flex flex-wrap gap-2">
                   <span v-for="[k, v] in labelEntries(serviceLabels)" :key="k" class="rounded bg-surface-2 px-2 py-1 font-mono text-xs text-(--color-muted)">{{ k }}=<span class="text-foam">{{ v }}</span></span>
                 </div>
+                <p v-else class="text-xs text-faint">None</p>
               </div>
-              <div v-if="labelEntries(containerLabels).length">
-                <p class="mb-2 text-xs font-semibold uppercase text-faint">Container</p>
-                <div class="flex flex-wrap gap-2">
+              <div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold uppercase text-faint">Container</p>
+                </div>
+                <div v-if="labelEntries(containerLabels).length" class="flex flex-wrap gap-2">
                   <span v-for="[k, v] in labelEntries(containerLabels)" :key="k" class="rounded bg-surface-2 px-2 py-1 font-mono text-xs text-(--color-muted)">{{ k }}=<span class="text-foam">{{ v }}</span></span>
                 </div>
+                <p v-else class="text-xs text-faint">None</p>
               </div>
             </div>
           </section>
@@ -467,7 +475,14 @@ function configRows(config: any) {
                   <tr v-if="!filteredTasks.length">
                     <td colspan="6" class="px-4 py-8 text-center text-(--color-muted)">No tasks.</td>
                   </tr>
-                  <tr v-for="task in filteredTasks" :key="task.id" class="align-top">
+                  <tr
+                    v-for="task in filteredTasks"
+                    :key="task.id"
+                    class="cursor-pointer align-top transition hover:bg-surface-2/60"
+                    tabindex="0"
+                    @click="navigateTo(`/tasks/${task.id}`)"
+                    @keydown.enter="navigateTo(`/tasks/${task.id}`)"
+                  >
                     <td class="px-4 py-3">
                       <p class="font-mono text-sm text-foam">{{ short(task.id, 8) }}</p>
                       <p class="mt-0.5 truncate font-mono text-xs text-faint">{{ task.image || '-' }}</p>
@@ -533,6 +548,7 @@ function configRows(config: any) {
           <section class="panel p-0 overflow-hidden">
             <div class="flex items-center justify-between gap-2 px-4 py-3">
               <h2 class="font-display text-lg font-semibold text-foam">Networks</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('network')" />
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-left text-sm">
@@ -562,6 +578,7 @@ function configRows(config: any) {
           <section class="panel p-0 overflow-hidden">
             <div class="flex items-center justify-between gap-2 px-4 py-3">
               <h2 class="font-display text-lg font-semibold text-foam">Ports</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('network')" />
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-left text-sm">
@@ -591,6 +608,7 @@ function configRows(config: any) {
           <section class="panel p-0 overflow-hidden">
             <div class="flex items-center justify-between gap-2 px-4 py-3">
               <h2 class="font-display text-lg font-semibold text-foam">Mounts</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('environment')" />
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full text-left text-sm">
@@ -619,7 +637,10 @@ function configRows(config: any) {
 
           <div class="grid gap-4 lg:grid-cols-2">
             <section class="panel p-4">
-              <h2 class="font-display text-lg font-semibold text-foam">Secrets</h2>
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="font-display text-lg font-semibold text-foam">Secrets</h2>
+                <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('environment')" />
+              </div>
               <div v-if="!secrets.length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">No secrets.</div>
               <div v-else class="mt-4 divide-y divide-hull">
                 <div v-for="secret in secrets" :key="secret.id || secret.name" class="py-3">
@@ -629,7 +650,10 @@ function configRows(config: any) {
               </div>
             </section>
             <section class="panel p-4">
-              <h2 class="font-display text-lg font-semibold text-foam">Configs</h2>
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="font-display text-lg font-semibold text-foam">Configs</h2>
+                <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('environment')" />
+              </div>
               <div v-if="!configs.length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">No configs.</div>
               <div v-else class="mt-4 divide-y divide-hull">
                 <div v-for="config in configs" :key="config.id || config.name" class="py-3">
@@ -642,34 +666,86 @@ function configRows(config: any) {
 
           <div class="grid gap-4 lg:grid-cols-2">
             <section class="panel p-4">
-              <h2 class="font-display text-lg font-semibold text-foam">Placement</h2>
-              <div v-if="!data?.placement?.Constraints?.length && !data?.placement?.Preferences?.length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">No placement rules.</div>
-              <div v-else class="mt-4 space-y-3">
-                <div v-if="data?.placement?.Constraints?.length">
-                  <p class="mb-2 text-xs font-semibold uppercase text-faint">Constraints</p>
-                  <p v-for="constraint in data.placement.Constraints" :key="constraint" class="font-mono text-xs text-(--color-muted)">{{ constraint }}</p>
-                </div>
-                <div v-if="data?.placement?.Preferences?.length">
-                  <p class="mb-2 text-xs font-semibold uppercase text-faint">Preferences</p>
-                  <p v-for="(pref, i) in data.placement.Preferences" :key="i" class="font-mono text-xs text-(--color-muted)">{{ pref }}</p>
-                </div>
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="font-display text-lg font-semibold text-foam">Resources</h2>
+                <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('resources')" />
               </div>
-            </section>
-            <section class="panel p-4">
-              <h2 class="font-display text-lg font-semibold text-foam">Update policy</h2>
-              <div v-if="!configRows(data?.updateConfig).length && !configRows(data?.restartPolicy).length" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">No policy details.</div>
-              <dl v-else class="mt-4 grid gap-2 text-xs">
-                <div v-for="row in configRows(data?.updateConfig)" :key="`update-${row.key}`" class="flex justify-between gap-3">
-                  <dt class="text-faint">update.{{ row.key }}</dt>
-                  <dd class="font-mono text-(--color-muted)">{{ row.value }}</dd>
-                </div>
-                <div v-for="row in configRows(data?.restartPolicy)" :key="`restart-${row.key}`" class="flex justify-between gap-3">
-                  <dt class="text-faint">restart.{{ row.key }}</dt>
-                  <dd class="font-mono text-(--color-muted)">{{ row.value }}</dd>
-                </div>
+              <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div><dt class="text-faint">CPU reservation</dt><dd class="font-mono text-foam">{{ formatNanoCpus(resources.reservedNanoCpus) }}</dd></div>
+                <div><dt class="text-faint">CPU limit</dt><dd class="font-mono text-foam">{{ formatNanoCpus(resources.limitNanoCpus) }}</dd></div>
+                <div><dt class="text-faint">Memory reservation</dt><dd class="font-mono text-foam">{{ formatBytes(resources.reservedMemoryBytes) }}</dd></div>
+                <div><dt class="text-faint">Memory limit</dt><dd class="font-mono text-foam">{{ formatBytes(resources.limitMemoryBytes) }}</dd></div>
               </dl>
             </section>
+            <section class="panel p-4">
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="font-display text-lg font-semibold text-foam">Log driver</h2>
+                <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('logs')" />
+              </div>
+              <div v-if="!data?.logDriver" class="mt-6 rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">Default driver.</div>
+              <div v-else class="mt-4 text-xs">
+                <p class="font-mono text-foam">{{ data.logDriver.name }}</p>
+                <dl v-if="Object.keys(data.logDriver.options || {}).length" class="mt-2 space-y-1">
+                  <div v-for="[k, v] in Object.entries(data.logDriver.options)" :key="k" class="flex justify-between gap-3">
+                    <dt class="text-faint">{{ k }}</dt>
+                    <dd class="font-mono text-(--color-muted)">{{ v }}</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
           </div>
+
+          <section class="panel p-4">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="font-display text-lg font-semibold text-foam">Deployment</h2>
+              <UButton v-if="can('operator')" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEditModal('deployment')" />
+            </div>
+            <div class="mt-4 space-y-4 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-faint">Autoredeploy</span>
+                <span class="font-mono" :class="data?.autoredeploy ? 'status-running' : 'text-(--color-muted)'">{{ data?.autoredeploy ? 'enabled' : 'disabled' }}</span>
+              </div>
+              <div>
+                <p class="mb-2 font-semibold uppercase text-faint">Placements</p>
+                <div v-if="data?.placement?.Constraints?.length" class="flex flex-wrap gap-1.5">
+                  <span v-for="c in data.placement.Constraints" :key="c" class="rounded bg-surface-2 px-2 py-1 font-mono text-(--color-muted)">{{ c }}</span>
+                </div>
+                <p v-else class="text-faint">None</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <p class="mb-2 font-semibold uppercase text-faint">Restart policy</p>
+                  <dl class="space-y-1">
+                    <div v-for="row in configRows(data?.restartPolicy)" :key="`restart-${row.key}`" class="flex justify-between gap-3">
+                      <dt class="text-faint">{{ row.key }}</dt>
+                      <dd class="font-mono text-(--color-muted)">{{ row.value }}</dd>
+                    </div>
+                    <p v-if="!configRows(data?.restartPolicy).length" class="text-faint">Default</p>
+                  </dl>
+                </div>
+                <div>
+                  <p class="mb-2 font-semibold uppercase text-faint">Update config</p>
+                  <dl class="space-y-1">
+                    <div v-for="row in configRows(data?.updateConfig)" :key="`update-${row.key}`" class="flex justify-between gap-3">
+                      <dt class="text-faint">{{ row.key }}</dt>
+                      <dd class="font-mono text-(--color-muted)">{{ row.value }}</dd>
+                    </div>
+                    <p v-if="!configRows(data?.updateConfig).length" class="text-faint">Default</p>
+                  </dl>
+                </div>
+                <div>
+                  <p class="mb-2 font-semibold uppercase text-faint">Rollback config</p>
+                  <dl class="space-y-1">
+                    <div v-for="row in configRows(data?.rollbackConfig)" :key="`rollback-${row.key}`" class="flex justify-between gap-3">
+                      <dt class="text-faint">{{ row.key }}</dt>
+                      <dd class="font-mono text-(--color-muted)">{{ row.value }}</dd>
+                    </div>
+                    <p v-if="!configRows(data?.rollbackConfig).length" class="text-faint">Default</p>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -703,25 +779,13 @@ function configRows(config: any) {
       </div>
     </DataState>
 
-    <UModal v-model:open="editOpen" title="Edit service">
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Image" required>
-            <UInput v-model="editImage" class="w-full font-mono" icon="i-lucide-container" :disabled="editSaving" />
-          </UFormField>
-          <UFormField v-if="mode === 'replicated'" label="Replicas">
-            <UInput v-model="editReplicas" type="number" min="0" class="w-full" icon="i-lucide-copy" :disabled="editSaving" />
-          </UFormField>
-          <p v-else class="text-sm text-(--color-muted)">Global services run one task per eligible node.</p>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2 w-full">
-          <UButton color="neutral" variant="ghost" label="Cancel" :disabled="editSaving" @click="editOpen = false" />
-          <UButton color="primary" icon="i-lucide-check" label="Save" :loading="editSaving" @click="saveEdit" />
-        </div>
-      </template>
-    </UModal>
+    <ServicesEditServiceModal
+      v-model:open="editModalOpen"
+      :service-id="id"
+      :data="data"
+      :initial-tab="editModalTab"
+      @saved="onServiceSaved"
+    />
   </div>
 </template>
 

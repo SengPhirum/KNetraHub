@@ -12,23 +12,10 @@ useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
-// Status priority used only when the user picks "State" as the sort field
-// below (not a separate UI control - it just redefines what "sort by State"
-// means): Running, Failed, Complete, then Shutdown, instead of plain
-// alphabetical order on the raw state string. Ranked high-to-low (not
-// 0..3) so it lines up with this list's default sort direction ('desc',
-// inherited from the page's default "Updated" sort meaning most-relevant
-// first) - selecting "State" right after load shows Running first without
-// also having to force-reset the direction toggle.
-const STATUS_PRIORITY: Record<string, number> = { running: 4, failed: 3, complete: 2, shutdown: 1 }
-function statusRank(state: string) {
-  return STATUS_PRIORITY[(state || '').toLowerCase()] ?? 0
-}
 const taskSortOptions = [
   { label: 'Updated', value: 'timestamp' },
   { label: 'Service', value: 'service' },
   { label: 'Node', value: 'node' },
-  { label: 'State', value: 'state', getValue: (t: any) => statusRank(t.state) },
   { label: 'CPU', value: 'metrics.cpuPercent' },
   { label: 'Memory', value: 'metrics.memoryUsedBytes' },
   { label: 'Slot', value: 'slot' }
@@ -42,7 +29,8 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
   sortOptions: taskSortOptions,
   defaultSortBy: 'timestamp',
   defaultSortDir: 'desc',
-  filterOptions: taskFilterOptions
+  filterOptions: taskFilterOptions,
+  tieBreaker: (t: any) => t.createdAt
 })
 
 function memoryPercent(used?: number | null, limit?: number | null) {
@@ -82,6 +70,16 @@ function openTask(t: any) {
   <div>
     <PageHeader title="Tasks" subtitle="Individual task instances scheduled across the swarm" icon="i-lucide-list-checks">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search tasks"
+        />
         <div class="flex items-center gap-1.5 text-xs text-faint select-none">
           <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
           {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
@@ -93,16 +91,6 @@ function openTask(t: any) {
     <div class="mb-3 flex items-center justify-between gap-3">
       <p class="text-sm text-(--color-muted)">Total (<span class="font-semibold text-foam">{{ filtered.length }}</span>)</p>
     </div>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search tasks"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No tasks." empty-icon="i-lucide-list-checks">
       <section class="panel p-0 overflow-hidden">

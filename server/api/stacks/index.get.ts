@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
       for (const f of files) {
         const ex = map.get(f.name)
         if (ex) ex.inGit = true
-        else map.set(f.name, { name: f.name, services: 0, networks: 0, configs: 0, secrets: 0, runningTasks: 0, desiredTasks: 0, inGit: true })
+        else map.set(f.name, { name: f.name, services: 0, networks: 0, volumes: 0, configs: 0, secrets: 0, runningTasks: 0, desiredTasks: 0, updatedAt: null, inGit: true })
       }
     } catch { /* gitlab unreachable — show running only */ }
   }

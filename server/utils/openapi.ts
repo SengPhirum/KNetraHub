@@ -368,6 +368,163 @@ export function buildOpenApiSpec() {
           responses: { 200: { description: 'Image updated' } }
         }
       },
+      '/services/{id}/command': {
+        post: {
+          tags: ['services'],
+          summary: 'Update command',
+          description: 'Replace the container command (CMD override). Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', properties: { command: { type: 'string', example: 'nginx -g "daemon off;"' } } } } }
+          },
+          responses: { 200: { description: 'Command updated' } }
+        }
+      },
+      '/services/{id}/extra-hosts': {
+        post: {
+          tags: ['services'],
+          summary: 'Update extra hosts',
+          description: 'Replace the service\'s extra /etc/hosts entries. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['hosts'], properties: { hosts: { type: 'array', items: { type: 'string' } } } } } }
+          },
+          responses: { 200: { description: 'Extra hosts updated' } }
+        }
+      },
+      '/services/{id}/environment': {
+        post: {
+          tags: ['services'],
+          summary: 'Update environment variables',
+          description: 'Replace the service\'s environment variables. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['env'], properties: { env: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } } } } } } } }
+          },
+          responses: { 200: { description: 'Environment updated' } }
+        }
+      },
+      '/services/{id}/secrets': {
+        post: {
+          tags: ['services'],
+          summary: 'Update secrets',
+          description: 'Replace the service\'s attached secrets. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['secrets'], properties: { secrets: { type: 'array', items: { type: 'object', properties: { secretId: { type: 'string' }, secretName: { type: 'string' }, fileName: { type: 'string' }, uid: { type: 'string' }, gid: { type: 'string' }, mode: { type: 'integer' } } } } } } } }
+          },
+          responses: { 200: { description: 'Secrets updated' } }
+        }
+      },
+      '/services/{id}/configs': {
+        post: {
+          tags: ['services'],
+          summary: 'Update configs',
+          description: 'Replace the service\'s attached configs. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['configs'], properties: { configs: { type: 'array', items: { type: 'object', properties: { configId: { type: 'string' }, configName: { type: 'string' }, fileName: { type: 'string' }, uid: { type: 'string' }, gid: { type: 'string' }, mode: { type: 'integer' } } } } } } } }
+          },
+          responses: { 200: { description: 'Configs updated' } }
+        }
+      },
+      '/services/{id}/networks': {
+        post: {
+          tags: ['services'],
+          summary: 'Update attached networks',
+          description: 'Replace the networks the service\'s tasks attach to. Forces a rolling update of every task. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['networkIds'], properties: { networkIds: { type: 'array', items: { type: 'string' } } } } } }
+          },
+          responses: { 200: { description: 'Networks updated' } }
+        }
+      },
+      '/services/{id}/ports': {
+        post: {
+          tags: ['services'],
+          summary: 'Update published ports',
+          description: 'Replace the service\'s published ports. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['ports'], properties: { ports: { type: 'array', items: { type: 'object', properties: { target: { type: 'integer' }, published: { type: 'integer' }, protocol: { type: 'string', enum: ['tcp', 'udp'] }, mode: { type: 'string', enum: ['ingress', 'host'] } } } } } } } }
+          },
+          responses: { 200: { description: 'Ports updated' } }
+        }
+      },
+      '/services/{id}/mounts': {
+        post: {
+          tags: ['services'],
+          summary: 'Update mounts',
+          description: 'Replace the service\'s container mounts. Forces a rolling update of every task. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['mounts'], properties: { mounts: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: ['bind', 'volume', 'tmpfs'] }, source: { type: 'string' }, target: { type: 'string' }, readOnly: { type: 'boolean' } } } } } } } }
+          },
+          responses: { 200: { description: 'Mounts updated' } }
+        }
+      },
+      '/services/{id}/resources': {
+        post: {
+          tags: ['services'],
+          summary: 'Update resource reservations/limits',
+          description: 'Replace the service\'s CPU/memory reservation and limit. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', properties: { reservation: { type: 'object', properties: { nanoCpus: { type: 'integer' }, memoryBytes: { type: 'integer' } } }, limit: { type: 'object', properties: { nanoCpus: { type: 'integer' }, memoryBytes: { type: 'integer' } } } } } } }
+          },
+          responses: { 200: { description: 'Resources updated' } }
+        }
+      },
+      '/services/{id}/deployment': {
+        post: {
+          tags: ['services'],
+          summary: 'Update deployment policy',
+          description: 'Replace service labels, autoredeploy opt-in, placement constraints, restart policy, update config, and rollback config. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    labels: { type: 'object', additionalProperties: { type: 'string' } },
+                    autoredeploy: { type: 'boolean' },
+                    constraints: { type: 'array', items: { type: 'string' } },
+                    restartPolicy: { type: 'object', properties: { condition: { type: 'string', enum: ['any', 'none', 'on-failure'] }, delay: { type: 'integer', description: 'seconds' }, window: { type: 'integer', description: 'seconds' }, maxAttempts: { type: 'integer' } } },
+                    updateConfig: { type: 'object', properties: { parallelism: { type: 'integer' }, delay: { type: 'integer', description: 'seconds' }, order: { type: 'string', enum: ['stop-first', 'start-first'] }, failureAction: { type: 'string', enum: ['pause', 'continue', 'rollback'] } } },
+                    rollbackConfig: { type: 'object', properties: { parallelism: { type: 'integer' }, delay: { type: 'integer', description: 'seconds' }, order: { type: 'string', enum: ['stop-first', 'start-first'] }, failureAction: { type: 'string', enum: ['pause', 'continue'] } } }
+                  }
+                }
+              }
+            }
+          },
+          responses: { 200: { description: 'Deployment policy updated' } }
+        }
+      },
+      '/services/{id}/log-driver': {
+        post: {
+          tags: ['services'],
+          summary: 'Update log driver',
+          description: 'Replace the service\'s logging driver and options. Requires `operator`.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string', example: 'json-file' }, options: { type: 'object', additionalProperties: { type: 'string' } } } } } }
+          },
+          responses: { 200: { description: 'Log driver updated' } }
+        }
+      },
       '/services/{id}/logs': {
         get: {
           tags: ['services'],

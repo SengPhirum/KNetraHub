@@ -38,19 +38,19 @@ function actionIcon(action: string) {
   <div>
     <PageHeader title="Audit log" subtitle="Every state-changing action, with actor and target" icon="i-lucide-scroll">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search audit log"
+        />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search audit log"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No audit entries yet." empty-icon="i-lucide-scroll">
       <div class="space-y-1.5">

@@ -13,21 +13,25 @@ export interface StackSummary {
   name: string
   services: number
   networks: number
+  volumes: number
   configs: number
   secrets: number
   runningTasks: number
   desiredTasks: number
+  updatedAt: string | null
 }
 
 export async function listStacks(): Promise<StackSummary[]> {
   const docker = useDocker()
-  const [services, networks, configs, secrets, tasks] = await Promise.all([
+  const [services, networks, volumeList, configs, secrets, tasks] = await Promise.all([
     docker.listServices(),
     docker.listNetworks(),
+    docker.listVolumes().catch(() => ({ Volumes: [] })),
     docker.listConfigs().catch(() => []),
     docker.listSecrets().catch(() => []),
     docker.listTasks().catch(() => [])
   ])
+  const volumes = (volumeList as any)?.Volumes || []
 
   const map = new Map<string, StackSummary>()
   const ensure = (name: string) =>
@@ -36,10 +40,12 @@ export async function listStacks(): Promise<StackSummary[]> {
       name,
       services: 0,
       networks: 0,
+      volumes: 0,
       configs: 0,
       secrets: 0,
       runningTasks: 0,
-      desiredTasks: 0
+      desiredTasks: 0,
+      updatedAt: null
     }).get(name)!
 
   for (const s of services) {
@@ -49,10 +55,15 @@ export async function listStacks(): Promise<StackSummary[]> {
     e.services++
     const replicas = s.Spec?.Mode?.Replicated?.Replicas
     if (typeof replicas === 'number') e.desiredTasks += replicas
+    if (s.UpdatedAt && (!e.updatedAt || s.UpdatedAt > e.updatedAt)) e.updatedAt = s.UpdatedAt
   }
   for (const n of networks) {
     const ns = n.Labels?.[STACK_LABEL]
     if (ns) ensure(ns).networks++
+  }
+  for (const v of volumes as any[]) {
+    const ns = v.Labels?.[STACK_LABEL]
+    if (ns) ensure(ns).volumes++
   }
   for (const c of configs as any[]) {
     const ns = c.Spec?.Labels?.[STACK_LABEL]

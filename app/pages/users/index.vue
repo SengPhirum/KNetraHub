@@ -103,6 +103,16 @@ async function confirmDelete() {
   <div>
     <PageHeader title="Users" subtitle="Local accounts and LDAP-synced identities" icon="i-lucide-users">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search users"
+        />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
         <UButton icon="i-lucide-user-plus" color="primary" label="Add user" @click="openCreate" />
       </template>
@@ -123,16 +133,6 @@ async function confirmDelete() {
         </ul>
       </div>
     </div>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search users"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No users yet." empty-icon="i-lucide-users">
       <TransitionGroup name="list" tag="div" class="space-y-2">

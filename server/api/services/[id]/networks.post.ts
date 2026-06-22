@@ -1,12 +1,13 @@
 import { requireRole } from '~~/server/utils/auth'
-import { withServiceSpec } from '~~/server/utils/serviceMutation'
+import { withServiceSpec, toSwarmNetworks } from '~~/server/utils/serviceMutation'
 import { audit } from '~~/server/utils/store'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
   const id = getRouterParam(event, 'id')!
+  const { networkIds } = await readBody<{ networkIds: string[] }>(event)
   const { info } = await withServiceSpec(id, (spec) => {
-    spec.TaskTemplate = { ...spec.TaskTemplate, ForceUpdate: (spec.TaskTemplate?.ForceUpdate || 0) + 1 }
+    spec.TaskTemplate.Networks = toSwarmNetworks(networkIds)
   })
-  await audit({ actor: user.username, action: 'service.redeploy', target: info.Spec.Name })
+  await audit({ actor: user.username, action: 'service.update-networks', target: info.Spec.Name })
   return { ok: true }
 })

@@ -66,6 +66,16 @@ function menu(c: any) {
   <div>
     <PageHeader title="Containers" subtitle="Raw containers across reachable nodes" icon="i-lucide-container">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search containers"
+        />
         <div class="flex items-center gap-1.5 text-xs text-faint select-none">
           <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
           {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
@@ -73,16 +83,6 @@ function menu(c: any) {
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search containers"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No containers." empty-icon="i-lucide-container">
       <TransitionGroup name="list" tag="div" class="space-y-2">

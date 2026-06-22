@@ -10,9 +10,13 @@ const props = withDefaults(defineProps<{
 })
 
 const colorMode = useColorMode()
+const { appearance } = useAppearance()
 
 const logo = computed(() => {
   if (props.variant === 'icon') {
+    if (appearance.value.logoIconUrl) {
+      return { src: appearance.value.logoIconUrl, width: 1024, height: 1024 }
+    }
     return {
       src: colorMode.value === 'dark'
         ? '/logo/dockhub-appicon-blue-1024.png'
@@ -22,6 +26,9 @@ const logo = computed(() => {
     }
   }
 
+  if (appearance.value.logoHorizontalUrl) {
+    return { src: appearance.value.logoHorizontalUrl, width: 2380, height: 612 }
+  }
   return {
     src: '/logo/dockhub-logo-horizontal-transparent.png',
     width: 2380,

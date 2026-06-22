@@ -73,6 +73,16 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
   <div>
     <PageHeader title="Networks" subtitle="Overlay and bridge networks" icon="i-lucide-network">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search networks"
+        />
         <div class="flex items-center gap-1.5 text-xs text-faint select-none">
           <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
           {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
@@ -81,16 +91,6 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
         <UButton v-if="can('operator')" icon="i-lucide-plus" color="primary" label="Create" @click="openCreate" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search networks"
-    />
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No networks." empty-icon="i-lucide-network">
       <TransitionGroup name="list" tag="div" class="space-y-2">

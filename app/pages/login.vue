@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'auth' })
 
 const { login } = useAuth()
-const config = useRuntimeConfig()
+const { appearance } = useAppearance()
 const toast = useToast()
 const route = useRoute()
 
@@ -39,7 +39,7 @@ async function submit() {
         <DockHubLogo variant="icon" class="size-20" />
       </span>
       <DockHubLogo size="lg" class="mx-auto mb-3 max-w-full" />
-      <h1 class="sr-only">{{ config.public.appName }}</h1>
+      <h1 class="sr-only">{{ appearance.appName }}</h1>
       <p class="mt-1.5 text-sm text-(--color-muted)">Run your Docker Swarm from one hub.</p>
     </div>
 

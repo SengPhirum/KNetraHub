@@ -36,6 +36,10 @@ interface UseListControlsOptions<T> {
    * page can default to {state: ['running']} while the standalone Tasks
    * list page shows everything. */
   defaultFilters?: Record<string, string[]>
+  /** Secondary sort key used only when the primary sort field compares
+   * equal between two items, e.g. break ties on a task's created date so
+   * otherwise-identical rows land in a meaningful order. */
+  tieBreaker?: (item: T) => unknown
 }
 
 function resolveListSource<T>(source: any): T[] {
@@ -167,15 +171,20 @@ export function useListControls<T = any>(
 
     if (!currentSort) return filtered
 
-    return filtered
-      .map((item, index) => ({ item, index }))
-      .sort((a, b) => {
-        const aValue = currentSort.getValue ? currentSort.getValue(a.item) : pathValue(a.item, currentSort.value)
-        const bValue = currentSort.getValue ? currentSort.getValue(b.item) : pathValue(b.item, currentSort.value)
-        const result = compareValues(aValue, bValue)
-        return (sortDir.value === 'desc' ? -result : result) || a.index - b.index
-      })
-      .map(({ item }) => item)
+    // Array.prototype.sort is spec-guaranteed stable, so ties already keep
+    // their original relative order for free - no manual index fallback
+    // needed. When a tieBreaker is configured (e.g. a task's created date),
+    // it's chained in as the real secondary sort key instead.
+    return [...filtered].sort((a, b) => {
+      const aValue = currentSort.getValue ? currentSort.getValue(a) : pathValue(a, currentSort.value)
+      const bValue = currentSort.getValue ? currentSort.getValue(b) : pathValue(b, currentSort.value)
+      const primary = compareValues(aValue, bValue)
+      if (primary) return sortDir.value === 'desc' ? -primary : primary
+
+      if (!options.tieBreaker) return 0
+      const secondary = compareValues(options.tieBreaker(a), options.tieBreaker(b))
+      return sortDir.value === 'desc' ? -secondary : secondary
+    })
   })
 
   function toggleSortDir() {

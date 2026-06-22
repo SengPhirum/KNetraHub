@@ -29,7 +29,10 @@ export function useFormat() {
 
   function cpus(n: number | undefined | null): string {
     if (n == null || !isFinite(n)) return '—'
-    return `${n.toFixed(n % 1 === 0 ? 0 : 1)} vCPU`
+    // Round to 2dp instead of 1dp - 1dp was rounding 0.25 to "0.3", hiding the
+    // actual configured value for the common quarter/eighth-core reservations.
+    const rounded = Math.round(n * 100) / 100
+    return `${rounded} vCPU`
   }
 
   function short(id: string | undefined, len = 12): string {

@@ -198,6 +198,16 @@ function memoryValue(svc: any) {
   <div>
     <PageHeader title="Services" subtitle="Replicated and global workloads across the swarm" icon="i-lucide-boxes">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search services"
+        />
         <div class="flex rounded-md border border-hull bg-surface p-0.5" aria-label="Service view">
           <button
             v-for="opt in viewOptions"
@@ -220,16 +230,6 @@ function memoryValue(svc: any) {
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search services"
-    />
 
     <DataState :status="status" :error="error" :empty="filtered.length === 0" :refreshing="refreshing" empty-label="No services running." empty-icon="i-lucide-boxes">
       <TransitionGroup v-if="viewMode === 'cards'" name="list" tag="div" class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">

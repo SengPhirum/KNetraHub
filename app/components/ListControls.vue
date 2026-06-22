@@ -9,10 +9,17 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   facets?: ListFilterFacet[]
   filters?: Record<string, string[]>
+  /** Renders as bare flex items with no margin/wrapper box of its own, so
+   * it can sit directly inside another flex row (e.g. merged into
+   * PageHeader's actions row) instead of stacking below it as its own
+   * full-width row. The expanded filter panel still drops to its own
+   * full-width line (via order-last) when toggled open. */
+  inline?: boolean
 }>(), {
   placeholder: 'Search',
   facets: () => [],
-  filters: () => ({})
+  filters: () => ({}),
+  inline: false
 })
 
 const emit = defineEmits<{
@@ -55,18 +62,25 @@ function facetModel(key: string) {
 function clearFilters() {
   emit('update:filters', {})
 }
+
+const groupClass = computed(() => {
+  if (props.inline) return 'flex flex-wrap items-center gap-2'
+  return props.facets.length
+    ? 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:w-auto'
+    : 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:w-auto'
+})
 </script>
 
 <template>
-  <div class="mb-4 space-y-2.5">
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+  <div :class="inline ? 'contents' : 'mb-4 space-y-2.5'">
+    <div :class="inline ? 'contents' : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'">
       <UInput
         v-model="searchModel"
         icon="i-lucide-search"
         :placeholder="placeholder"
-        class="w-full sm:max-w-xs"
+        :class="inline ? 'w-full sm:w-48 lg:w-64' : 'w-full sm:max-w-xs'"
       />
-      <div class="flex gap-2 sm:w-auto" :class="facets.length ? 'grid grid-cols-[auto_minmax(0,1fr)_auto] sm:flex' : 'grid grid-cols-[minmax(0,1fr)_auto]'">
+      <div :class="groupClass">
         <UButton
           v-if="facets.length"
           color="neutral"
@@ -96,7 +110,11 @@ function clearFilters() {
       </div>
     </div>
 
-    <div v-if="showFilters && facets.length" class="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2/60 p-2.5 ring-1 ring-hull-soft">
+    <div
+      v-if="showFilters && facets.length"
+      class="flex w-full flex-wrap items-center gap-2 rounded-lg bg-surface-2/60 p-2.5 ring-1 ring-hull-soft"
+      :class="inline ? 'order-last' : ''"
+    >
       <USelectMenu
         v-for="facet in facets"
         :key="facet.key"

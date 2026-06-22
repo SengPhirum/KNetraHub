@@ -303,6 +303,16 @@ function nodeBadges(n: any) {
   <div>
     <PageHeader title="Nodes" subtitle="Managers and workers in the swarm fleet" icon="i-lucide-server">
       <template #actions>
+        <ListControls
+          inline
+          v-model:search="search"
+          v-model:sort-by="sortBy"
+          v-model:sort-dir="sortDir"
+          v-model:filters="filters"
+          :sort-options="sortOptions"
+          :facets="facets"
+          placeholder="Search nodes"
+        />
         <div class="flex rounded-md border border-hull bg-surface p-0.5" aria-label="Node view">
           <button
             v-for="opt in viewOptions"
@@ -325,16 +335,6 @@ function nodeBadges(n: any) {
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing || usageRefreshing" @click="refreshAll()" />
       </template>
     </PageHeader>
-
-    <ListControls
-      v-model:search="search"
-      v-model:sort-by="sortBy"
-      v-model:sort-dir="sortDir"
-      v-model:filters="filters"
-      :sort-options="sortOptions"
-      :facets="facets"
-      placeholder="Search nodes"
-    />
 
     <DataState :status="status" :error="error" :empty="!filteredNodes.length" :refreshing="refreshing" empty-label="No nodes found." empty-icon="i-lucide-server">
       <TransitionGroup

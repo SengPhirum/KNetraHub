@@ -18,7 +18,7 @@ const userMenu = computed(() => [
   [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: () => logout() }]
 ])
 
-const config = useRuntimeConfig()
+const { appearance } = useAppearance()
 </script>
 
 <template>
@@ -53,7 +53,7 @@ const config = useRuntimeConfig()
           <div class="min-w-0">
             <div class="flex items-center gap-2 text-sm">
               <span class="dot dot-running" />
-              <span class="truncate font-display text-sm font-semibold tracking-tight text-foam">{{ config.public.appName }}</span>
+              <span class="truncate font-display text-sm font-semibold tracking-tight text-foam">{{ appearance.appName }}</span>
             </div>
           </div>
         </div>
