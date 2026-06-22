@@ -1,6 +1,6 @@
 # DockHub v0.1.8
 
-Date: 2026-06-19 UTC
+Date: 2026-06-22 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-06-19 UTC
 
 ## Source
 
-- Commit: `14e562d`
+- Commit: `f89e508`
 - Previous tag: none
 
 ## Changes
 
+- Update enhance all view (f89e508)
 - Enhance Stack and Service view (14e562d)
 - Enhance stack detail view (e728f76)
 - Update replase sqlite with timescaledb and fix some issue (527d233)
@@ -40,30 +41,24 @@ The working tree had uncommitted changes before this release script ran.
 
 ```text
  M RELEASE_NOTES.md
- M app/components/ListControls.vue
- M app/composables/useListControls.ts
- M app/composables/usePreferences.ts
- M app/pages/audit/index.vue
  M app/pages/configs/index.vue
- M app/pages/containers/index.vue
  M app/pages/networks/index.vue
- M app/pages/nodes/[id].vue
- M app/pages/nodes/index.vue
  M app/pages/secrets/index.vue
- M app/pages/services/[id].vue
- M app/pages/services/index.vue
- M app/pages/stacks/index.vue
- M app/pages/tasks/index.vue
- M app/pages/users/index.vue
+ M app/pages/stacks/[name].vue
  M app/pages/volumes/index.vue
  M release-notes/v0.1.8.md
- M server/api/nodes/[id].get.ts
- M server/api/tasks/index.get.ts
- M server/utils/db.ts
- M server/utils/metrics.ts
- M server/utils/store.ts
-?? app/pages/tasks/[id].vue
-?? server/api/services/usage.get.ts
-?? server/api/tasks/[id].get.ts
-?? server/api/tasks/[id]/
+ M server/api/configs/[id].get.ts
+ M server/api/services/[id].get.ts
+ M server/api/services/usage.get.ts
+ M server/api/stacks/[name]/index.get.ts
+ M server/api/tasks/[id].get.ts
+?? app/components/ResourceServicesTable.vue
+?? app/pages/configs/[id].vue
+?? app/pages/networks/[id].vue
+?? app/pages/secrets/[id].vue
+?? app/pages/volumes/[name].vue
+?? server/api/networks/[id].get.ts
+?? server/api/secrets/[id].get.ts
+?? server/api/volumes/[name].get.ts
+?? server/utils/resourceServices.ts
 ```

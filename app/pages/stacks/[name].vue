@@ -13,11 +13,12 @@ const { connected } = useDockerEvents((evt) => {
   if (['service', 'task', 'network', 'volume', 'secret', 'config'].includes(evt.type)) refresh()
 })
 useIntervalFn(() => {
-  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
+  if (prefs.value.refreshInterval > 0) refresh()
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
 const tab = ref<'overview' | 'services' | 'compose' | 'history'>('overview')
 const summary = computed(() => data.value?.summary || {})
+const currentUsage = computed(() => summary.value.currentUsage || { available: false, containers: 0, cpuPercent: 0, memoryUsedBytes: 0, memoryLimitBytes: 0, sampledAt: null })
 const serviceRows = computed(() => data.value?.services || [])
 const networkRows = computed(() => data.value?.networks || [])
 const volumeRows = computed(() => data.value?.volumes || [])
@@ -95,6 +96,52 @@ function formatNanoCpus(value?: number | null) {
 
 function formatBytes(value?: number | null) {
   return value ? bytes(value) : '-'
+}
+
+function memoryPercent(used?: number | null, limit?: number | null) {
+  if (!used || !limit) return null
+  return Math.min(100, (used / limit) * 100)
+}
+
+function percentLabel(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return '-'
+  return `${value.toFixed(value < 10 ? 1 : 0)}%`
+}
+
+function clampPercent(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, value))
+}
+
+function ringStyle(percent?: number | null) {
+  const safe = clampPercent(percent)
+  return {
+    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 72%, var(--color-surface-2)) 0)`
+  }
+}
+
+function cpuRingPercent() {
+  if (!currentUsage.value.available) return 0
+  const allocated = resourceCpuNano.value / 1e9
+  if (allocated > 0) return (Number(currentUsage.value.cpuPercent || 0) / (allocated * 100)) * 100
+  return Number(currentUsage.value.cpuPercent || 0)
+}
+
+function memoryRingPercent() {
+  if (!currentUsage.value.available) return 0
+  return memoryPercent(currentUsage.value.memoryUsedBytes, currentUsage.value.memoryLimitBytes || resourceMemoryBytes.value) ?? 0
+}
+
+function cpuDetail() {
+  const allocated = resourceCpuNano.value ? `${formatNanoCpus(resourceCpuNano.value)} ${resourceHint.value}` : 'No CPU reservation or limit'
+  if (!currentUsage.value.available) return `${allocated}. Waiting for current usage samples.`
+  return `${percentLabel(currentUsage.value.cpuPercent)} CPU now (${cpus(Number(currentUsage.value.cpuPercent || 0) / 100)}), ${allocated}.`
+}
+
+function memoryDetail() {
+  const allocated = resourceMemoryBytes.value ? `${formatBytes(resourceMemoryBytes.value)} ${resourceHint.value}` : 'No memory reservation or limit'
+  if (!currentUsage.value.available) return `${allocated}. Waiting for current usage samples.`
+  return `${formatBytes(currentUsage.value.memoryUsedBytes)} used / ${formatBytes(currentUsage.value.memoryLimitBytes || resourceMemoryBytes.value)} (${percentLabel(memoryRingPercent())}), ${allocated}.`
 }
 
 function replicaLabel(service: any) {
@@ -231,21 +278,31 @@ async function remove() {
                 </div>
               </div>
               <div class="min-w-0">
-                <div class="mx-auto flex size-20 items-center justify-center rounded-full border-8 border-beacon/60 bg-beacon/10 sm:size-24">
-                  <div>
-                    <p class="font-mono text-sm font-semibold text-foam">{{ formatNanoCpus(resourceCpuNano) }}</p>
-                    <p class="text-[11px] leading-tight text-faint">vCPU</p>
+                <div class="summary-ring-wrap" :title="cpuDetail()">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(cpuRingPercent())" tabindex="0" :aria-label="cpuDetail()">
+                    <div class="summary-ring-inner">
+                      <p class="font-mono text-sm font-semibold text-foam">{{ formatNanoCpus(resourceCpuNano) }}</p>
+                      <p class="text-[11px] leading-tight text-faint">vCPU</p>
+                    </div>
                   </div>
+                  <span class="summary-ring-tip">{{ cpuDetail() }}</span>
                 </div>
               </div>
               <div class="min-w-0">
-                <div class="mx-auto flex size-20 items-center justify-center rounded-full border-8 border-depth/60 bg-sky-500/10 sm:size-24">
-                  <div>
-                    <p class="font-mono text-sm font-semibold text-foam">{{ formatBytes(resourceMemoryBytes) }}</p>
-                    <p class="text-[11px] leading-tight text-faint">RAM</p>
+                <div class="summary-ring-wrap" :title="memoryDetail()">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(memoryRingPercent())" tabindex="0" :aria-label="memoryDetail()">
+                    <div class="summary-ring-inner">
+                      <p class="font-mono text-sm font-semibold text-foam">{{ formatBytes(resourceMemoryBytes) }}</p>
+                      <p class="text-[11px] leading-tight text-faint">RAM</p>
+                    </div>
                   </div>
+                  <span class="summary-ring-tip">{{ memoryDetail() }}</span>
                 </div>
               </div>
+            </div>
+
+            <div v-if="currentUsage.available" class="mt-4 rounded-md bg-surface-2/70 px-3 py-2 text-center text-xs text-faint ring-1 ring-hull-soft">
+              Current sample {{ relative(currentUsage.sampledAt) }} from {{ currentUsage.containers }} container(s)
             </div>
 
             <div class="mt-5 flex flex-wrap gap-2">
@@ -533,3 +590,64 @@ async function remove() {
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.summary-ring-wrap {
+  position: relative;
+}
+
+.summary-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.5rem;
+  transition: filter 0.16s ease, transform 0.16s ease;
+}
+
+.summary-ring:focus-visible,
+.summary-ring:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.summary-ring-inner {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: var(--color-surface);
+  padding: 0.25rem;
+}
+
+.summary-ring-tip {
+  position: absolute;
+  bottom: calc(100% + 0.55rem);
+  left: 50%;
+  z-index: 20;
+  width: max-content;
+  max-width: min(18rem, 82vw);
+  transform: translate(-50%, 0.25rem);
+  border-radius: 0.375rem;
+  background: var(--color-abyss);
+  color: var(--color-foam);
+  opacity: 0;
+  padding: 0.45rem 0.6rem;
+  pointer-events: none;
+  text-align: left;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  border: 1px solid var(--color-hull);
+  box-shadow: var(--panel-shadow-soft);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.summary-ring-wrap:hover .summary-ring-tip,
+.summary-ring:focus-visible + .summary-ring-tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+</style>

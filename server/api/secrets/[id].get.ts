@@ -9,29 +9,28 @@ export default defineEventHandler(async (event) => {
 
   const id = getRouterParam(event, 'id')!
   const docker = useDocker()
-  const config: any = await docker.getConfig(id).inspect().catch((err: any) => {
-    throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Config not found' })
+  const secret: any = await docker.getSecret(id).inspect().catch((err: any) => {
+    throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Secret not found' })
   })
-  const configName = config.Spec?.Name || id
+  const secretName = secret.Spec?.Name || id
 
   const [services, tasks] = await Promise.all([
     docker.listServices().catch(() => []),
     docker.listTasks().catch(() => [])
   ])
   const attachedServices = (services as any[]).filter((service) =>
-    (service.Spec?.TaskTemplate?.ContainerSpec?.Configs || []).some((c: any) =>
-      c.ConfigID === config.ID || c.ConfigName === configName
+    (service.Spec?.TaskTemplate?.ContainerSpec?.Secrets || []).some((s: any) =>
+      s.SecretID === secret.ID || s.SecretName === secretName
     )
   )
 
   return {
-    id: config.ID,
-    name: configName,
-    labels: config.Spec?.Labels || {},
-    stack: config.Spec?.Labels?.[STACK_LABEL] || null,
-    created: config.CreatedAt || null,
-    updated: config.UpdatedAt || null,
-    data: config.Spec?.Data ? Buffer.from(config.Spec.Data, 'base64').toString('utf8') : '',
+    id: secret.ID,
+    name: secretName,
+    labels: secret.Spec?.Labels || {},
+    stack: secret.Spec?.Labels?.[STACK_LABEL] || null,
+    created: secret.CreatedAt || null,
+    updated: secret.UpdatedAt || null,
     services: summarizeServices(attachedServices, tasks as any[])
   }
 })

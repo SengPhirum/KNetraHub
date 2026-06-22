@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
   const resources = task.Spec?.Resources || {}
   const reservations = resources.Reservations || {}
   const limits = resources.Limits || {}
+  const isRunning = task.Status?.State === 'running'
 
   return {
     id: task.ID,
@@ -46,22 +47,26 @@ export default defineEventHandler(async (event) => {
       limitNanoCpus: limits.NanoCPUs || 0,
       limitMemoryBytes: limits.MemoryBytes || 0
     },
-    currentUsage: metric
+    currentUsage: isRunning ? metric : emptyTaskMetric()
   }
 })
+
+function emptyTaskMetric() {
+  return { available: false, sampledAt: null, cpuPercent: 0, memoryUsedBytes: 0, memoryLimitBytes: 0 }
+}
 
 async function latestTaskMetric(taskId: string) {
   try {
     const { rows } = await getDb().query(
       `SELECT time, cpu_percent, memory_used, memory_limit
        FROM container_metrics
-       WHERE task_id = $1
+       WHERE task_id = $1 AND lower(COALESCE(state, '')) = 'running'
        ORDER BY time DESC
        LIMIT 1`,
       [taskId]
     )
     const row = rows[0]
-    if (!row) return { available: false, sampledAt: null, cpuPercent: 0, memoryUsedBytes: 0, memoryLimitBytes: 0 }
+    if (!row) return emptyTaskMetric()
     return {
       available: true,
       sampledAt: row.time,
@@ -70,6 +75,6 @@ async function latestTaskMetric(taskId: string) {
       memoryLimitBytes: Number(row.memory_limit || 0)
     }
   } catch {
-    return { available: false, sampledAt: null, cpuPercent: 0, memoryUsedBytes: 0, memoryLimitBytes: 0 }
+    return emptyTaskMetric()
   }
 }

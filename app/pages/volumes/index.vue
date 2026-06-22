@@ -40,6 +40,10 @@ async function remove(v: any) {
     refresh()
   } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
+
+function openVolume(v: any) {
+  navigateTo(`/volumes/${encodeURIComponent(v.name)}`)
+}
 </script>
 
 <template>
@@ -63,7 +67,16 @@ async function remove(v: any) {
 
     <DataState :status="status" :error="error" :empty="!filtered.length" empty-label="No volumes." empty-icon="i-lucide-database">
       <div class="space-y-2">
-        <div v-for="v in filtered" :key="v.name" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
+        <div
+          v-for="v in filtered"
+          :key="v.name"
+          class="panel-flush p-3.5 grid cursor-pointer grid-cols-2 gap-3 transition hover:ring-1 hover:ring-beacon/30 sm:grid-cols-12 sm:items-center"
+          tabindex="0"
+          role="link"
+          :aria-label="`Open volume ${v.name}`"
+          @click="openVolume(v)"
+          @keydown.enter="openVolume(v)"
+        >
           <div class="col-span-2 sm:col-span-5 min-w-0">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-database" class="size-4 text-(--color-muted)" />
@@ -75,7 +88,7 @@ async function remove(v: any) {
           <div class="sm:col-span-2 text-xs text-(--color-muted)">{{ v.scope }}</div>
           <div class="sm:col-span-2 text-xs text-faint">{{ relative(v.created) }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
-            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(v)" />
+            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(v)" />
           </div>
         </div>
       </div>

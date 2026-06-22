@@ -3,6 +3,7 @@ import { requireUser } from '~~/server/utils/auth'
 import { stackServices, STACK_LABEL } from '~~/server/utils/stack'
 import { useDocker } from '~~/server/utils/docker'
 import { gitlabEnabled, getStackFile, stackHistory } from '~~/server/utils/gitlab'
+import { getDb } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)
@@ -141,6 +142,11 @@ export default defineEventHandler(async (event) => {
   const reservedMemoryBytes = serviceRows.reduce((sum, s) => sum + (s.resources.reservedMemoryBytesTotal || 0), 0)
   const limitNanoCpus = serviceRows.reduce((sum, s) => sum + (s.resources.limitNanoCpusTotal || 0), 0)
   const limitMemoryBytes = serviceRows.reduce((sum, s) => sum + (s.resources.limitMemoryBytesTotal || 0), 0)
+  const runningTaskIds = stackTasks
+    .filter((task) => task.Status?.State === 'running')
+    .map((task) => task.ID)
+    .filter(Boolean)
+  const currentUsage = await latestStackMetrics(runningTaskIds)
 
   return {
     name,
@@ -160,6 +166,7 @@ export default defineEventHandler(async (event) => {
       reservedMemoryBytes,
       limitNanoCpus,
       limitMemoryBytes,
+      currentUsage,
       createdAt: earliest(services.map((s: any) => s.CreatedAt)),
       updatedAt: latest(services.map((s: any) => s.UpdatedAt))
     },
@@ -260,6 +267,56 @@ function serviceResources(service: any, desired: number) {
     reservedMemoryBytesTotal: (reservations.MemoryBytes || 0) * desired,
     limitNanoCpusTotal: (limits.NanoCPUs || 0) * desired,
     limitMemoryBytesTotal: (limits.MemoryBytes || 0) * desired
+  }
+}
+
+async function latestStackMetrics(runningTaskIds: string[]) {
+  if (!runningTaskIds.length) {
+    return {
+      available: false,
+      sampledAt: null,
+      containers: 0,
+      cpuPercent: 0,
+      memoryUsedBytes: 0,
+      memoryLimitBytes: 0
+    }
+  }
+
+  try {
+    const { rows } = await getDb().query(
+      `SELECT sum(cpu_percent) AS cpu_percent,
+              sum(memory_used) AS memory_used,
+              sum(memory_limit) AS memory_limit,
+              max(time) AS sampled_at,
+              count(*) AS containers
+       FROM (
+         SELECT DISTINCT ON (service_id, COALESCE(task_id, container_id))
+                service_id, task_id, container_id, cpu_percent, memory_used, memory_limit, time
+         FROM container_metrics
+         WHERE task_id = ANY($1::text[]) AND lower(COALESCE(state, '')) = 'running' AND time > now() - interval '15 minutes'
+         ORDER BY service_id, COALESCE(task_id, container_id), time DESC
+       ) latest`,
+      [runningTaskIds]
+    )
+    const row = rows[0]
+    const containers = Number(row?.containers || 0)
+    return {
+      available: containers > 0,
+      sampledAt: row?.sampled_at || null,
+      containers,
+      cpuPercent: Number(row?.cpu_percent || 0),
+      memoryUsedBytes: Number(row?.memory_used || 0),
+      memoryLimitBytes: Number(row?.memory_limit || 0)
+    }
+  } catch {
+    return {
+      available: false,
+      sampledAt: null,
+      containers: 0,
+      cpuPercent: 0,
+      memoryUsedBytes: 0,
+      memoryLimitBytes: 0
+    }
   }
 }
 

@@ -19,7 +19,13 @@ export default defineEventHandler(async (event) => {
   const nodeById = new Map((nodes as any[]).map((n) => [n.ID, n.Description?.Hostname || n.ID]))
   const networkById = new Map((networks as any[]).map((n) => [n.Id, n]))
   const volumeByName = new Map(((volumeList as any)?.Volumes || []).map((v: any) => [v.Name, v]))
-  const metrics = await latestServiceMetrics(id)
+  const runningTaskIds = new Set(
+    (tasks as any[])
+      .filter((task) => task.Status?.State === 'running')
+      .map((task) => task.ID)
+      .filter(Boolean)
+  )
+  const metrics = await latestServiceMetrics(id, [...runningTaskIds])
 
   const spec = service.Spec || {}
   const taskTemplate = spec.TaskTemplate || {}
@@ -37,7 +43,8 @@ export default defineEventHandler(async (event) => {
 
   const taskRows = (tasks as any[])
     .map((task) => {
-      const taskMetrics = metrics.byTask.get(task.ID)
+      const state = task.Status?.State || null
+      const taskMetrics = state === 'running' ? metrics.byTask.get(task.ID) : null
       return {
         id: task.ID,
         slot: task.Slot,
@@ -45,7 +52,7 @@ export default defineEventHandler(async (event) => {
         nodeName: nodeById.get(task.NodeID) || task.NodeID,
         image: stripDigest(task.Spec?.ContainerSpec?.Image),
         desiredState: task.DesiredState,
-        state: task.Status?.State || null,
+        state,
         status: task.Status || {},
         message: task.Status?.Err || task.Status?.Message || null,
         timestamp: task.Status?.Timestamp || task.UpdatedAt || task.CreatedAt,
@@ -139,7 +146,9 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-async function latestServiceMetrics(serviceId: string) {
+async function latestServiceMetrics(serviceId: string, runningTaskIds: string[]) {
+  if (!runningTaskIds.length) return emptyServiceMetrics()
+
   try {
     const { rows } = await getDb().query(
       `SELECT DISTINCT ON (COALESCE(task_id, container_id))
@@ -153,9 +162,9 @@ async function latestServiceMetrics(serviceId: string) {
               memory_limit,
               state
        FROM container_metrics
-       WHERE service_id = $1 AND time > now() - interval '15 minutes'
+       WHERE service_id = $1 AND task_id = ANY($2::text[]) AND lower(COALESCE(state, '')) = 'running' AND time > now() - interval '15 minutes'
        ORDER BY COALESCE(task_id, container_id), time DESC`,
-      [serviceId]
+      [serviceId, runningTaskIds]
     )
     const byTask = new Map<string, any>()
     let cpuPercent = 0
@@ -192,16 +201,20 @@ async function latestServiceMetrics(serviceId: string) {
       }
     }
   } catch {
-    return {
-      byTask: new Map<string, any>(),
-      current: {
-        available: false,
-        sampledAt: null,
-        containers: 0,
-        cpuPercent: 0,
-        memoryUsedBytes: 0,
-        memoryLimitBytes: 0
-      }
+    return emptyServiceMetrics()
+  }
+}
+
+function emptyServiceMetrics() {
+  return {
+    byTask: new Map<string, any>(),
+    current: {
+      available: false,
+      sampledAt: null,
+      containers: 0,
+      cpuPercent: 0,
+      memoryUsedBytes: 0,
+      memoryLimitBytes: 0
     }
   }
 }

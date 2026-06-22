@@ -36,7 +36,7 @@ async function latestServiceUsage(): Promise<Map<string, Omit<ServiceUsage, 'id'
          SELECT DISTINCT ON (service_id, COALESCE(task_id, container_id))
                 service_id, task_id, container_id, cpu_percent, memory_used, memory_limit, time
          FROM container_metrics
-         WHERE service_id IS NOT NULL AND time > now() - interval '15 minutes'
+         WHERE service_id IS NOT NULL AND lower(COALESCE(state, '')) = 'running' AND time > now() - interval '15 minutes'
          ORDER BY service_id, COALESCE(task_id, container_id), time DESC
        ) latest
        GROUP BY service_id`

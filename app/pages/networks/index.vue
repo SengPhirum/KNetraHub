@@ -62,6 +62,10 @@ async function remove(n: any) {
   }
 }
 
+function openNetwork(n: any) {
+  navigateTo(`/networks/${n.id}`)
+}
+
 const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
 </script>
 
@@ -90,7 +94,16 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
 
     <DataState :status="status" :error="error" :empty="!filtered.length" :refreshing="refreshing" empty-label="No networks." empty-icon="i-lucide-network">
       <TransitionGroup name="list" tag="div" class="space-y-2">
-        <div v-for="n in filtered" :key="n.id" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
+        <div
+          v-for="n in filtered"
+          :key="n.id"
+          class="panel-flush p-3.5 grid cursor-pointer grid-cols-2 gap-3 transition hover:ring-1 hover:ring-beacon/30 sm:grid-cols-12 sm:items-center"
+          tabindex="0"
+          role="link"
+          :aria-label="`Open network ${n.name}`"
+          @click="openNetwork(n)"
+          @keydown.enter="openNetwork(n)"
+        >
           <div class="col-span-2 sm:col-span-4 min-w-0">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-network" class="size-4 text-(--color-muted)" />
@@ -103,7 +116,7 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
           <div class="sm:col-span-2 text-xs text-(--color-muted)">{{ n.scope || '—' }}</div>
           <div class="sm:col-span-3 font-mono text-xs text-faint">{{ n.subnet || '—' }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
-            <UButton v-if="can('operator') && !SYSTEM.includes(n.name)" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(n)" />
+            <UButton v-if="can('operator') && !SYSTEM.includes(n.name)" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(n)" />
           </div>
         </div>
       </TransitionGroup>

@@ -38,6 +38,10 @@ async function remove(s: any) {
     refresh()
   } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
+
+function openSecret(s: any) {
+  navigateTo(`/secrets/${s.id}`)
+}
 </script>
 
 <template>
@@ -66,7 +70,16 @@ async function remove(s: any) {
 
     <DataState :status="status" :error="error" :empty="!filtered.length" empty-label="No secrets." empty-icon="i-lucide-key-round">
       <div class="space-y-2">
-        <div v-for="s in filtered" :key="s.id" class="panel-flush p-3.5 grid grid-cols-2 gap-3 sm:grid-cols-12 sm:items-center">
+        <div
+          v-for="s in filtered"
+          :key="s.id"
+          class="panel-flush p-3.5 grid cursor-pointer grid-cols-2 gap-3 transition hover:ring-1 hover:ring-beacon/30 sm:grid-cols-12 sm:items-center"
+          tabindex="0"
+          role="link"
+          :aria-label="`Open secret ${s.name}`"
+          @click="openSecret(s)"
+          @keydown.enter="openSecret(s)"
+        >
           <div class="col-span-2 sm:col-span-6 min-w-0">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-key-round" class="size-4 text-(--color-muted)" />
@@ -77,7 +90,7 @@ async function remove(s: any) {
           </div>
           <div class="sm:col-span-5 text-xs text-faint">Created {{ relative(s.created) }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
-            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(s)" />
+            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(s)" />
           </div>
         </div>
       </div>
