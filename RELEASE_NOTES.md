@@ -11,11 +11,16 @@ Date: 2026-06-25 UTC
 
 ## Source
 
-- Commit: `072fef6`
+- Commit: `a0593e2`
 - Previous tag: none
 
 ## Changes
 
+- chore: migrate to pnpm, rebrand to KNetraHub, and enhance README (a0593e2)
+- docs: refactor README with structured Table of Contents, updated feature descriptions, and enhanced architectural overview (d75285a)
+- Update .env example (84c573b)
+- Merge pull request #1 from SengPhirum/restructure-portal-and-prefs (08b6723)
+- Restructure portal: per-app settings, sectioned admin/preferences, full-page home (1edad5c)
 - feat: implement LibreNMS feature parity for Network module (072fef6)
 - Update (ae8fd24)
 - Add KNetraHub portal: app launcher, per-app Keycloak access, new logo (f7ee0d2)
@@ -38,7 +43,7 @@ Date: 2026-06-25 UTC
 - feat: expand settings page with LDAP/OIDC config UI and add docs pages (b35b7b0)
 - feat: add Swagger API reference and user API token management (2d16d2e)
 - Update setting (7257385)
-- feat: add PWA support, KNetraHubLogo component, and brand icons (2e8f4d2)
+- feat: add PWA support, DockHubLogo component, and brand icons (2e8f4d2)
 - feat: major UX overhaul — SPA cache, Moby Blue theme, roles/settings split, author/license (658e837)
 - Init (7cf7e9c)
 - Init (33f6c2b)
@@ -48,42 +53,11 @@ Date: 2026-06-25 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
-M  README.md
-A  app/components/AppSettingsScaffold.vue
- M app/components/SidebarNav.vue
-MM app/composables/useNav.ts
- M app/composables/usePreferences.ts
+ M Dockerfile
+ M RELEASE_NOTES.md
+ M app/components/DocsSidebar.vue
  M app/layouts/default.vue
-R  app/pages/docker.vue -> app/pages/docker/index.vue
-A  app/pages/docker/settings.vue
-M  app/pages/docs/configuration.vue
-M  app/pages/docs/manual.vue
-M  app/pages/documentation.vue
- M app/pages/index.vue
-A  app/pages/ipmgt/settings.vue
-A  app/pages/net/settings.vue
- M app/pages/preferences/index.vue
-A  app/pages/server/settings.vue
-MM app/pages/settings/index.vue
- M server/api/auth/logout.post.ts
- M server/api/user/preferences.patch.ts
- M server/utils/auth.ts
- M server/utils/db.ts
-M  server/utils/gitlab.ts
- M server/utils/store.ts
-?? app/components/AppLauncher.vue
-?? app/middleware/admin.ts
-?? app/pages/admin/
-?? app/pages/preferences/appearance.vue
-?? app/pages/preferences/info.vue
-?? app/pages/preferences/login-activity.vue
-?? app/pages/preferences/notifications.vue
-?? app/pages/preferences/password.vue
-?? app/pages/preferences/profile.vue
-?? app/pages/preferences/sessions.vue
-?? app/pages/preferences/tokens.vue
-?? app/pages/preferences/two-factor.vue
-?? server/api/user/login-activity.get.ts
-?? server/api/user/profile.patch.ts
-?? server/api/user/sessions/
+ M app/pages/documentation.vue
+ M release-notes/v0.1.1.md
+ M server/api/swagger/index.get.ts
 ```
