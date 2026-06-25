@@ -76,7 +76,7 @@ const { appearance } = useAppearance()
           class="shrink-0"
         />
 
-        <div v-if="!inApp" class="flex min-w-0 items-center gap-3">
+        <div v-if="isHome" class="flex min-w-0 items-center gap-3">
           <KNetraHubLogo variant="icon" class="size-8 shrink-0 drop-shadow-[0_10px_18px_rgba(8,41,68,0.18)]" />
           <div class="min-w-0">
             <div class="flex items-center gap-2 text-sm">

@@ -82,25 +82,14 @@ const quickStart = [
   { n: '4', title: 'Start the app', code: 'docker compose up -d\n# then open http://localhost:3000' }
 ]
 
-const homeNavCards = [
+// The interactive Swagger UI is its own full-page app served by the server; it
+// opens in a new tab rather than being embedded, so it gets the whole viewport.
+const swaggerUrl = '/api/swagger'
+
+const homeNavCards: Array<{ id: string; label: string; icon: string; desc: string; external?: string }> = [
   { id: 'manual', label: 'User Manual', icon: 'i-lucide-book-open', desc: 'Feature guides for dashboard, stacks, services, nodes, access control, and daily workflows.' },
   { id: 'configuration', label: 'Configuration', icon: 'i-lucide-sliders-horizontal', desc: 'Runtime options, Docker connection, GitLab versioning, Alerts, OIDC, LDAP, and local auth setup.' },
-  { id: 'api', label: 'API Reference', icon: 'i-lucide-braces', desc: 'Interactive Swagger UI covering every REST endpoint with request/response schemas and try-it-out.' }
-]
-
-const apiEndpointGroups = [
-  { tag: 'Auth',       icon: 'i-lucide-lock' },
-  { tag: 'Stacks',     icon: 'i-lucide-layers' },
-  { tag: 'Services',   icon: 'i-lucide-boxes' },
-  { tag: 'Tasks',      icon: 'i-lucide-list-checks' },
-  { tag: 'Nodes',      icon: 'i-lucide-server' },
-  { tag: 'Networks',   icon: 'i-lucide-network' },
-  { tag: 'Volumes',    icon: 'i-lucide-hard-drive' },
-  { tag: 'Secrets',    icon: 'i-lucide-key-round' },
-  { tag: 'Configs',    icon: 'i-lucide-file-cog' },
-  { tag: 'Registries', icon: 'i-lucide-package' },
-  { tag: 'Users',      icon: 'i-lucide-users' },
-  { tag: 'Audit',      icon: 'i-lucide-scroll-text' },
+  { id: 'api', label: 'API Reference', icon: 'i-lucide-braces', desc: 'Interactive Swagger UI covering every REST endpoint with request/response schemas and try-it-out. Opens in a new tab.', external: swaggerUrl }
 ]
 
 // ── User Manual data ──────────────────────────────────────────────────────────
@@ -753,23 +742,19 @@ const navConfig = [
     id: 'api',
     label: 'API Reference',
     icon: 'i-lucide-braces',
+    external: swaggerUrl,
     subs: [] as { id: string; label: string; icon: string }[]
   }
 ]
 
 // ── Page state ────────────────────────────────────────────────────────────────
-const runtimeConfig = useRuntimeConfig()
-const isStaticDocs = runtimeConfig.public.staticDocs as boolean
-
 const activeSection = ref('home')
 const mainRef = ref<HTMLElement | null>(null)
 const mobileOpen = ref(false)
-const apiEverLoaded = ref(false)
 
 function goTo(section: string, anchor?: string) {
   activeSection.value = section
   mobileOpen.value = false
-  if (section === 'api') apiEverLoaded.value = true
   nextTick(() => {
     if (anchor) {
       document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -781,9 +766,8 @@ function goTo(section: string, anchor?: string) {
 
 onMounted(() => {
   const hash = window.location.hash.replace('#', '')
-  if (['home', 'manual', 'configuration', 'api'].includes(hash)) {
+  if (['home', 'manual', 'configuration'].includes(hash)) {
     activeSection.value = hash
-    if (hash === 'api') apiEverLoaded.value = true
   }
 })
 
@@ -853,10 +837,7 @@ watch(activeSection, (val) => {
       </aside>
 
       <!-- Main scrollable content -->
-      <main
-        ref="mainRef"
-        :class="['docs-main', activeSection === 'api' && 'docs-main--api']"
-      >
+      <main ref="mainRef" class="docs-main">
         <!-- ── HOME ──────────────────────────────────────────────────────── -->
         <div v-show="activeSection === 'home'" class="section-wrap section-wrap--home">
           <!-- Hero -->
@@ -879,16 +860,23 @@ watch(activeSection, (val) => {
                 </div>
               </div>
               <div class="flex flex-wrap gap-2.5 mt-4">
-                <button
+                <component
+                  :is="card.external ? 'a' : 'button'"
                   v-for="card in homeNavCards"
                   :key="card.id"
+                  :href="card.external"
+                  :target="card.external ? '_blank' : undefined"
+                  :rel="card.external ? 'noopener noreferrer' : undefined"
                   class="home-hero-btn group"
-                  @click="goTo(card.id)"
+                  @click="card.external ? undefined : goTo(card.id)"
                 >
                   <UIcon :name="card.icon" class="size-3.5 text-beacon" />
                   {{ card.label }}
-                  <UIcon name="i-lucide-arrow-right" class="size-3 text-faint group-hover:translate-x-0.5 transition-transform" />
-                </button>
+                  <UIcon
+                    :name="card.external ? 'i-lucide-external-link' : 'i-lucide-arrow-right'"
+                    class="size-3 text-faint group-hover:translate-x-0.5 transition-transform"
+                  />
+                </component>
               </div>
             </div>
           </div>
@@ -969,21 +957,28 @@ watch(activeSection, (val) => {
             <p class="section-eyebrow">Documentation sections</p>
             <h2 class="section-title">Explore the docs</h2>
             <div class="grid gap-4 sm:grid-cols-3 mt-4">
-              <button
+              <component
+                :is="card.external ? 'a' : 'button'"
                 v-for="card in homeNavCards"
                 :key="card.id"
+                :href="card.external"
+                :target="card.external ? '_blank' : undefined"
+                :rel="card.external ? 'noopener noreferrer' : undefined"
                 class="doc-nav-card group"
-                @click="goTo(card.id)"
+                @click="card.external ? undefined : goTo(card.id)"
               >
                 <span class="flex size-10 items-center justify-center rounded-lg bg-abyss ring-1 ring-hull mb-3">
                   <UIcon :name="card.icon" class="size-5 text-beacon" />
                 </span>
                 <div class="flex items-start justify-between gap-2">
                   <h3 class="font-display text-base font-semibold text-foam">{{ card.label }}</h3>
-                  <UIcon name="i-lucide-arrow-right" class="size-4 text-faint mt-0.5 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  <UIcon
+                    :name="card.external ? 'i-lucide-external-link' : 'i-lucide-arrow-right'"
+                    class="size-4 text-faint mt-0.5 group-hover:translate-x-0.5 transition-transform shrink-0"
+                  />
                 </div>
                 <p class="mt-1.5 text-xs text-muted leading-relaxed">{{ card.desc }}</p>
-              </button>
+              </component>
             </div>
           </div>
 
@@ -1279,57 +1274,14 @@ watch(activeSection, (val) => {
 
         </div>
 
-        <!-- ── API REFERENCE ────────────────────────────────────────────── -->
-        <div v-show="activeSection === 'api'" class="api-wrapper">
-          <!-- Static docs build: live iframe unavailable -->
-          <div v-if="isStaticDocs" class="api-static-placeholder">
-            <span class="flex size-14 items-center justify-center rounded-2xl bg-surface-2 ring-1 ring-hull mb-5">
-              <UIcon name="i-lucide-braces" class="size-7 text-beacon" />
-            </span>
-            <h2 class="font-display text-xl font-semibold text-foam mb-2">API Reference</h2>
-            <p class="text-sm text-muted max-w-sm text-center leading-relaxed mb-6">
-              The interactive Swagger UI is served by the live KNetraHub server and is not available in this static documentation build.
-            </p>
-            <div class="flex flex-wrap gap-3 justify-center">
-              <div class="rounded-lg border border-hull bg-surface p-4 text-left max-w-xs">
-                <p class="text-xs font-semibold text-foam mb-2">When KNetraHub is running</p>
-                <p class="text-xs text-muted font-mono">http://your-server/api/swagger</p>
-              </div>
-            </div>
-            <div class="mt-8 rounded-lg border border-hull bg-surface p-5 max-w-lg text-left">
-              <div class="flex items-center gap-2 mb-3">
-                <UIcon name="i-lucide-info" class="size-4 text-beacon shrink-0" />
-                <p class="text-sm font-semibold text-foam">What the API covers</p>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div v-for="item in apiEndpointGroups" :key="item.tag" class="flex items-center gap-2 text-xs text-muted">
-                  <UIcon :name="item.icon" class="size-3.5 text-faint shrink-0" />
-                  {{ item.tag }}
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Live server: full Swagger iframe -->
-          <iframe
-            v-else-if="apiEverLoaded"
-            src="/api/swagger"
-            class="api-iframe"
-            title="KNetraHub API Reference"
-          />
-        </div>
+        <!-- API Reference is an external link (opens /api/swagger in a new tab),
+             handled by the sidebar nav and the home cards — no embedded section. -->
       </main>
     </div>
 
     <!-- ── Global fixed footer ───────────────────────────────────────────── -->
     <footer class="docs-global-footer">
       <div class="docs-global-footer-inner">
-        <div class="flex items-center gap-2 min-w-0">
-          <KNetraHubLogo variant="icon" class="size-4 opacity-50 shrink-0" />
-          <span class="text-xs text-faint truncate whitespace-nowrap">
-            <span class="sm:hidden">KNetraHub</span>
-            <span class="hidden sm:inline">KNetraHub — Docker Swarm Management Console</span>
-          </span>
-        </div>
         <p class="text-xs text-faint flex items-center gap-1 whitespace-nowrap shrink-0">
           <span class="hidden sm:inline">Made with</span>
           <span class="text-running">&#9829;</span>
@@ -1439,16 +1391,10 @@ watch(activeSection, (val) => {
 .docs-global-footer-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   height: 100%;
   padding: 0 1.25rem;
   gap: 1rem;
-}
-
-.docs-main--api {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
 /* ── Section wrappers ─────────────────────────────────────────────────────── */
@@ -1473,23 +1419,6 @@ watch(activeSection, (val) => {
 .section-wrap p,
 .section-wrap li span,
 .section-wrap ol li { font-size: 0.9375rem; }
-
-/* ── API iframe ───────────────────────────────────────────────────────────── */
-.api-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.api-iframe {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-  min-height: 500px;
-}
 
 /* ── Home hero ────────────────────────────────────────────────────────────── */
 .home-hero {
@@ -1675,17 +1604,6 @@ watch(activeSection, (val) => {
   background: color-mix(in srgb, var(--color-surface-2) 72%, transparent);
   padding: 0.55rem 0.65rem;
   font-size: 0.75rem;
-}
-
-/* ── API static placeholder ───────────────────────────────────────────────── */
-.api-static-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  padding: 3rem 1.5rem;
-  text-align: center;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */

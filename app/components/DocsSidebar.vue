@@ -4,6 +4,7 @@ const props = defineProps<{
     id: string
     label: string
     icon: string
+    external?: string
     subs: Array<{ id: string; label: string; icon: string }>
   }>
   activeSection: string
@@ -19,18 +20,25 @@ const emit = defineEmits<{
     <!-- Navigation -->
     <nav class="flex-1 space-y-px mt-2 overflow-y-auto">
       <template v-for="item in navConfig" :key="item.id">
-        <button
+        <!-- External items (e.g. Swagger UI) open in a new tab; internal items
+             switch the active section in place. -->
+        <component
+          :is="item.external ? 'a' : 'button'"
+          :href="item.external"
+          :target="item.external ? '_blank' : undefined"
+          :rel="item.external ? 'noopener noreferrer' : undefined"
           :class="[
             'flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm font-medium text-left transition-all duration-100',
             activeSection === item.id
               ? 'text-beacon bg-beacon/10'
               : 'text-muted hover:text-foam hover:bg-hull/50'
           ]"
-          @click="emit('navigate', item.id)"
+          @click="item.external ? undefined : emit('navigate', item.id)"
         >
           <UIcon :name="item.icon" class="size-4 shrink-0" />
           <span>{{ item.label }}</span>
-        </button>
+          <UIcon v-if="item.external" name="i-lucide-external-link" class="size-3.5 ml-auto shrink-0 opacity-60" />
+        </component>
 
         <!-- Sub-items (visible when section is active) -->
         <div

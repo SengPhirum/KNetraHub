@@ -164,7 +164,12 @@ export default defineEventHandler((event) => {
     .dh-auth-dot.authed { background: #34d399; box-shadow: 0 0 0 2px rgba(52,211,153,.2); }
 
     /* ── Main layout ────────────────────────────────────────────────────────── */
-    #swagger-ui { max-width: 1120px; margin: 0 auto; padding: 24px 20px 48px; }
+    html { height: 100%; }
+    body { display: flex; flex-direction: column; min-height: 100%; }
+    .dh-header { flex-shrink: 0; }
+    /* Swagger block fills the full height below the header even when the spec
+       renders short content, so the iframe never shows a dead empty area. */
+    #swagger-ui { flex: 1 0 auto; width: 100%; max-width: 1120px; margin: 0 auto; padding: 24px 20px 48px; }
 
     /* ── Info block ─────────────────────────────────────────────────────────── */
     .swagger-ui { background: transparent; }
