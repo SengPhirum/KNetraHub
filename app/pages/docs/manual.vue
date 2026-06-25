@@ -252,7 +252,7 @@ const featureGuides = [
     summary: 'Configure appearance, integration defaults, authentication providers, alerts, and UI-backed system settings - all admin-only.',
     steps: [
       'Use Authentication settings to enable LDAP or OIDC from the UI.',
-      'Use Integrations to configure GitLab without touching container env; the status dot is only green when KNetraHub actually reaches it.',
+      'Use Dock > Settings > Integrations to configure GitLab without touching container env; the status dot is only green when KNetraHub actually reaches it.',
       'Use Alerts to add notification channels (Telegram/Teams/Webhook) and tune which conditions notify you, with custom message templates.',
       'Save provider settings to store database overrides instead of editing container env.',
       'Use env defaults when you want to delete a saved override and return to .env values.',

@@ -74,7 +74,7 @@ const configurationSections = [
         id: 'gitlab-config',
         title: 'GitLab stack versioning',
         icon: 'i-lucide-git-branch',
-        summary: 'GitLab stores compose files under a repository path so stack changes have commit history and rollback points. Configure it from environment defaults or entirely from Settings > Integrations - the token is encrypted at rest either way.',
+        summary: 'GitLab stores compose files under a repository path so stack changes have commit history and rollback points. Configure it from environment defaults or entirely from Dock > Settings > Integrations - the token is encrypted at rest either way.',
         options: [
           ['NUXT_GITLAB_URL', 'GitLab instance base URL. Defaults to https://gitlab.com.'],
           ['NUXT_GITLAB_TOKEN', 'Personal, project, or deploy token with API access to the configured project. Encrypted at rest; shown masked in the UI.'],
@@ -86,7 +86,7 @@ const configurationSections = [
         steps: [
           'Create or choose a GitLab project for operations state.',
           'Create a token with API access to the project.',
-          'Set the URL, project ID, branch, and stacks path - via env vars or Settings > Integrations.',
+          'Set the URL, project ID, branch, and stacks path - via env vars or Dock > Settings > Integrations.',
           'Reload Settings and confirm the status dot turns green.',
           'Deploy a stack and verify the compose file appears under the configured path.',
           'Use stack history to view or roll back saved compose versions. Remove stops a stack\'s services but keeps its GitLab definition; once it shows status Defined, use Delete from GitLab to remove the compose file and history too.'

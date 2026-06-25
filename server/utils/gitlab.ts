@@ -21,7 +21,7 @@ async function cfg(): Promise<GitlabConfig> {
   if (!c.enabled || !c.token || !c.projectId) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'GitLab is not configured. Set it up under Settings -> Integrations, or via NUXT_GITLAB_* env vars.'
+      statusMessage: 'GitLab is not configured. Set it up under Dock -> Settings -> Integrations, or via NUXT_GITLAB_* env vars.'
     })
   }
   return c
