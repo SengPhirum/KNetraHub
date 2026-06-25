@@ -19,11 +19,28 @@ export interface User {
   lastLogin?: string
 }
 
+export interface NotificationPreferences {
+  deployFailures: boolean
+  nodeDown: boolean
+  replicasDegraded: boolean
+  diskUsage: boolean
+  newLogin: boolean
+}
+
 export interface UserPreferences {
   theme: 'system' | 'dark' | 'light'
   refreshInterval: number   // seconds; 0 = manual
   density: 'default' | 'compact' | 'comfortable'
   lists: Record<string, { sortBy: string; sortDir: 'asc' | 'desc'; filters?: Record<string, string[]> }>
+  notifications: NotificationPreferences
+}
+
+export const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
+  deployFailures: true,
+  nodeDown: true,
+  replicasDegraded: true,
+  diskUsage: true,
+  newLogin: false
 }
 
 export interface AuditEntry {
@@ -216,14 +233,25 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
   const row = rows[0]
-  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {} }
+  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS } }
   const data = parsePreferenceData(row.data)
   return {
     theme: row.theme as UserPreferences['theme'],
     refreshInterval: row.refresh_interval as number,
     density: row.density as UserPreferences['density'],
-    lists: sanitizeListPreferences(data.lists)
+    lists: sanitizeListPreferences(data.lists),
+    notifications: sanitizeNotifications(data.notifications)
   }
+}
+
+function sanitizeNotifications(input: any): NotificationPreferences {
+  const out: NotificationPreferences = { ...DEFAULT_NOTIFICATIONS }
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    for (const key of Object.keys(DEFAULT_NOTIFICATIONS) as (keyof NotificationPreferences)[]) {
+      if (typeof input[key] === 'boolean') out[key] = input[key]
+    }
+  }
+  return out
 }
 
 function parsePreferenceData(raw: string | null | undefined): Record<string, any> {
@@ -263,9 +291,10 @@ export async function updateUserPreferences(userId: string, patch: Partial<UserP
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
   const existing = rows[0]
   const currentData = parsePreferenceData(existing?.data)
-  const nextData = patch.lists !== undefined
-    ? { ...currentData, lists: sanitizeListPreferences(patch.lists) }
-    : currentData
+  let nextData = currentData
+  if (patch.lists !== undefined) nextData = { ...nextData, lists: sanitizeListPreferences(patch.lists) }
+  if (patch.notifications !== undefined) nextData = { ...nextData, notifications: sanitizeNotifications(patch.notifications) }
+  const dataChanged = patch.lists !== undefined || patch.notifications !== undefined
 
   if (!existing) {
     await db.query(
@@ -278,7 +307,7 @@ export async function updateUserPreferences(userId: string, patch: Partial<UserP
     if (patch.theme !== undefined) { fields.push(`theme = $${fields.length + 1}`); vals.push(patch.theme) }
     if (patch.refreshInterval !== undefined) { fields.push(`refresh_interval = $${fields.length + 1}`); vals.push(patch.refreshInterval) }
     if (patch.density !== undefined) { fields.push(`density = $${fields.length + 1}`); vals.push(patch.density) }
-    if (patch.lists !== undefined) { fields.push(`data = $${fields.length + 1}`); vals.push(JSON.stringify(nextData)) }
+    if (dataChanged) { fields.push(`data = $${fields.length + 1}`); vals.push(JSON.stringify(nextData)) }
     if (fields.length) {
       vals.push(userId)
       await db.query(`UPDATE user_preferences SET ${fields.join(', ')} WHERE user_id = $${vals.length}`, vals)
@@ -323,6 +352,62 @@ export async function listAudit(limit = 200): Promise<AuditEntry[]> {
     target: r.target ?? undefined,
     detail: r.detail ?? undefined
   }))
+}
+
+// ─── sessions ─────────────────────────────────────────────────────────────────
+// Browser login sessions, enabling revocation of stateless JWTs. The JWT's `sid`
+// claim points at a row here; deleting the row invalidates that token.
+
+export interface SessionRecord {
+  id: string
+  userId: string
+  createdAt: string
+  lastSeen: string
+  userAgent: string | null
+  ip: string | null
+}
+
+function mapSession(r: any): SessionRecord {
+  return { id: r.id, userId: r.user_id, createdAt: r.created_at, lastSeen: r.last_seen, userAgent: r.user_agent ?? null, ip: r.ip ?? null }
+}
+
+export async function createSession(userId: string, userAgent: string | null, ip: string | null): Promise<string> {
+  const id = nanoid()
+  const now = new Date().toISOString()
+  await getDb().query(
+    'INSERT INTO sessions (id, user_id, created_at, last_seen, user_agent, ip) VALUES ($1, $2, $3, $3, $4, $5)',
+    [id, userId, now, userAgent, ip]
+  )
+  return id
+}
+
+/** Returns the session's last_seen ISO string, or null if it no longer exists (revoked). */
+export async function getSessionLastSeen(id: string): Promise<string | null> {
+  const { rows } = await getDb().query('SELECT last_seen FROM sessions WHERE id = $1', [id])
+  return rows[0]?.last_seen ?? null
+}
+
+export async function touchSession(id: string): Promise<void> {
+  await getDb().query('UPDATE sessions SET last_seen = $2 WHERE id = $1', [id, new Date().toISOString()])
+}
+
+export async function listSessions(userId: string): Promise<SessionRecord[]> {
+  const { rows } = await getDb().query('SELECT * FROM sessions WHERE user_id = $1 ORDER BY last_seen DESC', [userId])
+  return rows.map(mapSession)
+}
+
+/** Delete one session, scoped to its owner so a user can only revoke their own. */
+export async function deleteSession(id: string, userId: string): Promise<number> {
+  const { rowCount } = await getDb().query('DELETE FROM sessions WHERE id = $1 AND user_id = $2', [id, userId])
+  return rowCount ?? 0
+}
+
+/** Delete all of a user's sessions, optionally keeping one (the current device). */
+export async function deleteUserSessions(userId: string, exceptId?: string): Promise<number> {
+  const { rowCount } = exceptId
+    ? await getDb().query('DELETE FROM sessions WHERE user_id = $1 AND id <> $2', [userId, exceptId])
+    : await getDb().query('DELETE FROM sessions WHERE user_id = $1', [userId])
+  return rowCount ?? 0
 }
 
 // ─── registries ───────────────────────────────────────────────────────────────

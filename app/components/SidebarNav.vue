@@ -3,14 +3,18 @@ defineProps<{ collapsed?: boolean }>()
 const emit = defineEmits<{ navigate: [] }>()
 
 const groups = useNav()
-const { can, hasPermission } = useAuth()
+const { can, hasPermission, user } = useAuth()
 const route = useRoute()
 
 const visibleGroups = computed(() =>
   groups.value
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => (!i.minRole || can(i.minRole)) && (!i.permission || hasPermission(i.permission)))
+      items: g.items.filter((i) =>
+        (!i.minRole || can(i.minRole))
+        && (!i.permission || hasPermission(i.permission))
+        && (!i.localOnly || user.value?.source === 'local')
+      )
     }))
     .filter((g) => g.items.length)
 )

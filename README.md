@@ -11,7 +11,7 @@ Built on **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 ## Highlights
 
 - **Live swarm control** - nodes (drain/pause/activate, promote/demote, labels, remove), services (scale, redeploy, rolling image updates, logs, delete), tasks, and raw containers.
-- **Stacks, versioned in Git** - deploy stacks from compose YAML; every deploy is committed to GitLab first, giving you a full change history and one-click **rollback** to any previous commit. GitLab is configurable entirely from Settings -> Integrations (no env vars required), with a status dot that's only green when KNetraHub actually reaches GitLab.
+- **Stacks, versioned in Git** - deploy stacks from compose YAML; every deploy is committed to GitLab first, giving you a full change history and one-click **rollback** to any previous commit. GitLab is configurable entirely from the Dock app's own settings (Dock -> Settings -> Integrations, no env vars required), with a status dot that's only green when KNetraHub actually reaches GitLab.
 - **Alerting** - notify Telegram, Microsoft Teams, or any generic webhook when a deploy fails, a service nears its CPU/memory limit, a node stops reporting, replicas stay degraded, or disk usage crosses a threshold. Each rule has a default message template you can customize with `{{placeholder}}` fields.
 - **Data resources** - create and manage overlay networks, volumes, secrets (write-only), and configs.
 - **Portal + app launcher** - the home page lists only the apps you can reach (Dock, Net, Server, IP Mgt, …); the sidebar is contextual to the app you're in. Docker management is the built-in **"Dock"** app.
@@ -301,7 +301,7 @@ Group mapping works like LDAP: the claim named by `NUXT_OIDC_GROUPS_CLAIM` (defa
 
 ### GitLab stack versioning
 
-Configure GitLab either via environment variables (first-run defaults) or entirely from **Settings -> Integrations** (saved as an encrypted database override - no container restart needed):
+Configure GitLab either via environment variables (first-run defaults) or entirely from the Dock app's own admin settings, **Dock -> Settings -> Integrations** (saved as an encrypted database override - no container restart needed). GitLab versioning is specific to the Docker app, so its configuration lives with that app rather than in the portal-wide settings:
 
 ```text
 NUXT_GITLAB_URL=https://gitlab.com   # default
@@ -317,7 +317,7 @@ The status dot next to GitLab in Settings is only green when DockHub actually re
 
 ### Alerts
 
-Configure notification channels and alert rules from **Settings -> Alerts**. Three channel types are supported - Telegram (bot token + chat ID), Microsoft Teams (incoming webhook URL), and a generic Webhook (URL + custom headers) - and channel credentials are encrypted at rest like everything else. Add as many channels as you like; every enabled channel receives every alert that fires.
+Configure notification channels and alert rules from the Dock app's own admin settings, **Dock -> Settings -> Alerts** (Swarm alerting belongs to the Docker app, so it lives with that app rather than in the portal-wide settings). Three channel types are supported - Telegram (bot token + chat ID), Microsoft Teams (incoming webhook URL), and a generic Webhook (URL + custom headers) - and channel credentials are encrypted at rest like everything else. Add as many channels as you like; every enabled channel receives every alert that fires.
 
 Five alert rules ship with sensible defaults, each independently enabled/disabled and configurable:
 

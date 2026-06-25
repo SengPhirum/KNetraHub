@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { SignJWT, jwtVerify } from 'jose'
 import type { Role, UserSource } from './store'
-import { lookupApiTokenUser } from './store'
+import { lookupApiTokenUser, createSession, getSessionLastSeen, touchSession } from './store'
 import { roleHasPermission, type Permission } from '../../shared/utils/permissions'
 import {
   resolveEntitlements,
@@ -22,6 +22,9 @@ export interface SessionUser {
   source: UserSource
   /** Keycloak realm roles (realm_access.roles), used to resolve per-app access. */
   realmRoles: string[]
+  /** Browser-session id (JWT `sid` claim). Absent for API-token auth. Lets a
+   *  stateless cookie JWT be revoked by deleting its sessions row. */
+  sid?: string
 }
 
 // Keep the legacy cookie name so existing sessions survive the DockHub rebrand.
@@ -31,8 +34,8 @@ function secret() {
   return new TextEncoder().encode(useRuntimeConfig().jwtSecret)
 }
 
-export async function issueToken(user: SessionUser): Promise<string> {
-  return await new SignJWT({ ...user })
+export async function issueToken(user: SessionUser, sid?: string): Promise<string> {
+  return await new SignJWT({ ...user, ...(sid ? { sid } : {}) })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('12h')
@@ -70,7 +73,22 @@ export async function resolveUserEntitlements(user: SessionUser): Promise<AppEnt
 }
 
 export async function setSession(event: H3Event, user: SessionUser) {
-  const token = await issueToken(user)
+  // Record the session so it can be listed/revoked, and bind the token to it.
+  const userAgent = getRequestHeader(event, 'user-agent') ?? null
+  const forwarded = getRequestHeader(event, 'x-forwarded-for')
+  const ip = (forwarded ? forwarded.split(',')[0]!.trim() : '')
+    || getRequestHeader(event, 'x-real-ip')
+    || event.node.req.socket?.remoteAddress
+    || null
+  // Degrade gracefully: if the session row can't be created (e.g. DB hiccup),
+  // still issue a working (un-revocable) token rather than failing login.
+  let sid: string | undefined
+  try {
+    sid = await createSession(user.id, userAgent, ip)
+  } catch (err) {
+    console.error('[auth] could not create session row; issuing token without sid', err)
+  }
+  const token = await issueToken(user, sid)
   setCookie(event, COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -99,13 +117,28 @@ export async function readSession(event: H3Event): Promise<SessionUser | null> {
   if (!token) return null
   try {
     const { payload } = await jwtVerify(token, secret())
+    const sid = typeof payload.sid === 'string' ? payload.sid : undefined
+    // Session-bound tokens can be revoked: if the sessions row is gone, the
+    // token is no longer valid. On a DB error we fail open (don't lock everyone
+    // out on a transient hiccup); tokens issued before this feature have no sid
+    // and stay valid until they expire.
+    if (sid) {
+      try {
+        const lastSeen = await getSessionLastSeen(sid)
+        if (lastSeen === null) return null
+        if (Date.now() - new Date(lastSeen).getTime() > 120_000) touchSession(sid).catch(() => {})
+      } catch {
+        // fail open
+      }
+    }
     return {
       id: String(payload.id),
       username: String(payload.username),
       displayName: String(payload.displayName),
       role: payload.role as Role,
       source: payload.source as UserSource,
-      realmRoles: Array.isArray(payload.realmRoles) ? (payload.realmRoles as string[]) : []
+      realmRoles: Array.isArray(payload.realmRoles) ? (payload.realmRoles as string[]) : [],
+      ...(sid ? { sid } : {})
     }
   } catch {
     return null

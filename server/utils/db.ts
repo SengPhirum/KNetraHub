@@ -131,6 +131,20 @@ async function runMigrations(): Promise<void> {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);
 
+    -- Browser login sessions, so a stateless JWT can be revoked ("sign out
+    -- everywhere" / per-device) by deleting its row. The JWT carries this id as
+    -- its sid claim; readSession rejects a token whose session row is gone.
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      user_agent TEXT,
+      ip TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+
     CREATE TABLE IF NOT EXISTS alert_channels (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

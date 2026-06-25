@@ -5,6 +5,9 @@ export interface NavItem {
   minRole?: 'viewer' | 'operator' | 'admin'
   permission?: Permission
   target?: string
+  /** Show only for local accounts (hidden for LDAP/OIDC, whose credentials live
+   *  in the directory/provider). e.g. the self-service password change. */
+  localOnly?: boolean
 }
 export interface NavGroup {
   label: string
@@ -44,7 +47,8 @@ const DOCK_GROUPS: NavGroup[] = [
   {
     label: 'Dock admin',
     items: [
-      { label: 'Registries', to: '/registries', icon: 'i-lucide-package', permission: 'docker.manage' }
+      { label: 'Registries', to: '/registries',      icon: 'i-lucide-package',  permission: 'docker.manage' },
+      { label: 'Settings',   to: '/docker/settings', icon: 'i-lucide-settings', permission: 'docker.manage' }
     ]
   }
 ]
@@ -59,6 +63,12 @@ const NET_GROUPS: NavGroup[] = [
       { label: 'Devices',  to: '/net/devices', icon: 'i-lucide-router',         permission: 'net.view' },
       { label: 'Alerts',   to: '/net/alerts',  icon: 'i-lucide-bell-ring',      permission: 'net.view' }
     ]
+  },
+  {
+    label: 'Network admin',
+    items: [
+      { label: 'Settings', to: '/net/settings', icon: 'i-lucide-settings', permission: 'net.manage' }
+    ]
   }
 ]
 
@@ -70,6 +80,12 @@ const SERVER_GROUPS: NavGroup[] = [
       { label: 'Overview', to: '/server',          icon: 'i-lucide-radar',          permission: 'server.view' },
       { label: 'Hosts',    to: '/server/hosts',    icon: 'i-lucide-server',         permission: 'server.view' },
       { label: 'Problems', to: '/server/problems', icon: 'i-lucide-triangle-alert', permission: 'server.view' }
+    ]
+  },
+  {
+    label: 'Server admin',
+    items: [
+      { label: 'Settings', to: '/server/settings', icon: 'i-lucide-settings', permission: 'server.manage' }
     ]
   }
 ]
@@ -83,43 +99,115 @@ const IPMGT_GROUPS: NavGroup[] = [
       { label: 'Subnets',   to: '/ipmgt/subnets',   icon: 'i-lucide-network',     permission: 'ipmgt.view' },
       { label: 'Addresses', to: '/ipmgt/addresses', icon: 'i-lucide-list-ordered',permission: 'ipmgt.view' }
     ]
+  },
+  {
+    label: 'IP Management admin',
+    items: [
+      { label: 'Settings', to: '/ipmgt/settings', icon: 'i-lucide-settings', permission: 'ipmgt.delete' }
+    ]
+  }
+]
+
+// The portal admin area's sidebar, grouped into sections. Shown on the admin
+// setting pages (/admin/*) and the existing /users and /audit pages - i.e.
+// whenever the user is at the portal level rather than inside an app. Every
+// item is admin-only (filtered by SidebarNav). There is deliberately no "Apps"
+// link here (the sidebar logo links home); the Logs section will grow as more
+// log types land (the user-requested "...").
+const ADMIN_GROUPS: NavGroup[] = [
+  {
+    label: 'General',
+    items: [
+      { label: 'Appearance', to: '/admin/appearance', icon: 'i-lucide-paintbrush', minRole: 'admin' },
+      { label: 'Reference',  to: '/admin/reference',  icon: 'i-lucide-book-open',  minRole: 'admin' }
+    ]
+  },
+  {
+    label: 'Security',
+    items: [
+      { label: 'Users',          to: '/users',                icon: 'i-lucide-users',        minRole: 'admin' },
+      { label: 'App & Access',   to: '/admin/access',         icon: 'i-lucide-layout-grid',  minRole: 'admin' },
+      { label: 'Authentication', to: '/admin/authentication', icon: 'i-lucide-shield-check', minRole: 'admin' }
+    ]
+  },
+  {
+    label: 'Logs',
+    items: [
+      { label: 'Audit log',  to: '/audit',            icon: 'i-lucide-scroll-text', minRole: 'admin' },
+      { label: 'System log', to: '/admin/system-log', icon: 'i-lucide-file-text',   minRole: 'admin' }
+    ]
+  }
+]
+
+// The user-preferences sidebar, grouped into sections. Shown on /preferences/*.
+// Open to any signed-in user (no minRole), so it's separate from ADMIN_GROUPS.
+// The Security section grows as account-security features land (2FA, sessions…).
+const PREFERENCES_GROUPS: NavGroup[] = [
+  {
+    label: 'General',
+    items: [
+      { label: 'Info',       to: '/preferences/info',       icon: 'i-lucide-circle-user' },
+      { label: 'Appearance', to: '/preferences/appearance', icon: 'i-lucide-paintbrush' }
+    ]
+  },
+  {
+    label: 'Account',
+    items: [
+      { label: 'Profile',         to: '/preferences/profile',       icon: 'i-lucide-user-round' },
+      { label: 'Password change', to: '/preferences/password',      icon: 'i-lucide-key-round', localOnly: true },
+      { label: 'Notifications',   to: '/preferences/notifications', icon: 'i-lucide-bell' }
+    ]
+  },
+  {
+    label: 'Security',
+    items: [
+      { label: 'API tokens',      to: '/preferences/tokens',         icon: 'i-lucide-square-asterisk' },
+      { label: 'Two-factor auth', to: '/preferences/two-factor',     icon: 'i-lucide-shield-check' },
+      { label: 'Active sessions', to: '/preferences/sessions',       icon: 'i-lucide-monitor-smartphone' },
+      { label: 'Login activity',  to: '/preferences/login-activity', icon: 'i-lucide-history' }
+    ]
   }
 ]
 
 /**
  * Contextual navigation. The sidebar shows:
- *  - always: a link back to the app launcher;
- *  - inside the Dock app: the Dock navigation above;
- *  - for global admins: portal Administration (users/audit/settings);
+ *  - inside an app: a link back to the app launcher + that app's own navigation
+ *    (including the app's own admin settings);
+ *  - in user preferences (/preferences/*): the sectioned preferences menu
+ *    (General / Account / Security), open to any signed-in user;
+ *  - at the portal level (admin pages: /admin/*, /users, /audit - not inside any
+ *    app): the sectioned admin menu (General / Security / Logs), with NO Apps
+ *    link (the sidebar logo links home);
  *  - always: Documentation, pinned to the bottom.
+ * The home page (/) is full-page with no sidebar, so this isn't used there.
  * Returns a ComputedRef so it reacts to route (current app) changes.
  */
 export function useNav(): ComputedRef<NavGroup[]> {
   const route = useRoute()
   return computed<NavGroup[]>(() => {
     const currentApp = appKeyForRoute(route.path)
-    const groups: NavGroup[] = [
-      { label: '', items: [{ label: 'Apps', to: '/', icon: 'i-lucide-layout-grid' }] }
-    ]
+    const inPreferences = route.path === '/preferences' || route.path.startsWith('/preferences/')
+    const groups: NavGroup[] = []
 
-    if (currentApp === 'docker') groups.push(...DOCK_GROUPS)
-    else if (currentApp === 'net') groups.push(...NET_GROUPS)
-    else if (currentApp === 'server') groups.push(...SERVER_GROUPS)
-    else if (currentApp === 'ipmgt') groups.push(...IPMGT_GROUPS)
-
-    groups.push({
-      label: 'Administration',
-      items: [
-        { label: 'Users',     to: '/users',    icon: 'i-lucide-users',       minRole: 'admin' },
-        { label: 'Audit log', to: '/audit',    icon: 'i-lucide-scroll-text', minRole: 'admin' },
-        { label: 'Settings',  to: '/settings', icon: 'i-lucide-settings',    minRole: 'admin' }
-      ]
-    })
+    if (currentApp) {
+      // Inside an app: back-to-launcher link + the app's own nav.
+      // groups.push({ label: '', items: [{ label: 'Apps', to: '/', icon: 'i-lucide-layout-grid' }] })
+      if (currentApp === 'docker') groups.push(...DOCK_GROUPS)
+      else if (currentApp === 'net') groups.push(...NET_GROUPS)
+      else if (currentApp === 'server') groups.push(...SERVER_GROUPS)
+      else if (currentApp === 'ipmgt') groups.push(...IPMGT_GROUPS)
+    } else if (inPreferences) {
+      // User preferences: the sectioned preferences menu (no Apps link).
+      groups.push(...PREFERENCES_GROUPS)
+    } else {
+      // Portal admin area: the sectioned admin menu (no Apps link).
+      groups.push(...ADMIN_GROUPS)
+    }
 
     groups.push({
       label: 'Documentation',
       items: [
-        { label: 'Documentation and API', to: '/documentation', icon: 'i-lucide-book-open-text' }
+        { label: 'Documentation', to: '/documentation', icon: 'i-lucide-book-open-text' }
       ]
     })
 

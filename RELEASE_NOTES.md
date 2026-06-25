@@ -1,6 +1,6 @@
 # DockHub v0.1.1
 
-Date: 2026-06-24 UTC
+Date: 2026-06-25 UTC
 
 ## Docker Images
 
@@ -11,11 +11,14 @@ Date: 2026-06-24 UTC
 
 ## Source
 
-- Commit: `e146779`
+- Commit: `072fef6`
 - Previous tag: none
 
 ## Changes
 
+- feat: implement LibreNMS feature parity for Network module (072fef6)
+- Update (ae8fd24)
+- Add KNetraHub portal: app launcher, per-app Keycloak access, new logo (f7ee0d2)
 - Update (e146779)
 - Add GitLab UI config, alerting, stack GitLab deletion, and icon branding (c1061f4)
 - Enhance dashboard and dev swarm (e8a09df)
@@ -45,40 +48,42 @@ Date: 2026-06-24 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M .env.example
- M README.md
- M agent/Dockerfile
- M agent/index.mjs
- M app/assets/css/main.css
- M app/components/DataState.vue
- M app/components/DockHubLogo.vue
+M  README.md
+A  app/components/AppSettingsScaffold.vue
  M app/components/SidebarNav.vue
- M app/composables/useAppearance.ts
- M app/composables/useAuth.ts
- M app/composables/useNav.ts
- M app/pages/docs/configuration.vue
- M app/pages/docs/manual.vue
- M app/pages/documentation.vue
+MM app/composables/useNav.ts
+ M app/composables/usePreferences.ts
+ M app/layouts/default.vue
+R  app/pages/docker.vue -> app/pages/docker/index.vue
+A  app/pages/docker/settings.vue
+M  app/pages/docs/configuration.vue
+M  app/pages/docs/manual.vue
+M  app/pages/documentation.vue
  M app/pages/index.vue
- M app/pages/login.vue
- M app/pages/settings/index.vue
- M app/pages/stacks/[name].vue
- M app/pages/stacks/index.vue
- M nuxt.config.ts
- M package-lock.json
- M package.json
- M server/utils/appearanceSettings.ts
+A  app/pages/ipmgt/settings.vue
+A  app/pages/net/settings.vue
+ M app/pages/preferences/index.vue
+A  app/pages/server/settings.vue
+MM app/pages/settings/index.vue
+ M server/api/auth/logout.post.ts
+ M server/api/user/preferences.patch.ts
  M server/utils/auth.ts
-?? agent/collectors/
-?? app/components/RemoteModuleLoader.vue
-?? app/pages/ipmgt.vue
-?? app/pages/net.vue
-?? app/pages/server.vue
-?? app/plugins/
-?? app/utils/moduleRegistry.ts
-?? remotes/
-?? server/api/auth/subsystem-token.get.ts
-?? server/api/modules/
-?? services/
-?? shared/
+ M server/utils/db.ts
+M  server/utils/gitlab.ts
+ M server/utils/store.ts
+?? app/components/AppLauncher.vue
+?? app/middleware/admin.ts
+?? app/pages/admin/
+?? app/pages/preferences/appearance.vue
+?? app/pages/preferences/info.vue
+?? app/pages/preferences/login-activity.vue
+?? app/pages/preferences/notifications.vue
+?? app/pages/preferences/password.vue
+?? app/pages/preferences/profile.vue
+?? app/pages/preferences/sessions.vue
+?? app/pages/preferences/tokens.vue
+?? app/pages/preferences/two-factor.vue
+?? server/api/user/login-activity.get.ts
+?? server/api/user/profile.patch.ts
+?? server/api/user/sessions/
 ```
