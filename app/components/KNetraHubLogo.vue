@@ -8,10 +8,16 @@ const props = withDefaults(defineProps<{
   variant?: 'horizontal' | 'icon'
   alt?: string
   size?: 'sm' | 'md' | 'lg'
+  /** Small caption rendered beneath the wordmark - e.g. the current app's name
+   *  while inside an app. Horizontal variant only. The two-tone "KNetra·Hub"
+   *  brand wordmark stays exactly as on the portal home; the app name reads as a
+   *  secondary subtitle, so each app keeps the portal identity. */
+  caption?: string
 }>(), {
   variant: 'horizontal',
   alt: 'KNetraHub',
-  size: 'md'
+  size: 'md',
+  caption: ''
 })
 
 const { appearance } = useAppearance()
@@ -27,6 +33,8 @@ const override = computed(() => {
     ? { src: appearance.value.logoHorizontalUrl, width: 2380, height: 612 }
     : null
 })
+
+const captionClass = { sm: 'text-[11px]', md: 'text-xs', lg: 'text-sm' } as const
 
 const tileClass = { sm: 'h-8 w-8', md: 'h-10 w-10', lg: 'h-12 w-12' } as const
 const textClass = { sm: 'text-lg', md: 'text-xl', lg: 'text-2xl' } as const
@@ -126,10 +134,18 @@ const overrideClass = computed(() =>
       <circle cx="256" cy="292" r="14" fill="#1d72bd" />
       <circle cx="245" cy="281" r="5" fill="#fff" />
     </svg>
-    <span
-      class="font-display font-semibold leading-none tracking-tight"
-      :class="textClass[size]"
-      style="color: var(--color-foam)"
-    >KNetra<span style="color: var(--color-beacon, #2496ED)">Hub</span></span>
+    <span class="flex min-w-0 flex-col">
+      <span
+        class="font-display font-semibold leading-none tracking-tight"
+        :class="textClass[size]"
+        style="color: var(--color-foam)"
+      >KNetra<span style="color: var(--color-beacon, #2496ED)">Hub</span></span>
+      <span
+        v-if="caption"
+        class="mt-1 truncate font-display font-medium uppercase leading-none tracking-[0.14em]"
+        :class="captionClass[size]"
+        style="color: var(--color-muted)"
+      >{{ caption }}</span>
+    </span>
   </div>
 </template>

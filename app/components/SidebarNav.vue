@@ -21,6 +21,14 @@ const visibleGroups = computed(() =>
 const primaryGroups = computed(() => visibleGroups.value.filter((g) => g.label !== 'Documentation'))
 const documentationGroup = computed(() => visibleGroups.value.find((g) => g.label === 'Documentation'))
 
+// Inside an app, the KNetraHub wordmark keeps the portal identity and the app's
+// name (Docker / Network / Server / IP Management) reads as a caption beneath it;
+// elsewhere the caption is empty and only the brand wordmark shows.
+const appCaption = computed(() => {
+  const key = appKeyForRoute(route.path)
+  return key ? getModuleRegistry().find((m) => m.key === key)?.name : undefined
+})
+
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
   if (to.includes('#')) return route.path + route.hash === to
@@ -37,7 +45,7 @@ function isActive(to: string) {
       @click="emit('navigate')"
     >
       <span class="flex w-full items-center justify-center px-3 py-2">
-        <KNetraHubLogo size="sm" class="max-w-full" />
+        <KNetraHubLogo size="sm" class="max-w-full" :caption="appCaption" />
       </span>
     </NuxtLink>
 
