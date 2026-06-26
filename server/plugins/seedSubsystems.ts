@@ -17,96 +17,11 @@ export default defineNitroPlugin(async (nitroApp) => {
       
       const db = getDb()
       
-      // Check if network devices exist
-      const netRes = await db.query('SELECT count(*) as cnt FROM net_devices')
-      if (Number(netRes.rows[0].cnt) === 0) {
-        console.log('[seed] Seeding MVP Network data...')
-        
-        const dev1Id = nanoid()
-        const dev2Id = nanoid()
-        const dev3Id = nanoid()
-        const dev4Id = nanoid()
-        const dev5Id = nanoid()
-        const dev6Id = nanoid()
-        const dev7Id = nanoid()
-        
-        await db.query(`INSERT INTO net_devices (id, hostname, ip, type, vendor, os, status, uptime, snmp_version, snmp_community, poll_method, category, sys_name, sys_descr, sys_object_id, created_at) VALUES 
-          ($1, 'Core-Switch-01', '10.0.0.1', 'Switch', 'Cisco', 'IOS-XE 16.9.4', 'up', '14 days', 'v2c', 'public', 'snmp', 'network', 'core-sw-01.local', 'Cisco IOS Software', '1.3.6.1.4.1.9.1', $8),
-          ($2, 'Router-B', '10.0.0.2', 'Router', 'Juniper', 'Junos 21.2', 'up', '14 days', 'v2c', 'public', 'snmp', 'network', 'router-b.local', 'Juniper Networks', '1.3.6.1.4.1.2636.1', $8),
-          ($3, 'Firewall-FW1', '10.0.0.254', 'Firewall', 'Palo Alto', 'PAN-OS 10.1', 'down', '0 days', 'v3', 'private', 'snmp', 'network', 'fw1.local', 'Palo Alto Networks', '1.3.6.1.4.1.25461', $8),
-          ($4, 'Synology-NAS-01', '10.0.0.50', 'NAS', 'Synology', 'DSM 7.2', 'up', '42 days', 'v2c', 'public', 'snmp', 'storage', 'nas-01.local', 'Synology DiskStation', '1.3.6.1.4.1.6574.1', $8),
-          ($5, 'HP-Printer-Floor1', '10.0.0.200', 'Printer', 'HP', 'Unknown', 'up', '5 days', NULL, NULL, 'ping', 'ping-only', NULL, NULL, NULL, $8),
-          ($6, 'VM-AppServer-01', '10.0.0.30', 'Server', 'VMware', 'Ubuntu 24.04', 'up', '120 days', 'v2c', 'public', 'snmp', 'server', 'app-01.local', 'Linux app-01 6.8.0', '1.3.6.1.4.1.8072.3.2.10', $8),
-          ($7, 'EnvSensor-Rack1', '10.0.0.150', 'Environment', 'APC', 'AOS 6.8', 'up', '300 days', 'v1', 'public', 'snmp', 'iot', 'apc-env-01.local', 'APC NetBotz', '1.3.6.1.4.1.318.1.3.27', $8)`,
-          [dev1Id, dev2Id, dev3Id, dev4Id, dev5Id, dev6Id, dev7Id, new Date().toISOString()]
-        )
-        
-        await db.query(`INSERT INTO net_interfaces (id, device_id, name, status, speed, in_traffic, out_traffic, mac_address, mtu, admin_status, oper_status, type) VALUES
-          ($1, $2, 'Gi1/0/1', 'up', '1Gbps', '45 Mbps', '12 Mbps', '00:1A:2B:3C:4D:5E', '1500', 'up', 'up', 'physical'),
-          ($3, $2, 'Gi1/0/2', 'down', '1Gbps', '0 Mbps', '0 Mbps', '00:1A:2B:3C:4D:5F', '1500', 'down', 'down', 'physical'),
-          ($4, $2, 'Te1/1/1', 'up', '10Gbps', '2.4 Gbps', '1.1 Gbps', '00:1A:2B:3C:4D:60', '9000', 'up', 'up', 'physical'),
-          ($5, $6, 'eth0', 'up', '10Gbps', '300 Mbps', '800 Mbps', '00:50:56:AB:CD:EF', '1500', 'up', 'up', 'virtual')`,
-          [nanoid(), dev1Id, nanoid(), nanoid(), nanoid(), dev6Id]
-        )
+      // The Network module is populated from real devices (Network > Discovery,
+      // or Add Device) and kept live by the real poller (server/plugins/netPoller.ts)
+      // - no simulated devices/interfaces/sensors/flows/syslog are seeded. Default
+      // probe and alert rules are seeded by the idempotent blocks further below.
 
-        await db.query(`INSERT INTO net_sensors (id, device_id, sensor_type, name, current_value, unit, limit_high, limit_low) VALUES
-          ($1, $2, 'temperature', 'System Board Temp', 35.5, 'C', 75.0, 0.0),
-          ($3, $2, 'fan', 'Fan 1 Speed', 4500, 'RPM', 8000, 1000),
-          ($4, $5, 'voltage', 'Disk 1 Voltage', 12.1, 'V', 13.0, 11.0),
-          ($6, $5, 'temperature', 'Disk 1 Temp', 42.0, 'C', 60.0, 0.0),
-          ($7, $8, 'temperature', 'Rack Inlet Temp', 22.5, 'C', 30.0, 10.0),
-          ($9, $8, 'humidity', 'Rack Humidity', 45.0, '%', 80.0, 20.0),
-          ($10, $8, 'power', 'Total Power Load', 1.2, 'kW', 3.0, 0.0)`,
-          [nanoid(), dev1Id, nanoid(), nanoid(), dev4Id, nanoid(), nanoid(), dev7Id, nanoid(), nanoid()]
-        )
-
-        const rule1Id = nanoid()
-        const rule2Id = nanoid()
-        await db.query(`INSERT INTO net_alert_rules (id, name, metric, condition, threshold, severity) VALUES
-          ($1, 'High CPU Load', 'cpu', '>', '90', 'critical'),
-          ($2, 'High Temperature', 'temperature', '>', '70', 'warning')`,
-          [rule1Id, rule2Id]
-        )
-
-        await db.query(`INSERT INTO net_alerts (id, device_id, rule_id, message, severity, status, timestamp) VALUES
-          ($1, $2, $3, 'CPU load exceeds 90%', 'critical', 'active', $5),
-          ($4, $2, $3, 'CPU load normal', 'critical', 'recovered', $6)`,
-          [nanoid(), dev1Id, rule1Id, nanoid(), new Date().toISOString(), new Date(Date.now() - 3600000).toISOString()]
-        )
-
-        await db.query(`INSERT INTO net_syslog (id, device_id, facility, severity, program, message, timestamp) VALUES
-          ($1, $2, 'authpriv', 'info', 'sshd', 'Accepted publickey for root from 10.0.0.2', $5),
-          ($3, $4, 'syslog', 'err', 'kernel', 'Link down on eth0', $6)`,
-          [nanoid(), dev6Id, nanoid(), dev3Id, new Date().toISOString(), new Date(Date.now() - 86400000).toISOString()]
-        )
-
-        const group1Id = nanoid()
-        const group2Id = nanoid()
-        await db.query(`INSERT INTO net_groups (id, name, description) VALUES
-          ($1, 'Core Infrastructure', 'Routers and Core Switches'),
-          ($2, 'Datacenter', 'All datacenter equipment')`,
-          [group1Id, group2Id]
-        )
-
-        await db.query(`INSERT INTO net_device_groups (device_id, group_id) VALUES
-          ($1, $2), ($1, $3), ($4, $2)`,
-          [dev1Id, group1Id, group2Id, dev2Id]
-        )
-
-        await db.query(`INSERT INTO net_backups (id, device_id, config_text, timestamp) VALUES
-          ($1, $2, 'hostname Core-Switch-01\\ninterface Gi1/0/1\\n speed 1000', $4),
-          ($3, $2, 'hostname Core-Switch-01\\ninterface Gi1/0/1\\n speed 1000\\ninterface Gi1/0/2\\n shutdown', $5)`,
-          [nanoid(), dev1Id, nanoid(), new Date(Date.now() - 86400000).toISOString(), new Date().toISOString()]
-        )
-
-        await db.query(`INSERT INTO net_flows (id, device_id, protocol, src_ip, dst_ip, src_port, dst_port, bytes, packets, timestamp) VALUES
-          ($1, $2, 'TCP', '10.0.0.30', '1.1.1.1', 443, 443, 1500000, 1200, $5),
-          ($3, $2, 'UDP', '10.0.0.50', '8.8.8.8', 53, 53, 5000, 45, $6),
-          ($4, $2, 'TCP', '10.0.0.30', '10.0.0.50', 22, 22, 45000, 100, $5)`,
-          [nanoid(), dev1Id, nanoid(), nanoid(), new Date().toISOString(), new Date(Date.now() - 60000).toISOString()]
-        )
-      }
-      
       // Check if server hosts exist
       const srvRes = await db.query('SELECT count(*) as cnt FROM server_hosts')
       if (Number(srvRes.rows[0].cnt) === 0) {
@@ -153,7 +68,33 @@ export default defineNitroPlugin(async (nitroApp) => {
           [nanoid(), s1, nanoid(), nanoid()]
         )
       }
-      
+
+      // --- Network Module: real-monitoring scaffolding (idempotent). ---
+
+      // A single Local Probe representing this collector (this server). Newly
+      // discovered devices are attached to it. Remote/distributed probes are a
+      // real deployment concern, so none are fabricated here.
+      const probeRes = await db.query('SELECT count(*) as cnt FROM net_probes')
+      if (Number(probeRes.rows[0].cnt) === 0) {
+        const now = new Date().toISOString()
+        await db.query(`INSERT INTO net_probes (id, name, type, location, ip, version, status, last_seen, created_at) VALUES
+          ($1, 'Local Probe', 'local', 'This server', '127.0.0.1', 'built-in', 'connected', $2, $2)`,
+          [nanoid(), now]
+        )
+      }
+
+      // Default alert rules (idempotent; harmless on an empty fleet).
+      const ruleRes = await db.query('SELECT count(*) as cnt FROM net_alert_rules')
+      if (Number(ruleRes.rows[0].cnt) === 0) {
+        await db.query(`INSERT INTO net_alert_rules (id, name, metric, condition, threshold, severity) VALUES
+          ($1, 'Device Down', 'status', '=', 'down', 'critical'),
+          ($2, 'High CPU Load', 'cpu', '>', '90', 'critical'),
+          ($3, 'High Temperature', 'temperature', '>', '70', 'warning'),
+          ($4, 'Interface Saturation', 'traffic', '>', '90', 'warning')`,
+          [nanoid(), nanoid(), nanoid(), nanoid()]
+        )
+      }
+
     } catch (err) {
       console.error('[seed] Failed to seed MVP data:', err)
     }

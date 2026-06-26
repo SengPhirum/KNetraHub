@@ -53,15 +53,39 @@ const DOCK_GROUPS: NavGroup[] = [
   }
 ]
 
-// The Network app's navigation (LibreNMS-style monitoring). Shown only while
-// the user is inside the Network app; items gated by the user's per-app net tier.
+// The Network app's navigation (PRTG-style monitoring). Shown only while the
+// user is inside the Network app; items gated by the user's per-app net tier.
 const NET_GROUPS: NavGroup[] = [
   {
-    label: 'Network',
+    label: 'Monitoring',
     items: [
-      { label: 'Overview', to: '/net',         icon: 'i-lucide-radar',          permission: 'net.view' },
-      { label: 'Devices',  to: '/net/devices', icon: 'i-lucide-router',         permission: 'net.view' },
-      { label: 'Alerts',   to: '/net/alerts',  icon: 'i-lucide-bell-ring',      permission: 'net.view' }
+      { label: 'Overview', to: '/net',         icon: 'i-lucide-radar',  permission: 'net.view' },
+      { label: 'Devices',  to: '/net/devices', icon: 'i-lucide-router', permission: 'net.view' },
+      { label: 'Sensors',  to: '/net/sensors', icon: 'i-lucide-gauge',  permission: 'net.view' },
+      { label: 'Maps',     to: '/net/maps',    icon: 'i-lucide-map',    permission: 'net.view' }
+    ]
+  },
+  {
+    label: 'Traffic & Logs',
+    items: [
+      { label: 'Alerts',  to: '/net/alerts', icon: 'i-lucide-bell-ring',        permission: 'net.view' },
+      { label: 'NetFlow', to: '/net/flows',  icon: 'i-lucide-arrow-left-right', permission: 'net.view' },
+      { label: 'Syslog',  to: '/net/syslog', icon: 'i-lucide-scroll-text',      permission: 'net.view' },
+      { label: 'Groups',  to: '/net/groups', icon: 'i-lucide-folder-tree',      permission: 'net.view' }
+    ]
+  },
+  {
+    label: 'Infrastructure',
+    items: [
+      { label: 'Discovery', to: '/net/discovery', icon: 'i-lucide-scan-line',   permission: 'net.view' },
+      { label: 'Probes',    to: '/net/probes',    icon: 'i-lucide-radio-tower', permission: 'net.view' }
+    ]
+  },
+  {
+    label: 'Insights',
+    items: [
+      { label: 'Reports',     to: '/net/reports', icon: 'i-lucide-file-text', permission: 'net.view' },
+      { label: 'AI Insights', to: '/net/ai',      icon: 'i-lucide-sparkles',  permission: 'net.view' }
     ]
   },
   {

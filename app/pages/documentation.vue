@@ -87,9 +87,9 @@ const quickStart = [
 const swaggerUrl = '/api/swagger'
 
 const homeNavCards: Array<{ id: string; label: string; icon: string; desc: string; external?: string }> = [
-  { id: 'manual', label: 'User Manual', icon: 'i-lucide-book-open', desc: 'Feature guides for dashboard, stacks, services, nodes, access control, and daily workflows.' },
-  { id: 'configuration', label: 'Configuration', icon: 'i-lucide-sliders-horizontal', desc: 'Runtime options, Docker connection, GitLab versioning, Alerts, OIDC, LDAP, and local auth setup.' },
-  { id: 'api', label: 'API Reference', icon: 'i-lucide-braces', desc: 'Interactive Swagger UI covering every REST endpoint with request/response schemas and try-it-out. Opens in a new tab.', external: swaggerUrl }
+  { id: 'manual', label: 'User Manual', icon: 'i-lucide-book-open', desc: 'Feature guides organised into a General session plus one session per app module (Docker, Network, Server, IP Management).' },
+  { id: 'configuration', label: 'Configuration', icon: 'i-lucide-sliders-horizontal', desc: 'General system & authentication setup, plus per-module configuration for Docker, Network, Server, and IP Management.' },
+  { id: 'api', label: 'API Reference', icon: 'i-lucide-braces', desc: 'REST endpoints grouped per module, with a link to the interactive Swagger explorer for try-it-out.' }
 ]
 
 // ── User Manual data ──────────────────────────────────────────────────────────
@@ -300,6 +300,359 @@ const workflows = [
       'Complete host maintenance outside KNetraHub.',
       'Activate the node and confirm new tasks can be scheduled.'
     ]
+  }
+]
+
+// ── Modules (Overview summary) ────────────────────────────────────────────────
+// KNetraHub is a portal hosting several in-process apps. Each module owns its
+// own pages, API routes, and docs sessions; portal-wide concerns (auth, users,
+// appearance, alerts delivery) live in the General sessions.
+const modules = [
+  {
+    id: 'docker',
+    name: 'Docker',
+    icon: 'i-lucide-container',
+    tagline: 'Docker Swarm management',
+    desc: 'Deploy and version compose stacks, scale and redeploy services, manage nodes, tasks, networks, volumes, secrets, configs, and private registries with live SSE monitoring.',
+    points: ['Stacks & GitLab versioning', 'Services, tasks & nodes', 'Networks, volumes, secrets, configs']
+  },
+  {
+    id: 'net',
+    name: 'Network',
+    icon: 'i-lucide-network',
+    tagline: 'PRTG-style network monitoring',
+    desc: 'Monitor devices and sensors, auto-discover ranges, visualise a distributed site map, collect via probes, run reports, and surface anomalies with AI insights.',
+    points: ['Devices, sensors & maps', 'Auto-discovery & probes', 'Reports, alerts & AI insights']
+  },
+  {
+    id: 'server',
+    name: 'Server',
+    icon: 'i-lucide-server-cog',
+    tagline: 'Zabbix-style host monitoring',
+    desc: 'Track host inventory, CPU / memory / disk metrics, agent status, and active problems and triggers across your server estate.',
+    points: ['Host inventory & metrics', 'Agent status', 'Problems & triggers']
+  },
+  {
+    id: 'ipmgt',
+    name: 'IP Management',
+    icon: 'i-lucide-id-card',
+    tagline: 'phpIPAM-style address management',
+    desc: 'Organise subnets and VLANs, inventory IP addresses, track assignment and utilisation, and keep allocation tidy.',
+    points: ['Subnets & VLANs', 'Address inventory', 'Assignment & utilisation']
+  }
+]
+
+// ── User Manual: Network module guides ────────────────────────────────────────
+const netGuides = [
+  {
+    id: 'net-overview',
+    title: 'Network Overview',
+    icon: 'i-lucide-radar',
+    summary: 'Start at the Network dashboard for device availability, active alerts, and top traffic talkers at a glance.',
+    steps: [
+      'Check the Up/Down device counters before drilling into an issue.',
+      'Use Recent Alerts to jump straight to the affected device.',
+      'Scan the Availability map for any red (down) tiles.',
+      'Open Top Talkers to spot unusual NetFlow volume.'
+    ],
+    shot: {
+      label: 'Network dashboard', status: 'Live',
+      metrics: [['Devices', '11'], ['Up', '10'], ['Down', '1'], ['Active alerts', '2']] as [string, string][],
+      rows: [['Core-Switch-01', '10.0.0.1', 'Up'], ['Firewall-FW1', '10.0.0.254', 'Down'], ['Synology-NAS-01', '10.0.0.50', 'Up']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-devices',
+    title: 'Devices',
+    icon: 'i-lucide-router',
+    summary: 'Maintain the inventory of monitored assets, add devices, and open a device for ports, sensors, and config backups.',
+    steps: [
+      'Filter by category or search by hostname/IP to find a device.',
+      'Use Add Device to register a host with a poll method (Ping or SNMP).',
+      'Open a device to inspect Ports, Sensors, Backups, and per-device Settings.',
+      'Switch SNMP version/community in Settings when a device changes.'
+    ],
+    shot: {
+      label: 'Device inventory', status: 'SNMP',
+      metrics: [['Total', '11'], ['Network', '6'], ['Servers', '2'], ['IoT', '1']] as [string, string][],
+      rows: [['Core-Switch-01', 'Cisco IOS-XE', 'Up'], ['Router-B', 'Juniper Junos', 'Up'], ['HP-Printer-Floor1', 'Ping only', 'Up']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-sensors',
+    title: 'Sensors',
+    icon: 'i-lucide-gauge',
+    summary: 'Review every monitored measurement fleet-wide; state is derived from each sensor\'s high/low limits.',
+    steps: [
+      'Use the OK / Warning / Down summary to gauge overall health.',
+      'Filter by sensor type (temperature, fan, voltage, power…) to focus.',
+      'Watch the load bar to see how close a reading is to its limit.',
+      'Click through to the owning device when a sensor goes Warning/Down.'
+    ],
+    shot: {
+      label: 'Sensors', status: 'Monitored',
+      metrics: [['Sensors', '7'], ['OK', '5'], ['Warning', '1'], ['Down', '1']] as [string, string][],
+      rows: [['System Board Temp', '35.5 C', 'OK'], ['Rack Humidity', '45 %', 'OK'], ['Disk 1 Temp', '58 C', 'Warning']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-maps',
+    title: 'Maps',
+    icon: 'i-lucide-map',
+    summary: 'See probe sites on a world map and a live status wallboard of every device.',
+    steps: [
+      'Read the world map markers: green connected, orange has down devices, red disconnected.',
+      'Hover a site marker for its up/down/sensor counts.',
+      'Use the wallboard grid as a NOC screen of device status.',
+      'Click a wallboard tile to open that device.'
+    ],
+    shot: {
+      label: 'Distributed map', status: 'Wallboard',
+      metrics: [['Sites', '4'], ['Connected', '3'], ['Devices up', '10'], ['Devices down', '1']] as [string, string][],
+      rows: [['New York (HQ)', 'Local', 'Connected'], ['London', 'Remote', 'Connected'], ['Singapore', 'Multi-platform', 'Disconnected']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-alerts',
+    title: 'Alerts & rules',
+    icon: 'i-lucide-bell-ring',
+    summary: 'Review notification triggers (alert rules) and the active/historical alert stream. Delivery channels are configured portal-wide.',
+    steps: [
+      'Check the Notification Triggers cards for the rules and thresholds in force.',
+      'Scan Alert History for active vs. recovered events.',
+      'Open the device on any alert row to investigate.',
+      'Configure delivery channels (Telegram/Teams/Webhook) in portal Settings.'
+    ],
+    shot: {
+      label: 'Alerts', status: 'Triggers',
+      metrics: [['Rules', '4'], ['Active', '1'], ['Critical', '1'], ['Warning', '1']] as [string, string][],
+      rows: [['Device Down', 'status = down', 'Critical'], ['High Temperature', 'temperature > 70', 'Warning'], ['High CPU Load', 'cpu > 90', 'Critical']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-discovery',
+    title: 'Auto-Discovery',
+    icon: 'i-lucide-scan-line',
+    summary: 'Scan an IP range to create devices and a recommended sensor set automatically, then review scan history.',
+    steps: [
+      'Enter a CIDR (e.g. 10.0.5.0/24) and choose Ping/SNMP method.',
+      'Start the scan (requires the Network operator tier).',
+      'Review how many addresses were scanned and devices added.',
+      'Open the inventory to tune the newly discovered devices.'
+    ],
+    shot: {
+      label: 'Discovery scan', status: 'Completed',
+      metrics: [['Scanned', '254'], ['Found', '4'], ['Added', '4'], ['Method', 'Ping+SNMP']] as [string, string][],
+      rows: [['Cisco-118', '10.0.5.118', 'Added'], ['QNAP-64', '10.0.5.64', 'Added'], ['Aruba-201', '10.0.5.201', 'Added']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-probes',
+    title: 'Probes',
+    icon: 'i-lucide-radio-tower',
+    summary: 'Distributed data collectors (local, remote, multi-platform) and the device/sensor load each one carries.',
+    steps: [
+      'Confirm each probe is Connected before trusting its data.',
+      'Read the device and sensor counts per probe to balance load.',
+      'Use remote probes for branch sites separated by firewalls.',
+      'Open Maps to see the same probes geographically.'
+    ],
+    shot: {
+      label: 'Probes', status: 'Connected',
+      metrics: [['Probes', '4'], ['Connected', '3'], ['Devices', '11'], ['Sensors', '7']] as [string, string][],
+      rows: [['Local Probe', 'New York (HQ)', 'Connected'], ['Remote · London', 'London, UK', 'Connected'], ['Multi · Singapore', 'Singapore', 'Disconnected']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-reports',
+    title: 'Reports',
+    icon: 'i-lucide-file-text',
+    summary: 'Generate availability, traffic, sensor-health, or inventory reports that snapshot live data, then preview them.',
+    steps: [
+      'Pick a report type and a period.',
+      'Click Generate to snapshot current data into a saved report.',
+      'Select any report from the list to preview its headline and rows.',
+      'Re-generate periodically to capture trends over time.'
+    ],
+    shot: {
+      label: 'Report preview', status: 'Generated',
+      metrics: [['Devices', '11'], ['Availability', '90.9%'], ['Down', '1'], ['Period', 'Last 30d']] as [string, string][],
+      rows: [['Availability summary', 'Generated', 'HTML'], ['Traffic summary', 'Top talkers', 'HTML'], ['Sensor health', 'OK/Warn/Crit', 'HTML']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-ai',
+    title: 'AI Insights',
+    icon: 'i-lucide-sparkles',
+    summary: 'Heuristic anomaly detection, similar-sensor correlation, and smart recommendations to reduce noise and gaps.',
+    steps: [
+      'Review Anomaly Detection for out-of-range sensors and down devices.',
+      'Use Similar Sensors to spot duplicate/redundant monitoring.',
+      'Apply Smart Recommendations (add sensors, enable SNMP, group devices).',
+      'Re-check after acting — counts update as the data changes.'
+    ],
+    shot: {
+      label: 'AI insights', status: 'Analysing',
+      metrics: [['Anomalies', '3'], ['Similar pairs', '2'], ['Recommendations', '6'], ['Model', 'Heuristic']] as [string, string][],
+      rows: [['Firewall-FW1', 'Unreachable', 'Critical'], ['Disk 1 Temp', 'Near limit', 'Warning'], ['HP-Printer', 'Enable SNMP', 'Tip']] as [string, string, string][]
+    }
+  }
+]
+
+// ── User Manual: Server module guides ─────────────────────────────────────────
+const serverGuides = [
+  {
+    id: 'server-overview',
+    title: 'Server Overview',
+    icon: 'i-lucide-radar',
+    summary: 'Monitor host availability and resource pressure across the server estate.',
+    steps: [
+      'Check how many hosts are Available vs. Offline.',
+      'Watch CPU and memory pressure for capacity risk.',
+      'Jump to Problems when a host shows a trigger.',
+      'Open a host for its detailed metrics.'
+    ],
+    shot: {
+      label: 'Server overview', status: 'Live',
+      metrics: [['Hosts', '4'], ['Available', '3'], ['Offline', '1'], ['Problems', '2']] as [string, string][],
+      rows: [['web-front-01', 'Ubuntu 22.04', 'Available'], ['db-prod-01', 'RHEL 9', 'Available'], ['win-util-01', 'Win 2022', 'Offline']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'server-hosts',
+    title: 'Hosts',
+    icon: 'i-lucide-server',
+    summary: 'Inventory hosts with OS, agent, CPU/memory, and uptime, and open a host for detail.',
+    steps: [
+      'Confirm the monitoring agent is reporting for each host.',
+      'Compare CPU/memory across hosts to find hot spots.',
+      'Open a host to see its metrics and recent problems.',
+      'Use uptime to spot recent reboots.'
+    ],
+    shot: {
+      label: 'Hosts', status: 'Agents',
+      metrics: [['Hosts', '4'], ['Agents up', '3'], ['Avg CPU', '37%'], ['Avg mem', '72%']] as [string, string][],
+      rows: [['web-front-01', '45% CPU', 'Available'], ['db-prod-01', '90% mem', 'Available'], ['win-util-01', '— / —', 'Offline']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'server-problems',
+    title: 'Problems',
+    icon: 'i-lucide-triangle-alert',
+    summary: 'Triage active triggers by severity and acknowledge what is being worked on.',
+    steps: [
+      'Sort attention by severity (High, Average, Warning).',
+      'Read the trigger text to understand the condition.',
+      'Acknowledge a problem once someone owns it.',
+      'Use duration to see how long a problem has persisted.'
+    ],
+    shot: {
+      label: 'Problems', status: 'Triage',
+      metrics: [['Active', '2'], ['High', '1'], ['Average', '1'], ['Acked', '1']] as [string, string][],
+      rows: [['db-prod-01', 'Low disk on /var', 'High'], ['web-front-02', 'High CPU 5m', 'Average']] as [string, string, string][]
+    }
+  }
+]
+
+// ── User Manual: IP Management module guides ──────────────────────────────────
+const ipmgtGuides = [
+  {
+    id: 'ipmgt-overview',
+    title: 'IPAM Overview',
+    icon: 'i-lucide-radar',
+    summary: 'See subnet utilisation at a glance and find where address space is running low.',
+    steps: [
+      'Scan utilisation bars for subnets nearing capacity.',
+      'Open a subnet to inspect its address inventory.',
+      'Plan new allocations from the least-used subnets.',
+      'Keep VLAN and gateway data accurate for each subnet.'
+    ],
+    shot: {
+      label: 'IPAM overview', status: 'Utilisation',
+      metrics: [['Subnets', '2'], ['Addresses', '512'], ['Used', '43%'], ['Free', '57%']] as [string, string][],
+      rows: [['Server Vlan', '10.0.1.0/24', '70%'], ['DB Vlan', '10.0.2.0/24', '17%']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'ipmgt-subnets',
+    title: 'Subnets',
+    icon: 'i-lucide-network',
+    summary: 'Organise subnets and VLANs, with gateway and utilisation tracked per network.',
+    steps: [
+      'Create a subnet with its CIDR, VLAN, and gateway.',
+      'Track utilisation as addresses are assigned.',
+      'Open a subnet to manage its addresses.',
+      'Keep gateways and descriptions current.'
+    ],
+    shot: {
+      label: 'Subnets', status: 'Organised',
+      metrics: [['Subnets', '2'], ['VLANs', '2'], ['Largest', '/24'], ['Peak use', '70%']] as [string, string][],
+      rows: [['Server Vlan', 'VLAN 10', '10.0.1.254'], ['DB Vlan', 'VLAN 20', '10.0.2.254']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'ipmgt-addresses',
+    title: 'Addresses',
+    icon: 'i-lucide-list-ordered',
+    summary: 'Inventory individual addresses with hostname, MAC, description, and assignment state.',
+    steps: [
+      'Mark addresses Used, Reserved, or Available.',
+      'Record hostname and MAC for assigned addresses.',
+      'Reserve gateways and infrastructure addresses.',
+      'Free addresses promptly when hosts are retired.'
+    ],
+    shot: {
+      label: 'Addresses', status: 'Tracked',
+      metrics: [['In subnet', '254'], ['Used', '2'], ['Reserved', '1'], ['Free', '251']] as [string, string][],
+      rows: [['10.0.1.1', 'Gateway', 'Reserved'], ['10.0.1.10', 'web-front-01', 'Used'], ['10.0.1.11', 'web-front-02', 'Used']] as [string, string, string][]
+    }
+  }
+]
+
+// Manual is organised into one General (portal) session plus one session per
+// app module. Docker guides are the original featureGuides minus the two
+// portal-level ones, which move to General.
+const GENERAL_MANUAL_IDS = ['users-audit', 'settings']
+const manualGroups = [
+  {
+    id: 'manual-general',
+    eyebrow: 'General · Portal',
+    label: 'Portal & administration',
+    icon: 'i-lucide-shield-check',
+    summary: 'Cross-cutting pages that apply to the whole portal, independent of any single app.',
+    guides: featureGuides.filter((g) => GENERAL_MANUAL_IDS.includes(g.id))
+  },
+  {
+    id: 'manual-docker',
+    eyebrow: 'Docker module',
+    label: 'Docker Swarm management',
+    icon: 'i-lucide-container',
+    summary: 'Deploy and operate Docker Swarm: stacks, services, tasks, nodes, and the resources that connect them.',
+    guides: featureGuides.filter((g) => !GENERAL_MANUAL_IDS.includes(g.id))
+  },
+  {
+    id: 'manual-net',
+    eyebrow: 'Network module',
+    label: 'Network monitoring',
+    icon: 'i-lucide-network',
+    summary: 'Monitor devices and sensors, discover ranges, map distributed sites, and act on alerts and AI insights.',
+    guides: netGuides
+  },
+  {
+    id: 'manual-server',
+    eyebrow: 'Server module',
+    label: 'Server monitoring',
+    icon: 'i-lucide-server-cog',
+    summary: 'Track host availability, resource metrics, and active problems across the server estate.',
+    guides: serverGuides
+  },
+  {
+    id: 'manual-ipmgt',
+    eyebrow: 'IP Management module',
+    label: 'IP address management',
+    icon: 'i-lucide-id-card',
+    summary: 'Organise subnets and VLANs and keep address assignment and utilisation tidy.',
+    guides: ipmgtGuides
   }
 ]
 
@@ -631,6 +984,204 @@ const configurationSections = [
   }
 ]
 
+// ── Configuration: per-module guides ──────────────────────────────────────────
+// The Network module performs REAL monitoring: a background poller pings every
+// device (ICMP) and reads SNMP v1/v2c system + interface data each cycle.
+const netConfigGuides = [
+  {
+    id: 'net-monitoring-config',
+    title: 'Polling & SNMP',
+    icon: 'i-lucide-network',
+    summary: 'Devices are monitored for real. The poller ICMP-pings every device each cycle (status + latency) and, for SNMP devices, reads system info and the interface table (up/down, speed, bit-rate from counter deltas). SNMP version/community are stored per device.',
+    options: [
+      ['Poll method', 'Per device: Ping (ICMP reachability + latency) or SNMP (also system info + interfaces).'],
+      ['SNMP version', 'v1 or v2c per device. SNMPv3 (auth/priv) is not supported yet — v3 devices are pinged only.'],
+      ['SNMP community', 'Stored per device (shown masked). Falls back to NUXT_NET_SNMP_COMMUNITY when unset.'],
+      ['Poll interval', 'NUXT_NET_POLL_INTERVAL_SECONDS (default 60). The first interface poll seeds counters; bit-rates appear from the second poll on.'],
+      ['Enable / disable', 'NUXT_NET_POLLING_ENABLED=false stops all polling. Requires a working ping binary + UDP/161 reachability to devices.']
+    ] as [string, string][],
+    steps: [
+      'Ensure the server can reach devices: ICMP allowed, and UDP/161 open for SNMP.',
+      'Add a device (Devices > Add Device) with its IP and poll method.',
+      'For SNMP, set the version (v1/v2c) and community in the device Settings tab.',
+      'Wait one poll interval, then open the device — status, latency, and ports populate.'
+    ],
+    env: ['NUXT_NET_POLLING_ENABLED', 'NUXT_NET_POLL_INTERVAL_SECONDS', 'NUXT_NET_POLL_CONCURRENCY', 'NUXT_NET_SNMP_COMMUNITY', 'NUXT_NET_SNMP_VERSION', 'NUXT_NET_SNMP_TIMEOUT_MS', 'NUXT_NET_PING_TIMEOUT_SECONDS']
+  },
+  {
+    id: 'net-discovery-config',
+    title: 'Auto-discovery, probes & alerts',
+    icon: 'i-lucide-scan-line',
+    summary: 'Auto-discovery runs a real ICMP/SNMP sweep of a CIDR and creates a device (plus an ICMP-latency sensor) for each responder; the poller then fills in interfaces. A device going unreachable raises a critical alert; recovery clears it.',
+    options: [
+      ['Scan input', 'A CIDR (≤ 1024 hosts/scan) + method: Ping, SNMP, or Ping+SNMP, with an optional SNMP community. Scanning needs the Network operator tier (net.scan).'],
+      ['Identification', 'SNMP responders are named from sysName and tagged with vendor/OS from sysObjectID/sysDescr; ping-only responders are added as Host.'],
+      ['Probes', 'A single Local Probe (this server) collects data; new devices attach to it. Remote/distributed probes are a deployment concern, not fabricated.'],
+      ['Alerts & delivery', 'Up/down transitions raise and clear alerts automatically. Delivery channels (Telegram/Teams/Webhook) are portal-wide — see General · System.']
+    ] as [string, string][],
+    steps: [
+      'Open Network > Discovery, enter a subnet (e.g. 192.168.1.0/24) and community.',
+      'Run the scan; responders are added and appear under Devices within a poll cycle.',
+      'Remove anything unwanted with the delete action on the Devices list.',
+      'Tune thresholds on the Alerts page; configure delivery once in Settings > Alerts.'
+    ],
+    env: ['NUXT_NET_DISCOVERY_CONCURRENCY', 'NUXT_NET_SNMP_COMMUNITY', 'NUXT_NET_SNMP_VERSION']
+  }
+]
+
+const serverConfigGuides = [
+  {
+    id: 'server-config',
+    title: 'Agents & metrics',
+    icon: 'i-lucide-server-cog',
+    summary: 'Hosts report OS, agent status, and CPU/memory/disk metrics; problems are raised by triggers. MVP host and problem data is seeded and simulated.',
+    options: [
+      ['Agent', 'Each host records its monitoring agent (e.g. Zabbix agent) and availability state.'],
+      ['Metrics', 'CPU, memory, and uptime per host drive overview and capacity views.'],
+      ['Problems', 'Triggers raise problems with severity (High/Average/Warning) and an ack flag.'],
+      ['Access', 'Gated by the Server app tier; admin settings require server.manage.']
+    ] as [string, string][],
+    steps: [
+      'Open the Server app and confirm hosts report as Available.',
+      'Review CPU/memory pressure on the overview.',
+      'Triage and acknowledge problems by severity.',
+      'Use Server > Settings (admin) for app-level options.'
+    ],
+    env: [] as string[]
+  }
+]
+
+const ipmgtConfigGuides = [
+  {
+    id: 'ipmgt-config',
+    title: 'Subnets & assignment',
+    icon: 'i-lucide-id-card',
+    summary: 'IPAM organises subnets/VLANs and tracks address state (Used/Reserved/Available). MVP subnet and address data is seeded.',
+    options: [
+      ['Subnet', 'CIDR, VLAN, and gateway define each network; utilisation is tracked as addresses are used.'],
+      ['Address state', 'Used, Reserved, or Available — with hostname, MAC, and description.'],
+      ['Utilisation', 'Per-subnet usage drives the overview bars and capacity planning.'],
+      ['Access', 'Gated by the IP Management app tier; deletes require the admin tier (ipmgt.delete).']
+    ] as [string, string][],
+    steps: [
+      'Create subnets with CIDR, VLAN, and gateway.',
+      'Reserve infrastructure addresses (gateways, anchors).',
+      'Assign addresses with hostname and MAC as hosts come online.',
+      'Free addresses when hosts are retired to keep utilisation accurate.'
+    ],
+    env: [] as string[]
+  }
+]
+
+// Configuration is organised into General sessions (system + authentication,
+// which apply portal-wide) and one session per app module. The existing guides
+// are mapped to a session id; new module guides live in their own arrays.
+const CONFIG_MODULE_OF: Record<string, string> = {
+  'runtime-config': 'general-system',
+  'appearance-config': 'general-system',
+  'alerts-config': 'general-system',
+  'alerts-telegram': 'general-system',
+  'alerts-teams': 'general-system',
+  'alerts-webhook': 'general-system',
+  'docker-config': 'docker',
+  'gitlab-config': 'docker',
+  'local-auth': 'general-auth',
+  'oidc-config': 'general-auth',
+  'keycloak': 'general-auth',
+  'authentik': 'general-auth',
+  'generic-oidc': 'general-auth',
+  'ldap-config': 'general-auth'
+}
+
+const configModuleGroups = [
+  { id: 'general-system', eyebrow: 'General · System', title: 'System & main configuration', summary: 'Runtime, branding, and alert-delivery options that apply to the whole portal regardless of which app you use.' },
+  { id: 'docker', eyebrow: 'Docker module', title: 'Docker engine & stack versioning', summary: 'Connect to the Swarm manager and store compose files in GitLab for history and rollback.' },
+  { id: 'net', eyebrow: 'Network module', title: 'Network monitoring configuration', summary: 'Polling/SNMP per device, auto-discovery, probes, and alert rules for the Network app.' },
+  { id: 'server', eyebrow: 'Server module', title: 'Server monitoring configuration', summary: 'Agents, host metrics, and problem triggers for the Server app.' },
+  { id: 'ipmgt', eyebrow: 'IP Management module', title: 'IPAM configuration', summary: 'Subnets, VLANs, and address assignment for the IP Management app.' },
+  { id: 'general-auth', eyebrow: 'General · Authentication', title: 'Authentication & role mapping', summary: 'Local accounts, OIDC SSO, and LDAP/AD — portal-wide identity that applies across every app.' }
+]
+
+function configGuidesFor(moduleId: string) {
+  if (moduleId === 'net') return netConfigGuides
+  if (moduleId === 'server') return serverConfigGuides
+  if (moduleId === 'ipmgt') return ipmgtConfigGuides
+  return configurationSections.flatMap((s) => s.guides).filter((g) => CONFIG_MODULE_OF[g.id] === moduleId)
+}
+
+// ── API Reference: endpoints grouped per module ───────────────────────────────
+// The interactive Swagger explorer currently covers the Docker/core API in full
+// (try-it-out). These groups document each module's REST surface; the monitoring
+// modules are read-mostly today.
+const apiGroups = [
+  {
+    id: 'api-general',
+    label: 'General · Core',
+    icon: 'i-lucide-shield-check',
+    desc: 'Authentication, API tokens, users, preferences, and portal system data. Apply across every module.',
+    endpoints: [
+      ['POST', '/auth/login', 'Sign in and start a session'],
+      ['GET', '/auth/me', 'Current user and entitlements'],
+      ['GET', '/user/tokens', 'List API tokens'],
+      ['POST', '/user/tokens', 'Create an API token'],
+      ['GET', '/users', 'User management (admin)'],
+      ['GET', '/system/overview', 'Portal/system overview']
+    ] as [string, string, string][]
+  },
+  {
+    id: 'api-docker',
+    label: 'Docker module',
+    icon: 'i-lucide-container',
+    desc: 'Full CRUD and operations for Swarm. This module is fully documented and try-it-out enabled in the interactive explorer.',
+    endpoints: [
+      ['GET', '/services', 'List services'],
+      ['POST', '/services/{id}/scale', 'Scale a service'],
+      ['GET', '/stacks', 'List stacks'],
+      ['POST', '/stacks', 'Deploy a stack'],
+      ['GET', '/nodes', 'List swarm nodes'],
+      ['GET', '/networks · /volumes · /secrets · /configs', 'Swarm resources']
+    ] as [string, string, string][]
+  },
+  {
+    id: 'api-net',
+    label: 'Network module',
+    icon: 'i-lucide-network',
+    desc: 'Devices, sensors, probes, discovery, reports, alerts, and AI insights for the Network app.',
+    endpoints: [
+      ['GET', '/net/devices', 'List devices'],
+      ['POST', '/net/devices', 'Add a device'],
+      ['GET', '/net/sensors', 'All sensors with derived state'],
+      ['GET', '/net/probes', 'Probes with device/sensor load'],
+      ['POST', '/net/discovery', 'Run a discovery scan'],
+      ['POST', '/net/reports', 'Generate a report'],
+      ['GET', '/net/ai', 'Anomalies, similar sensors, recommendations'],
+      ['GET', '/net/alerts · /net/rules', 'Alerts and rules']
+    ] as [string, string, string][]
+  },
+  {
+    id: 'api-server',
+    label: 'Server module',
+    icon: 'i-lucide-server-cog',
+    desc: 'Host inventory and active problems for the Server app.',
+    endpoints: [
+      ['GET', '/server/hosts', 'List hosts'],
+      ['GET', '/server/hosts/{id}', 'Host detail and metrics'],
+      ['GET', '/server/problems', 'Active problems and triggers']
+    ] as [string, string, string][]
+  },
+  {
+    id: 'api-ipmgt',
+    label: 'IP Management module',
+    icon: 'i-lucide-id-card',
+    desc: 'Subnets and address inventory for the IP Management app.',
+    endpoints: [
+      ['GET', '/ipmgt/subnets', 'List subnets'],
+      ['GET', '/ipmgt/subnets/{id}', 'Subnet detail'],
+      ['GET', '/ipmgt/subnets/{id}/ips', 'Addresses in a subnet']
+    ] as [string, string, string][]
+  }
+]
+
 const keycloakKeyValues: [string, string][] = [
   ['Realm', 'infrastructure'],
   ['Client ID', 'knetrahub'],
@@ -691,18 +1242,23 @@ const troubleshooting: [string, string][] = [
 ]
 
 // ── Sidebar navigation config ─────────────────────────────────────────────────
-const navConfig = [
+type NavSub = { id?: string; label: string; icon?: string; heading?: boolean }
+const navConfig: Array<{ id: string; label: string; icon: string; external?: string; subs: NavSub[] }> = [
   {
     id: 'home',
     label: 'Overview',
     icon: 'i-lucide-layout-dashboard',
-    subs: [] as { id: string; label: string; icon: string }[]
+    subs: []
   },
   {
     id: 'manual',
     label: 'User Manual',
     icon: 'i-lucide-book-open',
     subs: [
+      { heading: true, label: 'General' },
+      { id: 'users-audit',      label: 'Users & Audit',      icon: 'i-lucide-users' },
+      { id: 'settings',         label: 'Settings',           icon: 'i-lucide-settings' },
+      { heading: true, label: 'Docker' },
       { id: 'dashboard',        label: 'Dashboard',          icon: 'i-lucide-radar' },
       { id: 'stacks',           label: 'Stacks',             icon: 'i-lucide-layers' },
       { id: 'services',         label: 'Services',           icon: 'i-lucide-boxes' },
@@ -711,9 +1267,25 @@ const navConfig = [
       { id: 'networks-volumes', label: 'Networks & Volumes', icon: 'i-lucide-network' },
       { id: 'secrets-configs',  label: 'Secrets & Configs',  icon: 'i-lucide-key-round' },
       { id: 'registries',       label: 'Registries',         icon: 'i-lucide-package' },
-      { id: 'users-audit',      label: 'Users & Audit',      icon: 'i-lucide-users' },
-      { id: 'settings',         label: 'Settings',           icon: 'i-lucide-settings' },
-      { id: 'workflows',        label: 'Common Workflows',   icon: 'i-lucide-route' }
+      { id: 'workflows',        label: 'Common Workflows',   icon: 'i-lucide-route' },
+      { heading: true, label: 'Network' },
+      { id: 'net-overview',     label: 'Network Overview',   icon: 'i-lucide-radar' },
+      { id: 'net-devices',      label: 'Devices',            icon: 'i-lucide-router' },
+      { id: 'net-sensors',      label: 'Sensors',            icon: 'i-lucide-gauge' },
+      { id: 'net-maps',         label: 'Maps',               icon: 'i-lucide-map' },
+      { id: 'net-alerts',       label: 'Alerts & rules',     icon: 'i-lucide-bell-ring' },
+      { id: 'net-discovery',    label: 'Auto-Discovery',     icon: 'i-lucide-scan-line' },
+      { id: 'net-probes',       label: 'Probes',             icon: 'i-lucide-radio-tower' },
+      { id: 'net-reports',      label: 'Reports',            icon: 'i-lucide-file-text' },
+      { id: 'net-ai',           label: 'AI Insights',        icon: 'i-lucide-sparkles' },
+      { heading: true, label: 'Server' },
+      { id: 'server-overview',  label: 'Server Overview',    icon: 'i-lucide-radar' },
+      { id: 'server-hosts',     label: 'Hosts',              icon: 'i-lucide-server' },
+      { id: 'server-problems',  label: 'Problems',           icon: 'i-lucide-triangle-alert' },
+      { heading: true, label: 'IP Management' },
+      { id: 'ipmgt-overview',   label: 'IPAM Overview',      icon: 'i-lucide-radar' },
+      { id: 'ipmgt-subnets',    label: 'Subnets',            icon: 'i-lucide-network' },
+      { id: 'ipmgt-addresses',  label: 'Addresses',          icon: 'i-lucide-list-ordered' }
     ]
   },
   {
@@ -721,14 +1293,24 @@ const navConfig = [
     label: 'Configuration',
     icon: 'i-lucide-sliders-horizontal',
     subs: [
-      { id: 'runtime-config',  label: 'Runtime Config',    icon: 'i-lucide-sliders-horizontal' },
-      { id: 'appearance-config', label: 'Appearance',      icon: 'i-lucide-paintbrush' },
-      { id: 'docker-config',   label: 'Docker Engine',     icon: 'i-lucide-container' },
-      { id: 'gitlab-config',   label: 'GitLab Versioning', icon: 'i-lucide-git-branch' },
-      { id: 'alerts-config',   label: 'Alerts',            icon: 'i-lucide-bell' },
-      { id: 'alerts-telegram', label: 'Alerts: Telegram',  icon: 'i-lucide-send' },
-      { id: 'alerts-teams',    label: 'Alerts: Teams',     icon: 'i-lucide-users' },
-      { id: 'alerts-webhook',  label: 'Alerts: Webhook',   icon: 'i-lucide-webhook' },
+      { heading: true, label: 'General · System' },
+      { id: 'runtime-config',    label: 'Runtime Config',    icon: 'i-lucide-sliders-horizontal' },
+      { id: 'appearance-config', label: 'Appearance',        icon: 'i-lucide-paintbrush' },
+      { id: 'alerts-config',     label: 'Alerts',            icon: 'i-lucide-bell' },
+      { id: 'alerts-telegram',   label: 'Alerts: Telegram',  icon: 'i-lucide-send' },
+      { id: 'alerts-teams',      label: 'Alerts: Teams',     icon: 'i-lucide-users' },
+      { id: 'alerts-webhook',    label: 'Alerts: Webhook',   icon: 'i-lucide-webhook' },
+      { heading: true, label: 'Docker' },
+      { id: 'docker-config',     label: 'Docker Engine',     icon: 'i-lucide-container' },
+      { id: 'gitlab-config',     label: 'GitLab Versioning', icon: 'i-lucide-git-branch' },
+      { heading: true, label: 'Network' },
+      { id: 'net-monitoring-config', label: 'Polling & SNMP', icon: 'i-lucide-network' },
+      { id: 'net-discovery-config',  label: 'Discovery & Rules', icon: 'i-lucide-scan-line' },
+      { heading: true, label: 'Server' },
+      { id: 'server-config',     label: 'Agents & Metrics',  icon: 'i-lucide-server-cog' },
+      { heading: true, label: 'IP Management' },
+      { id: 'ipmgt-config',      label: 'Subnets & Assignment', icon: 'i-lucide-id-card' },
+      { heading: true, label: 'General · Authentication' },
       { id: 'local-auth',      label: 'Local Accounts',    icon: 'i-lucide-user-round-cog' },
       { id: 'oidc-config',     label: 'OIDC SSO',          icon: 'i-lucide-key-round' },
       { id: 'keycloak',        label: 'Keycloak',          icon: 'i-lucide-landmark' },
@@ -742,8 +1324,14 @@ const navConfig = [
     id: 'api',
     label: 'API Reference',
     icon: 'i-lucide-braces',
-    external: swaggerUrl,
-    subs: [] as { id: string; label: string; icon: string }[]
+    subs: [
+      { heading: true, label: 'By module' },
+      { id: 'api-general', label: 'General · Core',        icon: 'i-lucide-shield-check' },
+      { id: 'api-docker',  label: 'Docker module',         icon: 'i-lucide-container' },
+      { id: 'api-net',     label: 'Network module',        icon: 'i-lucide-network' },
+      { id: 'api-server',  label: 'Server module',         icon: 'i-lucide-server-cog' },
+      { id: 'api-ipmgt',   label: 'IP Management module',  icon: 'i-lucide-id-card' }
+    ]
   }
 ]
 
@@ -766,7 +1354,7 @@ function goTo(section: string, anchor?: string) {
 
 onMounted(() => {
   const hash = window.location.hash.replace('#', '')
-  if (['home', 'manual', 'configuration'].includes(hash)) {
+  if (['home', 'manual', 'configuration', 'api'].includes(hash)) {
     activeSection.value = hash
   }
 })
@@ -896,6 +1484,34 @@ watch(activeSection, (val) => {
             </div>
           </div>
 
+          <!-- Modules -->
+          <div class="mt-10">
+            <p class="section-eyebrow">Apps</p>
+            <h2 class="section-title">Modules in this portal</h2>
+            <p class="mt-2 text-sm text-muted max-w-2xl">
+              KNetraHub bundles several apps behind one portal. Each app has its own User Manual, Configuration, and API session below; portal-wide topics (authentication, users, appearance, alert delivery) live in the <strong class="text-foam font-medium">General</strong> sessions.
+            </p>
+            <div class="grid gap-4 sm:grid-cols-2 mt-4">
+              <div v-for="m in modules" :key="m.id" class="rounded-xl border border-hull bg-surface p-5 transition hover:border-beacon/30">
+                <div class="flex items-start gap-3">
+                  <span class="flex size-10 items-center justify-center rounded-lg bg-beacon/10 ring-1 ring-beacon/25 shrink-0">
+                    <UIcon :name="m.icon" class="size-5 text-beacon" />
+                  </span>
+                  <div class="min-w-0">
+                    <h3 class="font-display text-base font-semibold text-foam">{{ m.name }}</h3>
+                    <p class="text-xs text-faint">{{ m.tagline }}</p>
+                  </div>
+                </div>
+                <p class="mt-3 text-xs text-muted leading-relaxed">{{ m.desc }}</p>
+                <ul class="mt-3 grid gap-1">
+                  <li v-for="p in m.points" :key="p" class="flex items-center gap-1.5 text-xs text-muted">
+                    <UIcon name="i-lucide-check" class="size-3 text-running shrink-0" /> {{ p }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <!-- Tech stack + roles -->
           <div class="mt-10 grid gap-6 lg:grid-cols-2">
             <div>
@@ -993,13 +1609,26 @@ watch(activeSection, (val) => {
           </div>
 
           <div class="space-y-10">
-            <section class="space-y-4">
-              <p class="section-eyebrow">Feature usage</p>
-              <h2 class="section-title">Daily operation guide</h2>
+            <section
+              v-for="group in manualGroups"
+              :id="group.id"
+              :key="group.id"
+              class="space-y-4 scroll-mt-20"
+            >
+              <div class="flex items-center gap-2.5">
+                <span class="flex size-9 items-center justify-center rounded-lg bg-beacon/10 ring-1 ring-beacon/25 shrink-0">
+                  <UIcon :name="group.icon" class="size-4 text-beacon" />
+                </span>
+                <div>
+                  <p class="section-eyebrow">{{ group.eyebrow }}</p>
+                  <h2 class="section-title">{{ group.label }}</h2>
+                </div>
+              </div>
+              <p class="max-w-2xl text-sm text-muted">{{ group.summary }}</p>
 
               <div class="grid gap-6">
                 <article
-                  v-for="feature in featureGuides"
+                  v-for="feature in group.guides"
                   :id="feature.id"
                   :key="feature.id"
                   class="grid gap-4 scroll-mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,25rem)] lg:items-start"
@@ -1083,20 +1712,20 @@ watch(activeSection, (val) => {
 
           <div class="space-y-10">
             <section
-              v-for="section in configurationSections"
-              :id="section.id"
-              :key="section.id"
+              v-for="group in configModuleGroups"
+              :id="group.id"
+              :key="group.id"
               class="space-y-4 scroll-mt-20"
             >
               <div>
-                <p class="section-eyebrow">{{ section.eyebrow }}</p>
-                <h2 class="section-title">{{ section.title }}</h2>
-                <p class="mt-2 max-w-3xl text-sm text-muted">{{ section.summary }}</p>
+                <p class="section-eyebrow">{{ group.eyebrow }}</p>
+                <h2 class="section-title">{{ group.title }}</h2>
+                <p class="mt-2 max-w-3xl text-sm text-muted">{{ group.summary }}</p>
               </div>
 
               <div class="grid gap-4">
                 <article
-                  v-for="guide in section.guides"
+                  v-for="guide in configGuidesFor(group.id)"
                   :id="guide.id"
                   :key="guide.id"
                   class="scroll-mt-20 rounded-lg border border-hull bg-surface p-5"
@@ -1274,8 +1903,58 @@ watch(activeSection, (val) => {
 
         </div>
 
-        <!-- API Reference is an external link (opens /api/swagger in a new tab),
-             handled by the sidebar nav and the home cards — no embedded section. -->
+        <!-- ── API REFERENCE ────────────────────────────────────────────── -->
+        <div v-show="activeSection === 'api'" class="section-wrap">
+          <div class="mb-8">
+            <p class="section-eyebrow">Reference</p>
+            <h1 class="section-h1">API Reference</h1>
+            <p class="mt-2 text-sm text-muted max-w-2xl">REST endpoints grouped by module. Authenticate with an API token, then use the interactive explorer to try requests.</p>
+          </div>
+
+          <!-- Auth + explorer callout (general / portal-wide) -->
+          <div class="mb-8 rounded-lg border border-hull bg-surface p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-3">
+              <span class="flex size-10 items-center justify-center rounded-lg bg-beacon/10 ring-1 ring-beacon/25 shrink-0">
+                <UIcon name="i-lucide-braces" class="size-5 text-beacon" />
+              </span>
+              <div>
+                <p class="font-display text-base font-semibold text-foam">Interactive explorer</p>
+                <p class="mt-1 text-xs text-muted max-w-md">
+                  Full request/response schemas and try-it-out for the Docker/core API. Authorize with a token from
+                  Preferences → API Tokens (sent as <code class="font-mono text-beacon">Authorization: Bearer …</code>).
+                </p>
+              </div>
+            </div>
+            <a :href="swaggerUrl" target="_blank" rel="noopener noreferrer" class="home-hero-btn group shrink-0">
+              <UIcon name="i-lucide-external-link" class="size-3.5 text-beacon" /> Open Swagger UI
+            </a>
+          </div>
+
+          <!-- Per-module endpoint groups -->
+          <div class="space-y-8">
+            <section v-for="g in apiGroups" :id="g.id" :key="g.id" class="space-y-3 scroll-mt-20">
+              <div class="flex items-center gap-2">
+                <span class="flex size-9 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-hull shrink-0">
+                  <UIcon :name="g.icon" class="size-4 text-beacon" />
+                </span>
+                <h2 class="section-title">{{ g.label }}</h2>
+              </div>
+              <p class="max-w-3xl text-sm text-muted">{{ g.desc }}</p>
+              <div class="overflow-hidden rounded-lg border border-hull bg-surface">
+                <div
+                  v-for="(ep, i) in g.endpoints"
+                  :key="i"
+                  class="flex items-center gap-3 px-4 py-2.5"
+                  :class="i ? 'border-t border-hull-soft' : ''"
+                >
+                  <span class="api-method shrink-0" :class="`api-method--${ep[0].toLowerCase()}`">{{ ep[0] }}</span>
+                  <code class="font-mono text-xs text-foam shrink-0">{{ ep[1] }}</code>
+                  <span class="ml-auto text-right text-xs text-muted">{{ ep[2] }}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </main>
     </div>
 
@@ -1605,6 +2284,24 @@ watch(activeSection, (val) => {
   padding: 0.55rem 0.65rem;
   font-size: 0.75rem;
 }
+
+/* ── API method badges ────────────────────────────────────────────────────── */
+.api-method {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.3rem;
+  min-width: 3.4rem;
+  text-align: center;
+}
+
+.api-method--get    { background: color-mix(in srgb, #10b981 16%, transparent); color: #34d399; }
+.api-method--post   { background: color-mix(in srgb, #3b82f6 16%, transparent); color: #60a5fa; }
+.api-method--put    { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #fbbf24; }
+.api-method--delete { background: color-mix(in srgb, #ef4444 16%, transparent); color: #f87171; }
+.api-method--patch  { background: color-mix(in srgb, #06b6d4 16%, transparent); color: #38bdf8; }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 </style>

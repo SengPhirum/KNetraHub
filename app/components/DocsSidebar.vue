@@ -5,7 +5,7 @@ const props = defineProps<{
     label: string
     icon: string
     external?: string
-    subs: Array<{ id: string; label: string; icon: string }>
+    subs: Array<{ id?: string; label: string; icon?: string; heading?: boolean }>
   }>
   activeSection: string
 }>()
@@ -44,17 +44,26 @@ const emit = defineEmits<{
         <div
           v-if="item.subs.length"
           class="overflow-hidden transition-all duration-200 ml-2 pl-3 border-l border-hull-soft"
-          :style="activeSection === item.id ? 'max-height: 500px; margin-bottom: 4px;' : 'max-height: 0;'"
+          :style="activeSection === item.id ? 'max-height: 2200px; margin-bottom: 4px;' : 'max-height: 0;'"
         >
-          <button
-            v-for="sub in item.subs"
-            :key="sub.id"
-            class="flex items-center gap-1.5 w-full px-1.5 py-1 rounded text-xs text-faint hover:text-foam hover:bg-hull/40 text-left transition-colors"
-            @click.stop="emit('navigate', item.id, sub.id)"
-          >
-            <UIcon :name="sub.icon" class="size-3.5 shrink-0" />
-            <span>{{ sub.label }}</span>
-          </button>
+          <template v-for="(sub, i) in item.subs" :key="sub.id || `h-${i}`">
+            <!-- Module group heading (non-clickable) -->
+            <p
+              v-if="sub.heading"
+              class="px-1.5 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint/80 first:pt-0"
+            >
+              {{ sub.label }}
+            </p>
+            <!-- Clickable sub-item -->
+            <button
+              v-else
+              class="flex items-center gap-1.5 w-full px-1.5 py-1 rounded text-xs text-faint hover:text-foam hover:bg-hull/40 text-left transition-colors"
+              @click.stop="emit('navigate', item.id, sub.id)"
+            >
+              <UIcon v-if="sub.icon" :name="sub.icon" class="size-3.5 shrink-0" />
+              <span>{{ sub.label }}</span>
+            </button>
+          </template>
         </div>
       </template>
     </nav>

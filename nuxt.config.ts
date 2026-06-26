@@ -146,6 +146,22 @@ export default defineNuxtConfig({
       intervalMinutes: Number(process.env.NUXT_ALERTS_INTERVAL_MINUTES || 3)
     },
 
+    // Network module: real device monitoring (ICMP ping + SNMP v1/v2c). The
+    // poller pings every device and reads SNMP system/interface data on each
+    // cycle; discovery uses the same primitives to scan a CIDR. SNMPv3 needs
+    // auth/priv credentials not stored per device yet, so v3 devices are pinged
+    // only. Disable polling entirely with NUXT_NET_POLLING_ENABLED=false.
+    net: {
+      pollingEnabled: process.env.NUXT_NET_POLLING_ENABLED !== 'false',
+      pollIntervalSeconds: Number(process.env.NUXT_NET_POLL_INTERVAL_SECONDS || 60),
+      pollConcurrency: Number(process.env.NUXT_NET_POLL_CONCURRENCY || 16),
+      snmpCommunity: process.env.NUXT_NET_SNMP_COMMUNITY || 'public',
+      snmpVersion: process.env.NUXT_NET_SNMP_VERSION || 'v2c',
+      snmpTimeoutMs: Number(process.env.NUXT_NET_SNMP_TIMEOUT_MS || 2000),
+      pingTimeoutSeconds: Number(process.env.NUXT_NET_PING_TIMEOUT_SECONDS || 2),
+      discoveryConcurrency: Number(process.env.NUXT_NET_DISCOVERY_CONCURRENCY || 64)
+    },
+
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',
@@ -170,8 +186,10 @@ export default defineNuxtConfig({
 
   nitro: {
     // pg dynamically requires a few optional deps in ways Nitro's bundler
-    // can trip on — keep it external rather than bundled.
-    externals: { external: ['pg'] },
+    // can trip on — keep it external rather than bundled. net-snmp and ping
+    // (Network monitoring) are kept external too: ping spawns the system binary
+    // and net-snmp pulls in BER/buffer deps that are happier left unbundled.
+    externals: { external: ['pg', 'net-snmp', 'ping'] },
     // Docs build: only prerender /documentation (and root redirect)
     ...(isDocsBuild ? {
       prerender: {

@@ -274,6 +274,62 @@ async function runMigrations(): Promise<void> {
       timestamp TEXT NOT NULL
     );
 
+    -- Network Module: PRTG-style extensions ---------------------------------
+    -- Probes are the data collectors (local + remote/distributed sites) that a
+    -- device reports through; powers the Probes page and the distributed map.
+    CREATE TABLE IF NOT EXISTS net_probes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'remote',        -- local | remote | multi-platform
+      location TEXT,
+      ip TEXT,
+      version TEXT,
+      status TEXT NOT NULL DEFAULT 'connected',   -- connected | disconnected
+      latitude REAL,
+      longitude REAL,
+      last_seen TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Which probe collects a device's data (null = unassigned/local).
+    ALTER TABLE net_devices ADD COLUMN IF NOT EXISTS probe_id TEXT REFERENCES net_probes(id) ON DELETE SET NULL;
+
+    -- Real-poller bookkeeping: last successful poll + last measured ICMP latency.
+    ALTER TABLE net_devices ADD COLUMN IF NOT EXISTS last_polled TEXT;
+    ALTER TABLE net_devices ADD COLUMN IF NOT EXISTS last_rtt_ms REAL;
+
+    -- Interface counter snapshots so the poller can derive bit-rate between polls.
+    ALTER TABLE net_interfaces ADD COLUMN IF NOT EXISTS if_index INTEGER;
+    ALTER TABLE net_interfaces ADD COLUMN IF NOT EXISTS last_in_octets BIGINT;
+    ALTER TABLE net_interfaces ADD COLUMN IF NOT EXISTS last_out_octets BIGINT;
+    ALTER TABLE net_interfaces ADD COLUMN IF NOT EXISTS last_poll_at TEXT;
+
+    -- Auto-discovery scan jobs (scan an IP range, create devices/sensors).
+    CREATE TABLE IF NOT EXISTS net_discovery_jobs (
+      id TEXT PRIMARY KEY,
+      cidr TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'ping+snmp',
+      status TEXT NOT NULL DEFAULT 'completed',   -- running | completed | failed
+      scanned INTEGER DEFAULT 0,
+      found INTEGER DEFAULT 0,
+      added INTEGER DEFAULT 0,
+      started_at TEXT NOT NULL,
+      finished_at TEXT
+    );
+
+    -- Generated reports (availability / traffic / sensor-health / inventory).
+    -- summary holds a JSON snapshot rendered by the Reports page.
+    CREATE TABLE IF NOT EXISTS net_reports (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      period TEXT NOT NULL,
+      format TEXT DEFAULT 'html',
+      summary TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      created_by TEXT
+    );
+
     -- Server Module (Zabbix MVP)
     CREATE TABLE IF NOT EXISTS server_hosts (
       id TEXT PRIMARY KEY,

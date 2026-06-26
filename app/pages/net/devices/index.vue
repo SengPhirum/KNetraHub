@@ -45,6 +45,20 @@ async function addDevice() {
   isAddModalOpen.value = false
   refresh()
 }
+
+const deleteTarget = ref<any>(null)
+const deleting = ref(false)
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/net/devices/${deleteTarget.value.id}`, { method: 'DELETE' })
+    deleteTarget.value = null
+    await refresh()
+  } finally {
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -110,7 +124,10 @@ async function addDevice() {
                 </td>
                 <td class="px-4 py-3 text-xs">{{ dev.uptime }}</td>
                 <td class="px-4 py-3 text-right">
-                  <UButton :to="`/net/devices/${dev.id}`" size="xs" variant="ghost" icon="i-lucide-chevron-right" />
+                  <div class="flex items-center justify-end gap-1">
+                    <UButton v-if="hasApp('net')" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete device" @click="deleteTarget = dev" />
+                    <UButton :to="`/net/devices/${dev.id}`" size="xs" variant="ghost" icon="i-lucide-chevron-right" />
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -152,6 +169,24 @@ async function addDevice() {
           <UButton color="primary" @click="addDevice">Add Device</UButton>
         </div>
       </div>
+    </UModal>
+
+    <!-- Delete confirmation -->
+    <UModal :open="!!deleteTarget" @update:open="(v) => { if (!v) deleteTarget = null }">
+      <template #content>
+        <div class="p-6">
+          <h3 class="text-lg font-semibold text-foam mb-2">Delete device</h3>
+          <p class="text-sm text-(--color-muted)">
+            Remove <span class="font-medium text-foam">{{ deleteTarget?.hostname }}</span>
+            (<span class="font-mono">{{ deleteTarget?.ip }}</span>) and all of its interfaces, sensors, and alerts?
+            This cannot be undone.
+          </p>
+          <div class="mt-6 flex justify-end gap-3">
+            <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
+            <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
+          </div>
+        </div>
+      </template>
     </UModal>
   </div>
 </template>
