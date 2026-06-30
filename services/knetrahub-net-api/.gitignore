@@ -1,8 +1,0 @@
-node_modules
-.nitro
-.output
-.env
-
-# pnpm
-pnpm-debug.log*
-.pnpm-store
