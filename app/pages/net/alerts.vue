@@ -12,6 +12,17 @@ onMounted(() => {
 })
 
 const conditionLabel = (r: any) => `${r.metric} ${r.condition} ${r.threshold}`
+
+const acking = ref<string | null>(null)
+async function toggleAck(alert: any) {
+  acking.value = alert.id
+  try {
+    await $fetch(`/api/net/alerts/${alert.id}/ack`, { method: 'POST', body: { acknowledged: !alert.acknowledged_at } })
+    await refresh()
+  } finally {
+    acking.value = null
+  }
+}
 </script>
 
 <template>
@@ -60,14 +71,15 @@ const conditionLabel = (r: any) => `${r.metric} ${r.condition} ${r.threshold}`
                 <th class="px-4 py-3 font-medium">Rule</th>
                 <th class="px-4 py-3 font-medium">Message</th>
                 <th class="px-4 py-3 font-medium">Timestamp</th>
+                <th class="px-4 py-3 font-medium text-right">Acknowledge</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-surface">
               <tr v-if="status === 'pending' && !alerts" class="animate-pulse">
-                <td colspan="5" class="px-4 py-8 text-center text-faint">Loading alerts...</td>
+                <td colspan="6" class="px-4 py-8 text-center text-faint">Loading alerts...</td>
               </tr>
               <tr v-else-if="alerts?.length === 0">
-                <td colspan="5" class="px-4 py-8 text-center text-faint">No alerts.</td>
+                <td colspan="6" class="px-4 py-8 text-center text-faint">No alerts.</td>
               </tr>
               <tr v-for="alert in alerts" :key="alert.id" class="hover:bg-surface-2/50 transition">
                 <td class="px-4 py-3">
@@ -81,6 +93,20 @@ const conditionLabel = (r: any) => `${r.metric} ${r.condition} ${r.threshold}`
                 <td class="px-4 py-3 text-foam">{{ alert.rule_name }}</td>
                 <td class="px-4 py-3">{{ alert.message }}</td>
                 <td class="px-4 py-3 text-xs">{{ new Date(alert.timestamp).toLocaleString() }}</td>
+                <td class="px-4 py-3 text-right">
+                  <div v-if="alert.acknowledged_at" class="flex flex-col items-end gap-1">
+                    <UBadge size="xs" variant="subtle" color="info" icon="i-lucide-check-check">
+                      Acknowledged{{ alert.acknowledged_by ? ` · ${alert.acknowledged_by}` : '' }}
+                    </UBadge>
+                    <UButton v-if="hasApp('net')" size="xs" variant="ghost" color="neutral" :loading="acking === alert.id" @click="toggleAck(alert)">Un-acknowledge</UButton>
+                  </div>
+                  <UButton
+                    v-else-if="hasApp('net') && alert.status === 'active'"
+                    size="xs" variant="soft" color="info" icon="i-lucide-check"
+                    :loading="acking === alert.id" @click="toggleAck(alert)"
+                  >Acknowledge</UButton>
+                  <span v-else class="text-xs text-faint">—</span>
+                </td>
               </tr>
             </tbody>
           </table>

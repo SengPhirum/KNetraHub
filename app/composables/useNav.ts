@@ -38,10 +38,11 @@ const DOCK_GROUPS: NavGroup[] = [
   {
     label: 'Data',
     items: [
-      { label: 'Networks', to: '/networks', icon: 'i-lucide-network',    permission: 'docker.view' },
-      { label: 'Volumes',  to: '/volumes',  icon: 'i-lucide-hard-drive', permission: 'docker.view' },
-      { label: 'Secrets',  to: '/secrets',  icon: 'i-lucide-key-round',  permission: 'docker.view' },
-      { label: 'Configs',  to: '/configs',  icon: 'i-lucide-file-cog',   permission: 'docker.view' }
+      { label: 'Networks', to: '/networks', icon: 'i-lucide-network',        permission: 'docker.view' },
+      { label: 'Volumes',  to: '/volumes',  icon: 'i-lucide-hard-drive',     permission: 'docker.view' },
+      { label: 'Secrets',  to: '/secrets',  icon: 'i-lucide-key-round',      permission: 'docker.view' },
+      { label: 'Configs',  to: '/configs',  icon: 'i-lucide-file-cog',       permission: 'docker.view' },
+      { label: 'Registry', to: '/registry', icon: 'i-lucide-package-search', permission: 'docker.view' }
     ]
   },
   {

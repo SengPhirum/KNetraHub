@@ -356,6 +356,39 @@ async function runMigrations(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_net_dashboards_owner ON net_dashboards (owner);
 
+    -- Device onboarding templates: a saved bundle of defaults (category, poll
+    -- method, SNMP settings) so a new device can be created with one pick rather
+    -- than re-entering credentials each time (PRTG "device template" concept).
+    CREATE TABLE IF NOT EXISTS net_device_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL DEFAULT 'network',
+      poll_method TEXT NOT NULL DEFAULT 'snmp',
+      snmp_version TEXT,
+      snmp_community TEXT,
+      snmp_sec_level TEXT,
+      snmp_auth_user TEXT,
+      snmp_auth_protocol TEXT,
+      snmp_auth_password TEXT,
+      snmp_priv_protocol TEXT,
+      snmp_priv_password TEXT,
+      created_at TEXT NOT NULL,
+      created_by TEXT
+    );
+
+    -- Groups gained a created_at so the Groups page can show/sort by age.
+    ALTER TABLE net_groups ADD COLUMN IF NOT EXISTS created_at TEXT;
+
+    -- Pause/resume monitoring (PRTG core): a paused device is skipped by the
+    -- poller and shown as "paused" rather than flapping to "down".
+    ALTER TABLE net_devices ADD COLUMN IF NOT EXISTS monitoring_enabled BOOLEAN NOT NULL DEFAULT true;
+
+    -- Alert acknowledgement (PRTG): an operator can ack an active alarm so it's
+    -- visibly owned without clearing it; the poller still recovers it on its own.
+    ALTER TABLE net_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TEXT;
+    ALTER TABLE net_alerts ADD COLUMN IF NOT EXISTS acknowledged_by TEXT;
+
     -- Server Module (Zabbix MVP)
     CREATE TABLE IF NOT EXISTS server_hosts (
       id TEXT PRIMARY KEY,

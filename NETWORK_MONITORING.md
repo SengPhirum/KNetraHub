@@ -1,6 +1,6 @@
 # Network Module — Real Device Monitoring
 
-The Network app monitors **real** devices using **ICMP ping** and **SNMP v1/v2c**.
+The Network app monitors **real** devices using **ICMP ping** and **SNMP v1/v2c/v3**.
 There is no longer any simulated/dummy data: every status, latency, interface, and
 alert comes from an actual device on your network.
 
@@ -15,8 +15,15 @@ alert comes from an actual device on your network.
   recovers, the alert is cleared.
 - **Discovery** (`Network → Discovery`): a real ICMP/SNMP sweep of a CIDR that creates
   a device for every responder. The poller then fills in interfaces on the next cycle.
+- **Paused devices are skipped**: a device with monitoring paused (see below) is left
+  alone by the poller — it shows as `paused` rather than flapping to `down`, and no
+  "device down" alert is raised while it's offline for maintenance.
 
-> **SNMPv3** (auth/priv) is not supported yet — devices set to v3 are pinged only.
+> **SNMPv3** is fully supported (noAuthNoPriv / authNoPriv / authPriv; MD5/SHA/SHA-256/
+> SHA-512 auth; DES/AES/AES-256 priv). Set the version to **v3** on Add Device or the
+> device Settings tab and fill in the credentials. A v3 device with no security user
+> name falls back to ICMP-only.
+>
 > Flow (NetFlow) and Syslog collectors are not implemented; those pages stay empty
 > until a collector is added.
 
@@ -65,8 +72,28 @@ All optional — sensible defaults shown. See `.env.example`.
 **Option B — Add one device**
 
 1. **Network → Devices → Add Device.**
-2. Enter hostname + IP, choose **SNMP** (set version + community) or **Ping Only**.
-3. Save; the next poll cycle populates status, latency, and ports.
+2. *(Optional)* pick a **Template** to prefill the category + SNMP settings.
+3. Enter hostname + IP, choose **SNMP** (set version + community) or **Ping Only**.
+4. Save; the next poll cycle populates status, latency, and ports.
+
+## Organize & operate
+
+- **Device templates** (`Network → Settings → Device Templates`, needs the *admin*
+  tier): save a reusable bundle of monitoring defaults — category, poll method, and
+  SNMP v1/v2c/v3 credentials — under a name like *"Core Switch — SNMPv3"*. On
+  **Add Device** you then pick the template and only fill in hostname + IP.
+- **Categories** are a single fixed list shared by the Add Device form and a device's
+  Settings tab (so the label you choose never differs between the two). The list is
+  shown for reference in `Network → Settings → Categories`:
+  `network`, `server`, `storage`, `iot`, `ping-only`.
+- **Groups** (`Network → Groups`): create logical groups (by site, role, or owner) and
+  use **Manage** to add/remove member devices. Deleting a group never deletes devices.
+- **Pause / resume monitoring**: pause a device (from its detail page header or the
+  inventory row) before planned maintenance. Paused devices are skipped by the poller,
+  shown as `paused`, and don't raise down-alerts; **Resume** returns them to polling.
+- **Acknowledge alerts** (`Network → Alerts`): acknowledge an active alert to mark it as
+  owned (recording who + when) without clearing it — the poller still auto-recovers it
+  when the underlying condition clears.
 
 ## Clean up old/dummy data
 

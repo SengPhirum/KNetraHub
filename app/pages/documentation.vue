@@ -368,14 +368,31 @@ const netGuides = [
     summary: 'Maintain the inventory of monitored assets, add devices, and open a device for ports, sensors, and config backups.',
     steps: [
       'Filter by category or search by hostname/IP to find a device.',
-      'Use Add Device to register a host with a poll method (Ping or SNMP).',
-      'Open a device to inspect Ports, Sensors, Backups, and per-device Settings.',
-      'Switch SNMP version/community in Settings when a device changes.'
+      'Use Add Device to register a host — optionally apply a saved template to prefill SNMP/category defaults.',
+      'Pause monitoring during maintenance, then Resume it (paused devices are skipped by the poller).',
+      'Open a device for Ports, Sensors, Backups, a live latency graph, and per-device Settings.'
     ],
     shot: {
       label: 'Device inventory', status: 'SNMP',
       metrics: [['Total', '11'], ['Network', '6'], ['Servers', '2'], ['IoT', '1']] as [string, string][],
       rows: [['Core-Switch-01', 'Cisco IOS-XE', 'Up'], ['Router-B', 'Juniper Junos', 'Up'], ['HP-Printer-Floor1', 'Ping only', 'Up']] as [string, string, string][]
+    }
+  },
+  {
+    id: 'net-groups',
+    title: 'Groups & templates',
+    icon: 'i-lucide-folder-tree',
+    summary: 'Organize devices into logical groups, and save onboarding templates so new devices are a single pick.',
+    steps: [
+      'Create a group (by site, role, or owner) and use Manage to add/remove member devices.',
+      'In Network → Settings → Device Templates, save a template with the SNMP/category defaults you reuse.',
+      'On Add Device, pick a template to prefill everything except hostname and IP.',
+      'Categories are shared between the Add Device and Settings forms — see Settings → Categories.'
+    ],
+    shot: {
+      label: 'Device groups', status: 'Organized',
+      metrics: [['Groups', '3'], ['Templates', '2'], ['Categories', '5'], ['Devices', '11']] as [string, string][],
+      rows: [['Core Switches', '4 devices', 'Group'], ['Branch Sites', '5 devices', 'Group'], ['Core Switch — SNMPv3', 'network', 'Template']] as [string, string, string][]
     }
   },
   {
@@ -420,8 +437,8 @@ const netGuides = [
     steps: [
       'Check the Notification Triggers cards for the rules and thresholds in force.',
       'Scan Alert History for active vs. recovered events.',
-      'Open the device on any alert row to investigate.',
-      'Configure delivery channels (Telegram/Teams/Webhook) in portal Settings.'
+      'Acknowledge an active alert so the team knows it is owned (it still auto-recovers).',
+      'Open the device on any alert row, or configure delivery channels in portal Settings.'
     ],
     shot: {
       label: 'Alerts', status: 'Triggers',

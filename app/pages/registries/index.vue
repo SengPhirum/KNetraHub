@@ -30,6 +30,25 @@ async function create() {
   }
 }
 
+// Per-registry connection check (Docker Registry v2 /v2/ probe).
+const verifyState = reactive<Record<string, { state: 'checking' | 'ok' | 'fail'; message: string; latencyMs?: number }>>({})
+async function verify(r: any) {
+  verifyState[r.id] = { state: 'checking', message: 'Checking…' }
+  try {
+    const res = await $fetch<any>(`/api/registries/${r.id}/verify`)
+    verifyState[r.id] = { state: res.ok ? 'ok' : 'fail', message: res.message, latencyMs: res.latencyMs }
+    toast.add({
+      title: res.ok ? `${r.name} reachable` : `${r.name} check failed`,
+      description: `${res.message}${res.latencyMs != null ? ` · ${res.latencyMs}ms` : ''}`,
+      color: res.ok ? 'success' : 'error',
+      icon: res.ok ? 'i-lucide-plug-zap' : 'i-lucide-unplug'
+    })
+  } catch (e: any) {
+    verifyState[r.id] = { state: 'fail', message: e?.data?.statusMessage || 'Verify failed' }
+    toast.add({ title: 'Verify failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
+
 async function remove(r: any) {
   if (!confirm(`Remove registry "${r.name}"?`)) return
   const saved = [...(data.value ?? [])]
@@ -73,7 +92,24 @@ async function remove(r: any) {
               <p class="truncate font-mono text-xs text-faint">{{ r.url || '—' }}<span v-if="r.username"> · {{ r.username }}</span></p>
             </div>
           </div>
-          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(r)" />
+          <div class="flex items-center gap-2 shrink-0">
+            <span
+              v-if="verifyState[r.id]"
+              class="size-2 rounded-full"
+              :title="verifyState[r.id].message"
+              :class="verifyState[r.id].state === 'ok' ? 'bg-emerald-500' : verifyState[r.id].state === 'fail' ? 'bg-rose-500' : 'bg-amber-500 animate-pulse'"
+            ></span>
+            <UButton
+              icon="i-lucide-plug-zap"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              label="Verify"
+              :loading="verifyState[r.id]?.state === 'checking'"
+              @click="verify(r)"
+            />
+            <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(r)" />
+          </div>
         </div>
       </TransitionGroup>
     </DataState>

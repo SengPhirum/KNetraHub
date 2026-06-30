@@ -11,11 +11,13 @@ Date: 2026-06-30 UTC
 
 ## Source
 
-- Commit: `ac5a2af`
+- Commit: `8d20205`
 - Previous tag: none
 
 ## Changes
 
+- feat: add SNMP v3 support with credential management in device forms feat: implement network dashboards with CRUD operations and metrics tracking feat: enhance metrics collection for network devices with latency and availability data chore: update release notes for v0.1.1 with recent changes and commits fix: ensure app settings are accessible post-deployment without migration errors (8d20205)
+- chore: remove unused knetrahub-net-api service (19c36a4)
 - feat: add support for developer-specific corporate/AV root CAs in Docker setup (ac5a2af)
 - feat: add network sensors page with real-time monitoring and filtering (05b9708)
 - feat: add caption support to KNetraHubLogo and integrate app name in SidebarNav (8457afc)
@@ -58,28 +60,31 @@ Date: 2026-06-30 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
+ M NETWORK_MONITORING.md
  M RELEASE_NOTES.md
- M app/components/SidebarNav.vue
+ M app/composables/useNav.ts
+ M app/pages/documentation.vue
+ M app/pages/net/alerts.vue
  M app/pages/net/devices/[id].vue
  M app/pages/net/devices/index.vue
- M app/pages/net/index.vue
- M package.json
- M pnpm-lock.yaml
+ M app/pages/net/groups.vue
+ M app/pages/net/settings.vue
+ M app/pages/registries/index.vue
+ M app/utils/appRoutes.ts
  M release-notes/v0.1.1.md
- M release.sh
- M server/api/net/devices/[id].put.ts
- M server/api/net/devices/index.post.ts
  M server/plugins/netPoller.ts
  M server/utils/db.ts
- M server/utils/metrics.ts
- M server/utils/netMonitor.ts
+ M server/utils/registryClient.ts
  M server/utils/store.ts
-?? app/components/NetSnmpFields.vue
-?? app/components/net/
-?? app/composables/useNetData.ts
-?? app/utils/netDashboards.ts
-?? app/utils/netSnmp.ts
-?? server/api/net/dashboards/
-?? server/api/net/metrics.get.ts
-?? server/utils/netDashboards.ts
+?? app/pages/registry/
+?? app/utils/netCategories.ts
+?? app/utils/registryBrowser.ts
+?? server/api/net/alerts/
+?? server/api/net/devices/[id]/monitoring.post.ts
+?? server/api/net/groups.post.ts
+?? server/api/net/groups/
+?? server/api/net/templates.get.ts
+?? server/api/net/templates.post.ts
+?? server/api/net/templates/
+?? server/api/registries/[id]/
 ```

@@ -433,6 +433,19 @@ export async function addRegistry(input: Omit<Registry, 'id'>): Promise<Registry
   return { id, ...input }
 }
 
+export async function getRegistry(id: string): Promise<Registry | null> {
+  const { rows } = await getDb().query('SELECT * FROM registries WHERE id = $1', [id])
+  const r = rows[0]
+  if (!r) return null
+  return {
+    id: r.id,
+    name: r.name,
+    url: r.url,
+    username: r.username,
+    auth: r.auth ? decryptSecret(r.auth) : undefined
+  }
+}
+
 export async function deleteRegistry(id: string): Promise<void> {
   await getDb().query('DELETE FROM registries WHERE id = $1', [id])
 }

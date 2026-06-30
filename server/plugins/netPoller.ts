@@ -56,7 +56,9 @@ interface NetConfig {
 
 async function pollAllDevices(cfg: NetConfig) {
   const db = getDb()
-  const { rows: devices } = await db.query('SELECT * FROM net_devices')
+  // Paused devices (monitoring_enabled = false) are intentionally offline; skip
+  // them so the poller doesn't overwrite their "paused" status or raise alerts.
+  const { rows: devices } = await db.query('SELECT * FROM net_devices WHERE monitoring_enabled IS NOT FALSE')
   if (!devices.length) return
   const concurrency = Math.max(1, Number(cfg.pollConcurrency) || 16)
   await mapLimit(devices, concurrency, (d) => pollDevice(d, cfg).catch((e) => {

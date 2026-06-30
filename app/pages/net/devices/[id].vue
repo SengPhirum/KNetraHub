@@ -46,12 +46,73 @@ watch(device, (val) => {
   }
 }, { immediate: true })
 
+const saving = ref(false)
 async function saveSettings() {
-  await $fetch(`/api/net/devices/${route.params.id}`, {
-    method: 'PUT',
-    body: settingsForm
-  })
-  refresh()
+  saving.value = true
+  try {
+    await $fetch(`/api/net/devices/${route.params.id}`, { method: 'PUT', body: settingsForm })
+    await refresh()
+  } finally {
+    saving.value = false
+  }
+}
+
+// --- Latency history (real data from the net_metrics hypertable) ------------
+const latencyRange = ref('6h')
+const rangeItems = [
+  { value: '1h', label: '1h' },
+  { value: '6h', label: '6h' },
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' }
+]
+const { data: metrics } = useAsyncData(
+  `netDeviceMetrics-${route.params.id}`,
+  () => $fetch<any>(`/api/net/metrics?device=${route.params.id}&range=${latencyRange.value}`),
+  { watch: [latencyRange], default: () => ({ series: { latency: [] } }) }
+)
+const latencyPoints = computed<any[]>(() => metrics.value?.series?.latency || [])
+const latencyLabels = computed(() => latencyPoints.value.map((p) => fmtTime(p.time)))
+const latencyDatasets = computed(() => [
+  { label: 'Avg', data: latencyPoints.value.map((p) => p.avgMs), color: '#34d399' },
+  { label: 'Max', data: latencyPoints.value.map((p) => p.maxMs), color: '#f59e0b' }
+])
+function fmtTime(t: string) {
+  return latencyRange.value === '7d'
+    ? new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    : new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// --- Status presentation + pause/resume monitoring --------------------------
+function statusBorder(s: string) {
+  return s === 'up' ? 'border-b-emerald-500'
+    : s === 'paused' ? 'border-b-amber-500'
+    : s === 'down' ? 'border-b-rose-500'
+    : 'border-b-surface'
+}
+const toggling = ref(false)
+async function toggleMonitoring() {
+  if (!device.value) return
+  toggling.value = true
+  try {
+    await $fetch(`/api/net/devices/${route.params.id}/monitoring`, {
+      method: 'POST',
+      body: { enabled: device.value.monitoring_enabled === false }
+    })
+    await refresh()
+  } finally {
+    toggling.value = false
+  }
+}
+
+// --- Backups ----------------------------------------------------------------
+function downloadBackup(backup: any) {
+  const blob = new Blob([backup.config_text], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${device.value?.hostname || 'device'}-${backup.timestamp.replace(/[:.]/g, '-')}.cfg`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -59,9 +120,20 @@ async function saveSettings() {
   <div>
     <PageHeader :title="device?.hostname || 'Loading...'" subtitle="Device Management" icon="i-lucide-hard-drive">
       <template #actions>
-        <NuxtLink to="/net/devices" class="text-sm font-medium text-(--color-muted) hover:text-foam flex items-center gap-1">
-          <UIcon name="i-lucide-arrow-left" class="size-4" /> Back to Inventory
-        </NuxtLink>
+        <div class="flex items-center gap-3">
+          <UButton
+            v-if="hasApp('net') && device"
+            size="sm"
+            variant="soft"
+            :color="device.monitoring_enabled === false ? 'success' : 'neutral'"
+            :icon="device.monitoring_enabled === false ? 'i-lucide-play' : 'i-lucide-pause'"
+            :loading="toggling"
+            @click="toggleMonitoring"
+          >{{ device.monitoring_enabled === false ? 'Resume' : 'Pause' }}</UButton>
+          <NuxtLink to="/net/devices" class="text-sm font-medium text-(--color-muted) hover:text-foam flex items-center gap-1">
+            <UIcon name="i-lucide-arrow-left" class="size-4" /> Back to Inventory
+          </NuxtLink>
+        </div>
       </template>
     </PageHeader>
 
@@ -73,7 +145,7 @@ async function saveSettings() {
     <div v-else-if="device" class="space-y-6">
       
       <!-- Device Header Card -->
-      <div class="panel p-5 grid grid-cols-2 md:grid-cols-5 gap-6 border-b-4 border-b-surface" :class="device.status === 'up' ? 'border-b-green-500' : 'border-b-red-500'">
+      <div class="panel p-5 grid grid-cols-2 md:grid-cols-5 gap-6 border-b-4 border-b-surface" :class="statusBorder(device.status)">
         <div>
           <span class="text-xs font-medium uppercase text-(--color-muted)">IP Address</span>
           <p class="mt-1 font-mono text-sm text-foam">{{ device.ip }}</p>
@@ -109,13 +181,29 @@ async function saveSettings() {
             <h3 class="font-medium text-foam mb-3">System Information</h3>
             <dl class="space-y-2 text-sm">
               <div class="flex justify-between border-b border-surface pb-1"><dt class="text-faint">ObjectID</dt><dd class="text-foam font-mono">{{ device.sys_object_id || 'Unknown' }}</dd></div>
-              <div class="flex justify-between border-b border-surface pb-1"><dt class="text-faint">Category</dt><dd class="text-foam capitalize">{{ device.category }}</dd></div>
+              <div class="flex justify-between border-b border-surface pb-1"><dt class="text-faint">Category</dt><dd class="text-foam">{{ categoryLabel(device.category) }}</dd></div>
               <div class="flex justify-between border-b border-surface pb-1"><dt class="text-faint">Poll Method</dt><dd class="text-foam uppercase">{{ device.poll_method }}</dd></div>
+              <div class="flex justify-between border-b border-surface pb-1"><dt class="text-faint">Monitoring</dt><dd :class="device.monitoring_enabled === false ? 'text-amber-500' : 'text-emerald-500'">{{ device.monitoring_enabled === false ? 'Paused' : 'Active' }}</dd></div>
               <div class="flex justify-between pb-1"><dt class="text-faint">Description</dt><dd class="text-foam truncate max-w-xs" :title="device.sys_descr">{{ device.sys_descr || 'Unknown' }}</dd></div>
             </dl>
           </div>
-          <div class="panel p-5 flex items-center justify-center">
-            <p class="text-faint text-sm italic">Historical ping latency graphs will appear here.</p>
+          <div class="panel p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-foam">ICMP Latency</h3>
+              <USelect v-model="latencyRange" :items="rangeItems" value-key="value" label-key="label" size="xs" class="w-24" />
+            </div>
+            <div v-if="!latencyPoints.length" class="flex h-50 items-center justify-center text-center text-sm text-faint">
+              No latency history yet — it fills in as the poller runs.
+            </div>
+            <MetricsChart
+              v-else
+              :labels="latencyLabels"
+              :datasets="latencyDatasets"
+              :height="200"
+              fill
+              :format-value="(n: number) => `${n} ms`"
+              y-title="ms"
+            />
           </div>
         </div>
       </div>
@@ -194,7 +282,7 @@ async function saveSettings() {
                 <div class="font-medium text-foam">Configuration Backup</div>
                 <div class="text-xs text-faint mt-1">{{ new Date(backup.timestamp).toLocaleString() }}</div>
               </div>
-              <UButton size="xs" variant="ghost" icon="i-lucide-download">Download</UButton>
+              <UButton size="xs" variant="ghost" icon="i-lucide-download" @click="downloadBackup(backup)">Download</UButton>
             </div>
             <pre class="text-xs font-mono text-(--color-muted) whitespace-pre-wrap max-h-64 overflow-y-auto bg-surface-2 p-3 rounded">{{ backup.config_text }}</pre>
           </div>
@@ -212,7 +300,7 @@ async function saveSettings() {
             <UInput v-model="settingsForm.ip" class="w-full" />
           </UFormField>
           <UFormField label="Category">
-            <USelect v-model="settingsForm.category" :items="[{value:'network', label:'Network'}, {value:'server', label:'Server'}, {value:'storage', label:'Storage'}, {value:'iot', label:'IoT'}, {value:'ping-only', label:'Ping Only'}]" value-key="value" label-key="label" class="w-full" />
+            <USelect v-model="settingsForm.category" :items="CATEGORY_SELECT_ITEMS" value-key="value" label-key="label" class="w-full" />
           </UFormField>
           <div class="pt-4 border-t border-surface space-y-4">
             <UFormField label="Polling Method">
@@ -223,7 +311,7 @@ async function saveSettings() {
             </template>
           </div>
           <div class="pt-6 flex justify-end">
-            <UButton color="primary" @click="saveSettings">Save Changes</UButton>
+            <UButton color="primary" :loading="saving" @click="saveSettings">Save Changes</UButton>
           </div>
         </div>
       </div>

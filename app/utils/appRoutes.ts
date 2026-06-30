@@ -18,6 +18,7 @@ export const DOCKER_ROUTE_PREFIXES = [
   '/volumes',
   '/secrets',
   '/configs',
+  '/registry',
   '/registries'
 ]
 
