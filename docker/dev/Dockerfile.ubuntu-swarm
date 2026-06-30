@@ -33,6 +33,16 @@ RUN apt-get -o Acquire::Max-FutureTime=86400 update \
   && docker --version \
   && dockerd --version
 
+# Trust any developer-supplied corporate / antivirus root CAs (Kaspersky,
+# Zscaler, ...) so pnpm/corepack can fetch through a TLS-intercepting proxy.
+# Drop your root CA as a .crt into docker/dev/certs/ - see that folder's README.
+# undici (pnpm/corepack's metadata fetch) ignores NODE_TLS_REJECT_UNAUTHORIZED,
+# strict-ssl=false and NODE_EXTRA_CA_CERTS, so adding the CA to the system trust
+# store and starting Node with --use-system-ca is the only reliable fix.
+COPY docker/dev/certs/ /usr/local/share/ca-certificates/knetrahub-dev/
+RUN update-ca-certificates
+ENV NODE_OPTIONS="--use-system-ca"
+
 WORKDIR /workspace
 
 COPY docker/dev/swarm-entrypoint.sh /usr/local/bin/dockhub-swarm-dev

@@ -10,3 +10,8 @@ dist
 # pnpm
 pnpm-debug.log*
 .pnpm-store
+
+# Dev swarm: developer-specific corporate/AV root CAs (machine-specific)
+docker/dev/certs/*
+!docker/dev/certs/.gitkeep
+!docker/dev/certs/README.md
