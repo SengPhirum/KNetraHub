@@ -6,7 +6,8 @@ import { getDb } from '../../utils/db'
 export default defineEventHandler(async () => {
   const db = getDb()
   const res = await db.query(`
-    SELECT s.*, d.hostname AS device_name, d.ip AS device_ip, d.category AS device_category, d.status AS device_status
+    SELECT s.*, d.hostname AS device_name, d.ip AS device_ip, d.category AS device_category,
+           d.status AS device_status, d.monitoring_enabled
     FROM net_sensors s
     JOIN net_devices d ON s.device_id = d.id
     ORDER BY d.hostname ASC, s.name ASC

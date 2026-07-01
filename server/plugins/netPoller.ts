@@ -6,10 +6,11 @@ import {
   snmpGetInterfaces,
   uptimeFromTicks,
   formatRate,
+  rateBps,
   mapLimit,
   type SnmpOpts
 } from '../utils/netMonitor'
-import { recordNetSample } from '../utils/metrics'
+import { recordNetSample, recordSensorReadings } from '../utils/metrics'
 
 /**
  * Real Network poller. On each cycle it ICMP-pings every device, and for SNMP
@@ -107,7 +108,8 @@ async function pollDevice(device: any, cfg: NetConfig) {
     [newStatus, uptime, sys_name, sys_descr, sys_object_id, vendor, os, now, result.rttMs, device.id]
   )
 
-  await upsertPingSensor(device.id, result.rttMs)
+  const pingSensorId = await upsertPingSensor(device.id, result.rttMs)
+  if (pingSensorId) await recordSensorReadings(pingSensorId, [{ channel: 'value', value: result.rttMs }])
 
   // Time-series history for the /net dashboard latency + availability graphs.
   await recordNetSample(device.id, result.rttMs, result.alive ? 1 : 0)
@@ -131,10 +133,10 @@ async function upsertInterfaces(deviceId: string, ip: string, opts: SnmpOpts) {
 
   for (const i of ifaces) {
     const prev = existing.get(i.name)
+    const seconds = prev?.last_poll_at ? (Date.parse(now) - Date.parse(prev.last_poll_at)) / 1000 : 0
     let inTraffic = '0 Mbps'
     let outTraffic = '0 Mbps'
-    if (prev?.last_poll_at) {
-      const seconds = (Date.parse(now) - Date.parse(prev.last_poll_at)) / 1000
+    if (seconds > 0) {
       inTraffic = formatRate(prev.last_in_octets, i.inOctets, seconds)
       outTraffic = formatRate(prev.last_out_octets, i.outOctets, seconds)
     }
@@ -159,25 +161,84 @@ async function upsertInterfaces(deviceId: string, ip: string, opts: SnmpOpts) {
           i.adminStatus, i.operStatus, i.type, i.ifIndex, i.inOctets, i.outOctets, now]
       )
     }
+
+    // Interface-bandwidth sensor (PRTG-style) with In/Out channels. Only for
+    // operationally-up, non-loopback interfaces, and only once we have a prior
+    // counter read to derive a real rate from (the first cycle just seeds it).
+    if (seconds > 0 && i.operStatus === 'up' && i.type !== 'loopback') {
+      const inMbps = toMbps(rateBps(prev.last_in_octets, i.inOctets, seconds))
+      const outMbps = toMbps(rateBps(prev.last_out_octets, i.outOctets, seconds))
+      if (inMbps != null || outMbps != null) {
+        const total = Math.round((inMbps || 0) + (outMbps || 0))
+        const sensorId = await upsertTrafficSensor(deviceId, i.name, total, speedToMbps(i.speed))
+        await recordSensorReadings(sensorId, [
+          { channel: 'in', value: inMbps },
+          { channel: 'out', value: outMbps }
+        ])
+      }
+    }
   }
 }
 
-async function upsertPingSensor(deviceId: string, rttMs: number | null) {
-  if (rttMs == null) return
+/** bits-per-second -> Mbps rounded to 2dp, preserving null. */
+function toMbps(bps: number | null): number | null {
+  return bps == null ? null : Math.round((bps / 1e6) * 100) / 100
+}
+
+/** Parse an interface speed string (e.g. "1Gbps", "100Mbps") to numeric Mbps. */
+function speedToMbps(speed: string): number | null {
+  const m = /^([\d.]+)\s*(gbps|mbps|kbps)$/i.exec((speed || '').trim())
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isFinite(n)) return null
+  const unit = m[2]!.toLowerCase()
+  if (unit === 'gbps') return n * 1000
+  if (unit === 'kbps') return n / 1000
+  return n
+}
+
+/** Upsert the per-interface bandwidth sensor (matched by device + type + name),
+ *  keeping its current total throughput and line-rate limit fresh. */
+async function upsertTrafficSensor(deviceId: string, ifName: string, totalMbps: number, limitHighMbps: number | null): Promise<string> {
+  const db = getDb()
+  const name = `IF ${ifName}`
+  const existing = await db.query(
+    `SELECT id FROM net_sensors WHERE device_id = $1 AND sensor_type = 'traffic' AND name = $2 LIMIT 1`,
+    [deviceId, name]
+  )
+  if (existing.rows.length) {
+    const id = existing.rows[0].id
+    await db.query('UPDATE net_sensors SET current_value = $1, limit_high = $2 WHERE id = $3', [totalMbps, limitHighMbps, id])
+    return id
+  }
+  const id = nanoid()
+  await db.query(
+    `INSERT INTO net_sensors (id, device_id, sensor_type, name, current_value, unit, limit_high, limit_low)
+     VALUES ($1, $2, 'traffic', $3, $4, 'Mbps', $5, 0)`,
+    [id, deviceId, name, totalMbps, limitHighMbps]
+  )
+  return id
+}
+
+async function upsertPingSensor(deviceId: string, rttMs: number | null): Promise<string | null> {
+  if (rttMs == null) return null
   const db = getDb()
   const existing = await db.query(
     `SELECT id FROM net_sensors WHERE device_id = $1 AND sensor_type = 'ping' LIMIT 1`,
     [deviceId]
   )
   if (existing.rows.length) {
-    await db.query('UPDATE net_sensors SET current_value = $1 WHERE id = $2', [rttMs, existing.rows[0].id])
-  } else {
-    await db.query(
-      `INSERT INTO net_sensors (id, device_id, sensor_type, name, current_value, unit, limit_high, limit_low)
-       VALUES ($1, $2, 'ping', 'ICMP Latency', $3, 'ms', 200, 0)`,
-      [nanoid(), deviceId, rttMs]
-    )
+    const id = existing.rows[0].id
+    await db.query('UPDATE net_sensors SET current_value = $1 WHERE id = $2', [rttMs, id])
+    return id
   }
+  const id = nanoid()
+  await db.query(
+    `INSERT INTO net_sensors (id, device_id, sensor_type, name, current_value, unit, limit_high, limit_low)
+     VALUES ($1, $2, 'ping', 'ICMP Latency', $3, 'ms', 200, 0)`,
+    [id, deviceId, rttMs]
+  )
+  return id
 }
 
 async function handleStatusChange(device: any, newStatus: string, now: string) {

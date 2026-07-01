@@ -1,32 +1,39 @@
 <script setup lang="ts">
+// Server (Zabbix) dashboard: availability, problems-by-severity, and the
+// current top problems, all from the real poller.
 const { hasApp } = useAuth()
 
-const { data: hosts } = useAsyncData('serverHosts', () => $fetch('/api/server/hosts'))
-const { data: problems } = useAsyncData('serverProblems', () => $fetch('/api/server/problems'))
+const { data: hosts, refresh: rH } = useAsyncData('serverDashHosts', () => $fetch<any[]>('/api/server/hosts'), { default: () => [], server: false })
+const { data: problems, refresh: rP } = useAsyncData('serverDashProblems', () => $fetch<any[]>('/api/server/problems'), { default: () => [], server: false })
+onMounted(() => { const t = setInterval(() => { rH(); rP() }, 15000); onUnmounted(() => clearInterval(t)) })
 
-const summary = computed(() => {
-  const allProblems = problems.value || []
+const avail = computed(() => {
+  const list = hosts.value || []
   return {
-    totalHosts: (hosts.value || []).length,
-    problems: allProblems.length,
-    highSeverity: allProblems.filter(p => p.severity === 'High' || p.severity === 'Disaster').length
+    total: list.length,
+    available: list.filter((h) => h.availability === 'available').length,
+    unavailable: list.filter((h) => h.availability === 'unavailable').length,
+    paused: list.filter((h) => h.monitoring_enabled === false).length
   }
 })
 
-const recentProblems = computed(() => {
-  return (problems.value || []).slice(0, 5).map(p => ({
-    id: p.id,
-    host: p.host || 'Unknown',
-    trigger: p.trigger,
-    severity: p.severity,
-    time: p.duration
-  }))
+const openProblems = computed(() => (problems.value || []).filter((p: any) => p.status === 'problem'))
+const bySeverity = computed(() => {
+  const counts = new Map<number, number>()
+  for (const p of openProblems.value) counts.set(Number(p.severity_num), (counts.get(Number(p.severity_num)) || 0) + 1)
+  return SEVERITIES.slice().reverse().map((s) => ({ ...s, count: counts.get(s.value) || 0 }))
 })
+const topProblems = computed(() => openProblems.value.slice(0, 8))
+
+function duration(p: any) {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(p.fired_at)) / 1000))
+  if (s < 60) return `${s}s`; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`
+}
 </script>
 
 <template>
   <div>
-    <PageHeader title="Server Dashboard" subtitle="Overview of server infrastructure health" icon="i-lucide-server-cog" />
+    <PageHeader title="Server Dashboard" subtitle="Real-time host availability and problems" icon="i-lucide-server-cog" />
 
     <div v-if="!hasApp('monitoring')" class="panel flex flex-col items-center gap-2 p-10 text-center">
       <UIcon name="i-lucide-lock" class="size-6 text-faint" />
@@ -34,49 +41,55 @@ const recentProblems = computed(() => {
     </div>
 
     <div v-else class="space-y-6">
-      <div class="grid gap-4 md:grid-cols-3">
+      <div class="grid gap-4 md:grid-cols-4">
         <div class="panel p-5 flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-semibold uppercase text-(--color-muted)">Monitored Hosts</span>
-          <span class="mt-2 text-4xl font-bold text-foam">{{ summary.totalHosts }}</span>
+          <span class="text-xs font-semibold uppercase text-(--color-muted)">Hosts</span>
+          <span class="mt-2 text-4xl font-bold text-foam">{{ avail.total }}</span>
         </div>
-        <div class="panel p-5 flex flex-col items-center justify-center text-center border-l-4 border-orange-500">
-          <span class="text-xs font-semibold uppercase text-(--color-muted)">Active Problems</span>
-          <span class="mt-2 text-4xl font-bold text-orange-500">{{ summary.problems }}</span>
+        <div class="panel p-5 flex flex-col items-center justify-center text-center border-l-4 border-green-500">
+          <span class="text-xs font-semibold uppercase text-(--color-muted)">Available</span>
+          <span class="mt-2 text-4xl font-bold text-green-500">{{ avail.available }}</span>
         </div>
         <div class="panel p-5 flex flex-col items-center justify-center text-center border-l-4 border-red-500">
-          <span class="text-xs font-semibold uppercase text-(--color-muted)">High Severity</span>
-          <span class="mt-2 text-4xl font-bold text-red-500">{{ summary.highSeverity }}</span>
+          <span class="text-xs font-semibold uppercase text-(--color-muted)">Unavailable</span>
+          <span class="mt-2 text-4xl font-bold text-red-500">{{ avail.unavailable }}</span>
+        </div>
+        <div class="panel p-5 flex flex-col items-center justify-center text-center border-l-4 border-slate-500">
+          <span class="text-xs font-semibold uppercase text-(--color-muted)">Open problems</span>
+          <span class="mt-2 text-4xl font-bold text-orange-500">{{ openProblems.length }}</span>
         </div>
       </div>
 
       <div class="grid gap-4 xl:grid-cols-2">
         <section class="panel p-5">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Top Problems</h2>
-            <NuxtLink to="/monitoring/server/problems" class="text-xs text-beacon hover:underline">View all -></NuxtLink>
-          </div>
-          <div class="space-y-3">
-            <div v-for="problem in recentProblems" :key="problem.id" class="flex flex-col gap-1 p-3 rounded-lg bg-surface-2 border border-surface">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-medium px-2 py-0.5 rounded" 
-                      :class="{
-                        'bg-red-500/20 text-red-400': problem.severity === 'High',
-                        'bg-orange-500/20 text-orange-400': problem.severity === 'Average',
-                        'bg-yellow-500/20 text-yellow-400': problem.severity === 'Warning'
-                      }">
-                  {{ problem.severity }}
-                </span>
-                <span class="text-xs text-faint">{{ problem.time }}</span>
+          <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted) mb-4">Problems by severity</h2>
+          <div class="space-y-2">
+            <div v-for="s in bySeverity" :key="s.value" class="flex items-center gap-3">
+              <span class="w-28 text-xs" :class="s.text">{{ s.label }}</span>
+              <div class="flex-1 h-2 rounded bg-surface-2 overflow-hidden">
+                <div class="h-full rounded" :style="{ width: (openProblems.length ? (s.count / openProblems.length * 100) : 0) + '%', backgroundColor: s.hex }"></div>
               </div>
-              <p class="text-sm font-medium text-foam mt-1">{{ problem.host }}</p>
-              <p class="text-xs text-(--color-muted)">{{ problem.trigger }}</p>
+              <span class="w-8 text-right font-display font-semibold text-foam">{{ s.count }}</span>
             </div>
           </div>
         </section>
 
-        <section class="panel p-5 flex flex-col items-center justify-center min-h-[300px]">
-          <UIcon name="i-lucide-activity" class="size-12 text-faint mb-3" />
-          <p class="text-sm text-(--color-muted)">Global Performance Metrics Placeholder</p>
+        <section class="panel p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Top problems</h2>
+            <NuxtLink to="/monitoring/server/problems" class="text-xs text-beacon hover:underline">View all →</NuxtLink>
+          </div>
+          <div class="space-y-2">
+            <div v-for="p in topProblems" :key="p.id" class="flex items-center gap-3 p-2 rounded-lg bg-surface-2 border border-surface">
+              <span class="px-2 py-0.5 rounded text-xs font-medium shrink-0" :class="severityMeta(p.severity_num).badge">{{ severityMeta(p.severity_num).label }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm text-foam truncate">{{ p.name }}</p>
+                <p class="text-xs text-faint">{{ p.host }}</p>
+              </div>
+              <span class="text-xs text-faint shrink-0">{{ duration(p) }}</span>
+            </div>
+            <div v-if="!topProblems.length" class="text-center text-sm text-faint py-6">No open problems. All clear.</div>
+          </div>
         </section>
       </div>
     </div>

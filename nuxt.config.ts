@@ -162,6 +162,22 @@ export default defineNuxtConfig({
       discoveryConcurrency: Number(process.env.NUXT_NET_DISCOVERY_CONCURRENCY || 64)
     },
 
+    // Server module (Zabbix-style): real host monitoring (ICMP ping + SNMP
+    // host-resources/UCD metrics). The serverPoller pings every enabled host,
+    // collects its SNMP items, evaluates triggers into problems, and fires
+    // actions. Disable with NUXT_SERVER_POLLING_ENABLED=false.
+    server: {
+      pollingEnabled: process.env.NUXT_SERVER_POLLING_ENABLED !== 'false',
+      pollIntervalSeconds: Number(process.env.NUXT_SERVER_POLL_INTERVAL_SECONDS || 60),
+      pollConcurrency: Number(process.env.NUXT_SERVER_POLL_CONCURRENCY || 16),
+      snmpCommunity: process.env.NUXT_SERVER_SNMP_COMMUNITY || 'public',
+      snmpVersion: process.env.NUXT_SERVER_SNMP_VERSION || 'v2c',
+      snmpTimeoutMs: Number(process.env.NUXT_SERVER_SNMP_TIMEOUT_MS || 2000),
+      pingTimeoutSeconds: Number(process.env.NUXT_SERVER_PING_TIMEOUT_SECONDS || 2),
+      discoveryConcurrency: Number(process.env.NUXT_SERVER_DISCOVERY_CONCURRENCY || 64),
+      webTimeoutMs: Number(process.env.NUXT_SERVER_WEB_TIMEOUT_MS || 8000)
+    },
+
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',

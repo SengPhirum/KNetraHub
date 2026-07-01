@@ -1,13 +1,15 @@
 import { getDb } from '../../../utils/db'
 
-export default defineEventHandler(async (event) => {
+// Problems/events with host + severity. Open problems first, then recent
+// resolved. `name` falls back to the legacy `trigger` text column.
+export default defineEventHandler(async () => {
   const db = getDb()
-  // Join with server_hosts to get the host name
-  const result = await db.query(`
-    SELECT p.*, h.name as host 
+  const { rows } = await db.query(`
+    SELECT p.*, COALESCE(p.name, p.trigger) AS name, h.name AS host
     FROM server_problems p
     LEFT JOIN server_hosts h ON p.host_id = h.id
-    ORDER BY p.fired_at DESC
+    ORDER BY (p.status = 'problem') DESC, p.severity_num DESC, p.fired_at DESC
+    LIMIT 500
   `)
-  return result.rows
+  return rows
 })

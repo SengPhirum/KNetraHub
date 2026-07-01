@@ -22,31 +22,13 @@ export default defineNitroPlugin(async (nitroApp) => {
       // - no simulated devices/interfaces/sensors/flows/syslog are seeded. Default
       // probe and alert rules are seeded by the idempotent blocks further below.
 
-      // Check if server hosts exist
-      const srvRes = await db.query('SELECT count(*) as cnt FROM server_hosts')
-      if (Number(srvRes.rows[0].cnt) === 0) {
-        console.log('[seed] Seeding MVP Server data...')
-        
-        const h1 = nanoid()
-        const h2 = nanoid()
-        const h3 = nanoid()
-        const h4 = nanoid()
-        
-        await db.query(`INSERT INTO server_hosts (id, name, ip, os, status, cpu, memory, uptime, agent) VALUES
-          ($1, 'web-front-01', '10.0.1.10', 'Ubuntu 22.04', 'Available', '45%', '62%', '124 days', 'Zabbix agent 6.4'),
-          ($2, 'web-front-02', '10.0.1.11', 'Ubuntu 22.04', 'Available', '50%', '65%', '124 days', 'Zabbix agent 6.4'),
-          ($3, 'db-prod-01', '10.0.2.10', 'RHEL 9', 'Available', '15%', '90%', '124 days', 'Zabbix agent 6.4'),
-          ($4, 'win-util-01', '10.0.3.5', 'Windows Server 2022', 'Offline', '-', '-', '0 days', 'Zabbix agent 6.4')`,
-          [h1, h2, h3, h4]
-        )
-        
-        await db.query(`INSERT INTO server_problems (id, host_id, trigger, severity, fired_at, duration, ack) VALUES
-          ($1, $2, 'Free disk space is less than 10% on volume /var/lib/postgresql', 'High', $5, '15m', false),
-          ($3, $4, 'CPU load is too high (over 90% for 5m)', 'Average', $5, '1h', true)`,
-          [nanoid(), h3, nanoid(), h2, new Date().toISOString()]
-        )
-      }
-      
+      // The Server module (Zabbix clone) is populated from REAL hosts added via
+      // Server > Hosts or Discovery and kept live by server/plugins/serverPoller.ts
+      // (ICMP + SNMP). No fake hosts/problems/metrics are seeded. We only seed a
+      // couple of example host groups and a default "Linux by SNMP" template
+      // (items + triggers) so a freshly-added host can be provisioned in one click.
+      await seedServerConfig(db)
+
       // Check if IPAM subnets exist
       const ipamRes = await db.query('SELECT count(*) as cnt FROM ipmgt_subnets')
       if (Number(ipamRes.rows[0].cnt) === 0) {
@@ -100,3 +82,62 @@ export default defineNitroPlugin(async (nitroApp) => {
     }
   }, 3000) // Wait 3 seconds to let db initialize
 })
+
+/**
+ * Seed the Server (Zabbix) module's *configuration* only — example host groups
+ * and a default "Linux by SNMP" template with real item OIDs + threshold
+ * triggers. Idempotent (own count checks). No hosts or metric values are
+ * fabricated; those come from the real poller.
+ */
+async function seedServerConfig(db: ReturnType<typeof getDb>) {
+  const now = new Date().toISOString()
+
+  const grpRes = await db.query('SELECT count(*) as cnt FROM server_host_groups')
+  if (Number(grpRes.rows[0].cnt) === 0) {
+    await db.query(
+      `INSERT INTO server_host_groups (id, name, description, created_at) VALUES
+        ($1, 'Linux servers', 'Linux hosts monitored by SNMP', $4),
+        ($2, 'Windows servers', 'Windows hosts monitored by SNMP', $4),
+        ($3, 'Network infrastructure', 'Switches, routers and appliances', $4)`,
+      [nanoid(), nanoid(), nanoid(), now]
+    )
+  }
+
+  const tplRes = await db.query('SELECT count(*) as cnt FROM server_templates')
+  if (Number(tplRes.rows[0].cnt) === 0) {
+    const tplId = nanoid()
+    await db.query(
+      `INSERT INTO server_templates (id, name, description, created_at) VALUES ($1, $2, $3, $4)`,
+      [tplId, 'Linux by SNMP', 'CPU / memory / disk / uptime via SNMP, with default thresholds', now]
+    )
+    // Items: key_ drives collection in serverMonitor.ts (snmp_oid is informational).
+    const items: [string, string, string, string, number][] = [
+      // name, key_, units, snmp_oid (reference), update_interval
+      ['CPU utilization',    'system.cpu.util',  '%',     '1.3.6.1.2.1.25.3.3.1.2', 60],
+      ['Memory utilization', 'vm.memory.util',   '%',     '1.3.6.1.4.1.2021.4',      60],
+      ['Root FS utilization','vfs.fs.size[/]',   '%',     '1.3.6.1.2.1.25.2.3.1',    60],
+      ['System uptime',      'system.uptime',    'uptime','1.3.6.1.2.1.1.3.0',       60],
+      ['CPU load (1m)',      'system.cpu.load',  '',      '1.3.6.1.4.1.2021.10.1.5.1', 60]
+    ]
+    for (const [name, key_, units, oid, interval] of items) {
+      await db.query(
+        `INSERT INTO server_template_items (id, template_id, name, key_, type, value_type, units, snmp_oid, update_interval)
+         VALUES ($1, $2, $3, $4, 'snmp', 'numeric', $5, $6, $7)`,
+        [nanoid(), tplId, name, key_, units, oid, interval]
+      )
+    }
+    // Triggers: item_key, name, operator, threshold, for_seconds, severity(0-5).
+    const triggers: [string, string, string, number, number, number][] = [
+      ['system.cpu.util', 'High CPU utilization (>90% for 5m)',    '>', 90, 300, 3],
+      ['vm.memory.util',  'High memory utilization (>90% for 5m)', '>', 90, 300, 3],
+      ['vfs.fs.size[/]',  'Low free disk space on / (>90%)',       '>', 90, 0,   4]
+    ]
+    for (const [itemKey, name, op, threshold, forSec, sev] of triggers) {
+      await db.query(
+        `INSERT INTO server_template_triggers (id, template_id, name, item_key, operator, threshold, for_seconds, severity)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [nanoid(), tplId, name, itemKey, op, threshold, forSec, sev]
+      )
+    }
+  }
+}

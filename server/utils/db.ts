@@ -412,6 +412,223 @@ async function runMigrations(): Promise<void> {
       ack BOOLEAN DEFAULT false
     );
 
+    -- ── Server Module: full Zabbix clone (real ICMP+SNMP monitoring) ──────────
+    -- Host = monitored machine (Zabbix host). Extend the MVP table with polling
+    -- config (ICMP/SNMP incl. v3 creds mirroring net_devices), availability, and
+    -- SNMP system info. The cpu/memory string columns are retired (items now hold
+    -- real metric values) but left in place for backward compatibility.
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS poll_method TEXT NOT NULL DEFAULT 'icmp';
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_version TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_community TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_sec_level TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_auth_user TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_auth_protocol TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_auth_password TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_priv_protocol TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS snmp_priv_password TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS availability TEXT NOT NULL DEFAULT 'unknown';
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS monitoring_enabled BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS last_polled TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS last_rtt_ms DOUBLE PRECISION;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS sys_name TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS sys_descr TEXT;
+    ALTER TABLE server_hosts ADD COLUMN IF NOT EXISTS created_at TEXT;
+
+    -- Problems become event-like: a numeric Zabbix severity (0-5), open/resolved
+    -- lifecycle, acknowledgement, an operator comment, and maintenance suppression.
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS trigger_id TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS name TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS severity_num INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'problem';
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS r_clock TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS ack_by TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS ack_at TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS comment TEXT;
+    ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT false;
+
+    -- Host groups (logical org, like Zabbix host groups) + membership.
+    CREATE TABLE IF NOT EXISTS server_host_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS server_host_group_members (
+      host_id TEXT NOT NULL REFERENCES server_hosts(id) ON DELETE CASCADE,
+      group_id TEXT NOT NULL REFERENCES server_host_groups(id) ON DELETE CASCADE,
+      PRIMARY KEY (host_id, group_id)
+    );
+
+    -- Host interfaces (Zabbix: agent/snmp/ipmi/jmx endpoints on a host).
+    CREATE TABLE IF NOT EXISTS server_host_interfaces (
+      id TEXT PRIMARY KEY,
+      host_id TEXT NOT NULL REFERENCES server_hosts(id) ON DELETE CASCADE,
+      type TEXT NOT NULL DEFAULT 'agent',
+      ip TEXT,
+      dns TEXT,
+      port INTEGER,
+      main BOOLEAN NOT NULL DEFAULT true
+    );
+    CREATE INDEX IF NOT EXISTS idx_server_host_interfaces_host ON server_host_interfaces (host_id);
+
+    -- Templates: reusable item + trigger bundles linked to hosts.
+    CREATE TABLE IF NOT EXISTS server_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS server_template_items (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES server_templates(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      key_ TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'snmp',
+      value_type TEXT NOT NULL DEFAULT 'numeric',
+      units TEXT,
+      snmp_oid TEXT,
+      update_interval INTEGER NOT NULL DEFAULT 60
+    );
+    CREATE TABLE IF NOT EXISTS server_template_triggers (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES server_templates(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      item_key TEXT NOT NULL,
+      operator TEXT NOT NULL DEFAULT '>',
+      threshold DOUBLE PRECISION,
+      for_seconds INTEGER NOT NULL DEFAULT 0,
+      severity INTEGER NOT NULL DEFAULT 2
+    );
+    CREATE TABLE IF NOT EXISTS server_host_templates (
+      host_id TEXT NOT NULL REFERENCES server_hosts(id) ON DELETE CASCADE,
+      template_id TEXT NOT NULL REFERENCES server_templates(id) ON DELETE CASCADE,
+      PRIMARY KEY (host_id, template_id)
+    );
+
+    -- Items: the metric-collection units (Zabbix item). last_value/last_clock hold
+    -- the newest sample; full history lives in the server_item_history hypertable.
+    CREATE TABLE IF NOT EXISTS server_items (
+      id TEXT PRIMARY KEY,
+      host_id TEXT NOT NULL REFERENCES server_hosts(id) ON DELETE CASCADE,
+      template_id TEXT,
+      name TEXT NOT NULL,
+      key_ TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'snmp',
+      value_type TEXT NOT NULL DEFAULT 'numeric',
+      units TEXT,
+      snmp_oid TEXT,
+      update_interval INTEGER NOT NULL DEFAULT 60,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      last_value DOUBLE PRECISION,
+      last_text TEXT,
+      last_clock TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_server_items_host ON server_items (host_id);
+
+    -- Triggers: a threshold condition on an item that opens a problem (Zabbix
+    -- trigger). last_state tracks ok/problem; since = when the breach began (for
+    -- the sustained "for" window).
+    CREATE TABLE IF NOT EXISTS server_triggers (
+      id TEXT PRIMARY KEY,
+      host_id TEXT NOT NULL REFERENCES server_hosts(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES server_items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      operator TEXT NOT NULL DEFAULT '>',
+      threshold DOUBLE PRECISION,
+      for_seconds INTEGER NOT NULL DEFAULT 0,
+      severity INTEGER NOT NULL DEFAULT 2,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      last_state TEXT NOT NULL DEFAULT 'ok',
+      since TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_server_triggers_host ON server_triggers (host_id);
+
+    -- Maintenance windows: during an active window, matching hosts' new problems
+    -- are suppressed. host_ids/group_ids are JSON arrays.
+    CREATE TABLE IF NOT EXISTS server_maintenance (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      active_since TEXT NOT NULL,
+      active_till TEXT NOT NULL,
+      host_ids TEXT NOT NULL DEFAULT '[]',
+      group_ids TEXT NOT NULL DEFAULT '[]',
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Actions: notify via an alert channel when a problem >= min_severity opens.
+    CREATE TABLE IF NOT EXISTS server_actions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      min_severity INTEGER NOT NULL DEFAULT 2,
+      channel_id TEXT,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      created_at TEXT NOT NULL
+    );
+
+    -- Services: a tree for SLA rollup (leaf services map to a trigger).
+    CREATE TABLE IF NOT EXISTS server_services (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      algorithm TEXT NOT NULL DEFAULT 'worst',
+      sla_target DOUBLE PRECISION DEFAULT 99.9,
+      trigger_id TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    -- Network maps: a JSON canvas of host nodes + links (like the net maps).
+    CREATE TABLE IF NOT EXISTS server_maps (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      config TEXT NOT NULL DEFAULT '{"nodes":[],"links":[]}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Discovery: scan a CIDR (ICMP/SNMP) to auto-create hosts.
+    CREATE TABLE IF NOT EXISTS server_discovery_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      cidr TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'icmp',
+      snmp_community TEXT,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS server_discovery_jobs (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT,
+      cidr TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'icmp',
+      status TEXT NOT NULL DEFAULT 'completed',
+      scanned INTEGER DEFAULT 0,
+      found INTEGER DEFAULT 0,
+      added INTEGER DEFAULT 0,
+      started_at TEXT NOT NULL,
+      finished_at TEXT
+    );
+
+    -- Web monitoring: an HTTP scenario polled for status + latency.
+    CREATE TABLE IF NOT EXISTS server_web_scenarios (
+      id TEXT PRIMARY KEY,
+      host_id TEXT REFERENCES server_hosts(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      expected_status INTEGER NOT NULL DEFAULT 200,
+      interval INTEGER NOT NULL DEFAULT 60,
+      status TEXT NOT NULL DEFAULT 'enabled',
+      last_status TEXT,
+      last_code INTEGER,
+      last_ms DOUBLE PRECISION,
+      last_check TEXT,
+      created_at TEXT NOT NULL
+    );
+
     -- IPAM Module (phpIPAM MVP)
     CREATE TABLE IF NOT EXISTS ipmgt_subnets (
       id TEXT PRIMARY KEY,

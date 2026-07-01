@@ -100,9 +100,24 @@ const MONITORING_GROUPS: NavGroup[] = [
   {
     label: 'Server',
     items: [
-      { label: 'Dashboard', to: '/monitoring/server',          icon: 'i-lucide-server-cog',     permission: 'monitoring.view' },
-      { label: 'Hosts',     to: '/monitoring/server/hosts',    icon: 'i-lucide-server',         permission: 'monitoring.view' },
-      { label: 'Problems',  to: '/monitoring/server/problems', icon: 'i-lucide-triangle-alert', permission: 'monitoring.view' }
+      { label: 'Dashboard',   to: '/monitoring/server',            icon: 'i-lucide-server-cog',     permission: 'monitoring.view' },
+      { label: 'Hosts',       to: '/monitoring/server/hosts',      icon: 'i-lucide-server',         permission: 'monitoring.view' },
+      { label: 'Latest data', to: '/monitoring/server/latestdata', icon: 'i-lucide-list',           permission: 'monitoring.view' },
+      { label: 'Problems',    to: '/monitoring/server/problems',   icon: 'i-lucide-triangle-alert', permission: 'monitoring.view' },
+      { label: 'Maps',        to: '/monitoring/server/maps',       icon: 'i-lucide-map',            permission: 'monitoring.view' },
+      { label: 'Services',    to: '/monitoring/server/services',   icon: 'i-lucide-gauge-circle',   permission: 'monitoring.view' }
+    ]
+  },
+  {
+    label: 'Server Configuration',
+    items: [
+      { label: 'Host groups', to: '/monitoring/server/groups',      icon: 'i-lucide-folder-tree',  permission: 'monitoring.view' },
+      { label: 'Templates',   to: '/monitoring/server/templates',   icon: 'i-lucide-layout-template', permission: 'monitoring.view' },
+      { label: 'Triggers',    to: '/monitoring/server/triggers',    icon: 'i-lucide-zap',          permission: 'monitoring.view' },
+      { label: 'Discovery',   to: '/monitoring/server/discovery',   icon: 'i-lucide-scan-line',    permission: 'monitoring.view' },
+      { label: 'Web',         to: '/monitoring/server/web',         icon: 'i-lucide-globe',        permission: 'monitoring.view' },
+      { label: 'Maintenance', to: '/monitoring/server/maintenance', icon: 'i-lucide-wrench',       permission: 'monitoring.view' },
+      { label: 'Actions',     to: '/monitoring/server/actions',     icon: 'i-lucide-bell-ring',    permission: 'monitoring.view' }
     ]
   },
   {

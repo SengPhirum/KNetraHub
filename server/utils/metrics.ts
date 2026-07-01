@@ -169,9 +169,38 @@ async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<vo
   await db.query(`SELECT create_hypertable('net_metrics', 'time', if_not_exists => TRUE);`)
   await db.query(`CREATE INDEX IF NOT EXISTS idx_net_metrics_device_time ON net_metrics (device_id, time DESC);`)
 
+  await db.query(`
+    -- net_sensor_readings: per-sensor, per-channel historical value (PRTG's
+    -- "channel" = one line on a sensor graph, e.g. a traffic sensor's In/Out).
+    -- One row per channel per poll cycle (see server/plugins/netPoller.ts).
+    -- Powers the sensor graphs via /api/net/sensors/[id]/metrics.
+    CREATE TABLE IF NOT EXISTS net_sensor_readings (
+      time TIMESTAMPTZ NOT NULL,
+      sensor_id TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      value DOUBLE PRECISION
+    );
+  `)
+  await db.query(`SELECT create_hypertable('net_sensor_readings', 'time', if_not_exists => TRUE);`)
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_net_sensor_readings_sensor_time ON net_sensor_readings (sensor_id, time DESC);`)
+
+  await db.query(`
+    -- server_item_history: per-item Server-module (Zabbix) sample. One row per
+    -- item per poll cycle (see server/plugins/serverPoller.ts). value_num powers
+    -- the item history graphs via /api/server/items/[id]/history.
+    CREATE TABLE IF NOT EXISTS server_item_history (
+      time TIMESTAMPTZ NOT NULL,
+      item_id TEXT NOT NULL,
+      value_num DOUBLE PRECISION,
+      value_str TEXT
+    );
+  `)
+  await db.query(`SELECT create_hypertable('server_item_history', 'time', if_not_exists => TRUE);`)
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_server_item_history_item_time ON server_item_history (item_id, time DESC);`)
+
   // Retention: $1 = NUXT_METRICS_RETENTION_DAYS (default 30). INTERVAL literals
   // can't be parameterized directly, so multiply a 1-day interval by an int param.
-  for (const table of ['node_metrics', 'container_metrics', 'disk_usage', 'network_usage', 'node_heartbeat', 'service_status_events', 'net_metrics']) {
+  for (const table of ['node_metrics', 'container_metrics', 'disk_usage', 'network_usage', 'node_heartbeat', 'service_status_events', 'net_metrics', 'net_sensor_readings', 'server_item_history']) {
     await db.query(
       `SELECT add_retention_policy('${table}', INTERVAL '1 day' * $1::int, if_not_exists => TRUE);`,
       [retentionDays]
@@ -249,6 +278,49 @@ export async function recordNetSample(deviceId: string, rttMs: number | null, up
     )
   } catch (err) {
     console.error('[metrics] failed to record net sample', err)
+  }
+}
+
+/** Best-effort: never throws. Records one Network-module sensor sample per
+ * channel (PRTG "channel" = one graph line, e.g. a traffic sensor's In/Out) for
+ * the sensor graphs. Like recordNetSample it calls migrateMetrics() defensively
+ * (memoized) so an early poll can't race the hypertable creation. Channels with
+ * a null value are skipped. */
+export async function recordSensorReadings(
+  sensorId: string,
+  channels: { channel: string; value: number | null }[]
+): Promise<void> {
+  const rows = channels.filter((c) => c.value != null)
+  if (!rows.length) return
+  try {
+    const db = getDb()
+    await migrateMetrics(db, useRuntimeConfig().metrics.retentionDays)
+    const now = new Date()
+    for (const c of rows) {
+      await db.query(
+        `INSERT INTO net_sensor_readings (time, sensor_id, channel, value) VALUES ($1, $2, $3, $4)`,
+        [now, sensorId, c.channel, c.value]
+      )
+    }
+  } catch (err) {
+    console.error('[metrics] failed to record sensor readings', err)
+  }
+}
+
+/** Best-effort: never throws. Records one Server-module item sample for the
+ * Zabbix item history graphs. Like recordNetSample it calls migrateMetrics()
+ * defensively (memoized). Pass value_num for numeric items (value_str optional). */
+export async function recordServerItemSample(itemId: string, valueNum: number | null, valueStr: string | null = null): Promise<void> {
+  if (valueNum == null && valueStr == null) return
+  try {
+    const db = getDb()
+    await migrateMetrics(db, useRuntimeConfig().metrics.retentionDays)
+    await db.query(
+      `INSERT INTO server_item_history (time, item_id, value_num, value_str) VALUES ($1, $2, $3, $4)`,
+      [new Date(), itemId, valueNum, valueStr]
+    )
+  } catch (err) {
+    console.error('[metrics] failed to record server item sample', err)
   }
 }
 

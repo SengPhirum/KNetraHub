@@ -399,12 +399,12 @@ const netGuides = [
     id: 'net-sensors',
     title: 'Sensors',
     icon: 'i-lucide-gauge',
-    summary: 'Review every monitored measurement fleet-wide; state is derived from each sensor\'s high/low limits.',
+    summary: 'Review every monitored measurement fleet-wide; state (Up / Warning / Down / Paused) is derived from each sensor\'s high/low limits. Open a sensor for its historical graph.',
     steps: [
-      'Use the OK / Warning / Down summary to gauge overall health.',
-      'Filter by sensor type (temperature, fan, voltage, power…) to focus.',
+      'Use the Up / Warning / Down / Paused summary to gauge overall health.',
+      'Filter by sensor type (ping, traffic, temperature, fan…) to focus.',
       'Watch the load bar to see how close a reading is to its limit.',
-      'Click through to the owning device when a sensor goes Warning/Down.'
+      'Click a sensor to open its detail page: a history graph over 1h–7d with its limit thresholds, plus channels (e.g. a traffic sensor\'s In/Out), coverage, and last-scan interval.'
     ],
     shot: {
       label: 'Sensors', status: 'Monitored',
@@ -522,12 +522,12 @@ const serverGuides = [
     id: 'server-overview',
     title: 'Server Overview',
     icon: 'i-lucide-radar',
-    summary: 'Monitor host availability and resource pressure across the server estate.',
+    summary: 'A real Zabbix-style monitor: hosts are polled over ICMP + SNMP for availability and CPU/memory/disk/uptime, triggers raise 6-severity problems, and templates provision items in one click. The dashboard shows availability and problems-by-severity.',
     steps: [
-      'Check how many hosts are Available vs. Offline.',
-      'Watch CPU and memory pressure for capacity risk.',
-      'Jump to Problems when a host shows a trigger.',
-      'Open a host for its detailed metrics.'
+      'Check Available vs. Unavailable hosts and the open-problem count.',
+      'Read the problems-by-severity breakdown (Not classified → Disaster).',
+      'Jump to Problems to acknowledge or close, or into a host for its graphs.',
+      'Add hosts via Hosts or Discovery; link the "Linux by SNMP" template to collect data.'
     ],
     shot: {
       label: 'Server overview', status: 'Live',
@@ -539,12 +539,12 @@ const serverGuides = [
     id: 'server-hosts',
     title: 'Hosts',
     icon: 'i-lucide-server',
-    summary: 'Inventory hosts with OS, agent, CPU/memory, and uptime, and open a host for detail.',
+    summary: 'Create hosts with an ICMP or SNMP interface, put them in host groups, and link templates to auto-provision items + triggers. Availability, items and problem counts come from the real poller. Configuration areas: Host groups, Templates, Triggers, Discovery, Web, Maintenance, Actions.',
     steps: [
-      'Confirm the monitoring agent is reporting for each host.',
-      'Compare CPU/memory across hosts to find hot spots.',
-      'Open a host to see its metrics and recent problems.',
-      'Use uptime to spot recent reboots.'
+      'Create a host (Poll method = SNMP for CPU/memory/disk) or run Discovery to sweep a CIDR.',
+      'Link the "Linux by SNMP" template — its items + triggers appear on the host.',
+      'Open a host for Latest data and per-item history graphs.',
+      'Pause a host to stop polling; a Maintenance window suppresses its problems.'
     ],
     shot: {
       label: 'Hosts', status: 'Agents',

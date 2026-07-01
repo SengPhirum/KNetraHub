@@ -11,11 +11,12 @@ Date: 2026-07-01 UTC
 
 ## Source
 
-- Commit: `3d8875c`
+- Commit: `29ed5f7`
 - Previous tag: none
 
 ## Changes
 
+- feat: merge Network and Server modules into a unified Monitoring module with new routes and components feat: implement network settings page with device templates, categories, and poller summary feat: add syslog page for real-time device event logs feat: create host metrics page for server monitoring with detailed information feat: develop server dashboard with active problems and recent alerts overview feat: enhance permissions and roles for the new Monitoring module chore: update app routes to reflect the new Monitoring structure and remove legacy paths chore: refactor module registry to include Monitoring and remove old Network and Server entries fix: ensure proper access control for Monitoring features based on user permissions (29ed5f7)
 - feat: Network module enhancements + Docker registry image browser (3d8875c)
 - feat: add SNMP v3 support with credential management in device forms feat: implement network dashboards with CRUD operations and metrics tracking feat: enhance metrics collection for network devices with latency and availability data chore: update release notes for v0.1.1 with recent changes and commits fix: ensure app settings are accessible post-deployment without migration errors (8d20205)
 - chore: remove unused knetrahub-net-api service (19c36a4)
@@ -61,36 +62,55 @@ Date: 2026-07-01 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M app/components/SidebarNav.vue
- M app/components/net/widgets/AlertsListWidget.vue
- M app/components/net/widgets/DeviceAvailabilityWidget.vue
+ M RELEASE_NOTES.md
  M app/composables/useNav.ts
  M app/pages/documentation.vue
-RM app/pages/net/ai.vue -> app/pages/monitoring/network/ai.vue
-RM app/pages/net/alerts.vue -> app/pages/monitoring/network/alerts.vue
-RM app/pages/net/devices/[id].vue -> app/pages/monitoring/network/devices/[id].vue
-RM app/pages/net/devices/index.vue -> app/pages/monitoring/network/devices/index.vue
-RM app/pages/net/discovery.vue -> app/pages/monitoring/network/discovery.vue
-RM app/pages/net/flows.vue -> app/pages/monitoring/network/flows.vue
-RM app/pages/net/groups.vue -> app/pages/monitoring/network/groups.vue
-RM app/pages/net/index.vue -> app/pages/monitoring/network/index.vue
-RM app/pages/net/maps.vue -> app/pages/monitoring/network/maps.vue
-RM app/pages/net/probes.vue -> app/pages/monitoring/network/probes.vue
-RM app/pages/net/reports.vue -> app/pages/monitoring/network/reports.vue
-RM app/pages/net/sensors.vue -> app/pages/monitoring/network/sensors.vue
-RM app/pages/net/settings.vue -> app/pages/monitoring/network/settings.vue
-RM app/pages/net/syslog.vue -> app/pages/monitoring/network/syslog.vue
-RM app/pages/server/hosts/[id].vue -> app/pages/monitoring/server/hosts/[id].vue
-RM app/pages/server/hosts/index.vue -> app/pages/monitoring/server/hosts/index.vue
-RM app/pages/server/index.vue -> app/pages/monitoring/server/index.vue
-RM app/pages/server/problems.vue -> app/pages/monitoring/server/problems.vue
-RM app/pages/server/settings.vue -> app/pages/monitoring/server/settings.vue
- M app/utils/appRoutes.ts
- M app/utils/moduleRegistry.ts
- M server/utils/appRoles.ts
- M shared/types/module.ts
- M shared/utils/entitlements.ts
- M shared/utils/permissions.ts
-?? app/middleware/legacy-monitoring.global.ts
-?? app/pages/monitoring/index.vue
+RM app/pages/monitoring/network/sensors.vue -> app/pages/monitoring/network/sensors/index.vue
+ M app/pages/monitoring/server/hosts/[id].vue
+ M app/pages/monitoring/server/hosts/index.vue
+ M app/pages/monitoring/server/index.vue
+ M app/pages/monitoring/server/problems.vue
+ M nuxt.config.ts
+ M release-notes/v0.1.1.md
+ M server/api/net/sensors.get.ts
+ M server/api/server/hosts/[id].get.ts
+ M server/api/server/hosts/index.get.ts
+ M server/api/server/problems/index.get.ts
+ M server/plugins/netPoller.ts
+ M server/plugins/seedSubsystems.ts
+ M server/utils/db.ts
+ M server/utils/metrics.ts
+ M server/utils/netMonitor.ts
+?? app/pages/monitoring/network/sensors/[id].vue
+?? app/pages/monitoring/server/actions.vue
+?? app/pages/monitoring/server/discovery.vue
+?? app/pages/monitoring/server/groups.vue
+?? app/pages/monitoring/server/latestdata.vue
+?? app/pages/monitoring/server/maintenance.vue
+?? app/pages/monitoring/server/maps.vue
+?? app/pages/monitoring/server/services.vue
+?? app/pages/monitoring/server/templates.vue
+?? app/pages/monitoring/server/triggers.vue
+?? app/pages/monitoring/server/web.vue
+?? app/utils/serverSeverity.ts
+?? server/api/net/sensors/
+?? server/api/server/actions/
+?? server/api/server/discovery.post.ts
+?? server/api/server/discovery/
+?? server/api/server/hostgroups/
+?? server/api/server/hosts/[id].delete.ts
+?? server/api/server/hosts/[id].put.ts
+?? server/api/server/hosts/[id]/
+?? server/api/server/hosts/index.post.ts
+?? server/api/server/items/
+?? server/api/server/maintenance/
+?? server/api/server/maps/
+?? server/api/server/problems/[id]/
+?? server/api/server/services/
+?? server/api/server/templates/
+?? server/api/server/triggers/
+?? server/api/server/web/
+?? server/plugins/serverPoller.ts
+?? server/utils/serverMonitor.ts
+?? server/utils/serverProvision.ts
 ```
