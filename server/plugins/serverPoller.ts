@@ -58,30 +58,49 @@ async function pollAll(cfg: ServerConfig) {
   await pollWebScenarios(cfg).catch((e) => console.error('[serverPoller] web checks failed:', e?.message || e))
 }
 
-// HTTP GET each enabled web scenario; record status/code/latency.
+// Run each enabled web scenario's ordered steps (Zabbix multi-step web check).
+// The scenario is up only if every step passes its expected status + optional
+// required string; aggregate latency is the sum of step times.
 async function pollWebScenarios(cfg: ServerConfig) {
   const db = getDb()
   const { rows } = await db.query(`SELECT * FROM server_web_scenarios WHERE status = 'enabled'`)
   if (!rows.length) return
   const timeout = Number((cfg as any).webTimeoutMs) || 8000
   await mapLimit(rows, 8, async (w: any) => {
-    const started = Date.now()
-    let code: number | null = null
-    let up = false
-    try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), timeout)
-      const res = await fetch(w.url, { method: 'GET', signal: ctrl.signal, redirect: 'follow' })
-      clearTimeout(t)
-      code = res.status
-      up = res.status === (w.expected_status || 200)
-    } catch { up = false }
-    const ms = Date.now() - started
-    await db.query(
-      'UPDATE server_web_scenarios SET last_status = $1, last_code = $2, last_ms = $3, last_check = $4 WHERE id = $5',
-      [up ? 'up' : 'down', code, ms, new Date().toISOString(), w.id]
-    )
+    const now = new Date().toISOString()
+    let steps = (await db.query('SELECT * FROM server_web_steps WHERE scenario_id = $1 ORDER BY step_no ASC', [w.id])).rows
+    if (!steps.length) steps = [{ id: null, url: w.url, expected_status: w.expected_status, required_string: null }]
+
+    let allUp = true, totalMs = 0, lastCode: number | null = null
+    for (const s of steps) {
+      const r = await runStep(s.url, s.expected_status || 200, s.required_string, timeout)
+      allUp = allUp && r.up
+      totalMs += r.ms
+      lastCode = r.code
+      if (s.id) {
+        await db.query('UPDATE server_web_steps SET last_status = $1, last_code = $2, last_ms = $3, last_check = $4 WHERE id = $5',
+          [r.up ? 'up' : 'down', r.code, r.ms, now, s.id])
+      }
+      if (!r.up) break // stop at the first failing step, like Zabbix
+    }
+    await db.query('UPDATE server_web_scenarios SET last_status = $1, last_code = $2, last_ms = $3, last_check = $4 WHERE id = $5',
+      [allUp ? 'up' : 'down', lastCode, totalMs, now, w.id])
   })
+}
+
+async function runStep(url: string, expected: number, requiredString: string | null, timeout: number): Promise<{ up: boolean; code: number | null; ms: number }> {
+  const started = Date.now()
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeout)
+    const res = await fetch(url, { method: 'GET', signal: ctrl.signal, redirect: 'follow' })
+    let up = res.status === expected
+    if (up && requiredString) { const body = await res.text().catch(() => ''); up = body.includes(requiredString) }
+    clearTimeout(t)
+    return { up, code: res.status, ms: Date.now() - started }
+  } catch {
+    return { up: false, code: null, ms: Date.now() - started }
+  }
 }
 
 async function pollHost(host: any, cfg: ServerConfig) {

@@ -11,11 +11,12 @@ Date: 2026-07-01 UTC
 
 ## Source
 
-- Commit: `29ed5f7`
+- Commit: `a665ae4`
 - Previous tag: none
 
 ## Changes
 
+- feat: rebuild Monitoring app (Network+Server merge, sensor graphs, Zabbix server clone) (a665ae4)
 - feat: merge Network and Server modules into a unified Monitoring module with new routes and components feat: implement network settings page with device templates, categories, and poller summary feat: add syslog page for real-time device event logs feat: create host metrics page for server monitoring with detailed information feat: develop server dashboard with active problems and recent alerts overview feat: enhance permissions and roles for the new Monitoring module chore: update app routes to reflect the new Monitoring structure and remove legacy paths chore: refactor module registry to include Monitoring and remove old Network and Server entries fix: ensure proper access control for Monitoring features based on user permissions (29ed5f7)
 - feat: Network module enhancements + Docker registry image browser (3d8875c)
 - feat: add SNMP v3 support with credential management in device forms feat: implement network dashboards with CRUD operations and metrics tracking feat: enhance metrics collection for network devices with latency and availability data chore: update release notes for v0.1.1 with recent changes and commits fix: ensure app settings are accessible post-deployment without migration errors (8d20205)
@@ -64,53 +65,22 @@ The working tree had uncommitted changes before this release script ran.
 ```text
  M RELEASE_NOTES.md
  M app/composables/useNav.ts
- M app/pages/documentation.vue
-RM app/pages/monitoring/network/sensors.vue -> app/pages/monitoring/network/sensors/index.vue
- M app/pages/monitoring/server/hosts/[id].vue
- M app/pages/monitoring/server/hosts/index.vue
  M app/pages/monitoring/server/index.vue
- M app/pages/monitoring/server/problems.vue
- M nuxt.config.ts
+ M app/pages/monitoring/server/maps.vue
+ M app/pages/monitoring/server/services.vue
+RM app/pages/monitoring/server/web.vue -> app/pages/monitoring/server/web/index.vue
  M release-notes/v0.1.1.md
- M server/api/net/sensors.get.ts
- M server/api/server/hosts/[id].get.ts
- M server/api/server/hosts/index.get.ts
- M server/api/server/problems/index.get.ts
- M server/plugins/netPoller.ts
- M server/plugins/seedSubsystems.ts
+ M server/api/server/services/index.get.ts
+ M server/api/server/web/index.post.ts
+ M server/plugins/serverPoller.ts
  M server/utils/db.ts
- M server/utils/metrics.ts
- M server/utils/netMonitor.ts
-?? app/pages/monitoring/network/sensors/[id].vue
-?? app/pages/monitoring/server/actions.vue
-?? app/pages/monitoring/server/discovery.vue
-?? app/pages/monitoring/server/groups.vue
-?? app/pages/monitoring/server/latestdata.vue
-?? app/pages/monitoring/server/maintenance.vue
-?? app/pages/monitoring/server/maps.vue
-?? app/pages/monitoring/server/services.vue
-?? app/pages/monitoring/server/templates.vue
-?? app/pages/monitoring/server/triggers.vue
-?? app/pages/monitoring/server/web.vue
-?? app/utils/serverSeverity.ts
-?? server/api/net/sensors/
-?? server/api/server/actions/
-?? server/api/server/discovery.post.ts
-?? server/api/server/discovery/
-?? server/api/server/hostgroups/
-?? server/api/server/hosts/[id].delete.ts
-?? server/api/server/hosts/[id].put.ts
-?? server/api/server/hosts/[id]/
-?? server/api/server/hosts/index.post.ts
-?? server/api/server/items/
-?? server/api/server/maintenance/
-?? server/api/server/maps/
-?? server/api/server/problems/[id]/
-?? server/api/server/services/
-?? server/api/server/templates/
-?? server/api/server/triggers/
-?? server/api/server/web/
-?? server/plugins/serverPoller.ts
-?? server/utils/serverMonitor.ts
-?? server/utils/serverProvision.ts
+?? app/pages/monitoring/problems.vue
+?? app/pages/monitoring/server/web/[id].vue
+?? server/api/server/maps/[id].delete.ts
+?? server/api/server/maps/[id].get.ts
+?? server/api/server/maps/[id].put.ts
+?? server/api/server/maps/index.post.ts
+?? server/api/server/web/[id].get.ts
+?? server/api/server/web/[id]/
+?? server/api/server/web/steps/
 ```

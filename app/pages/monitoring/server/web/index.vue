@@ -51,7 +51,7 @@ async function del(w: any) { if (!confirm(`Delete "${w.name}"?`)) return; await 
             <tr v-else-if="!scenarios.length"><td colspan="7" class="px-4 py-8 text-center text-faint">No web scenarios.</td></tr>
             <tr v-for="w in scenarios" :key="w.id" class="hover:bg-surface-2/50 transition">
               <td class="px-4 py-3"><UBadge :color="w.last_status === 'up' ? 'success' : w.last_status === 'down' ? 'error' : 'neutral'" variant="subtle" size="xs">{{ w.last_status || 'pending' }}</UBadge></td>
-              <td class="px-4 py-3 font-medium text-foam">{{ w.name }}</td>
+              <td class="px-4 py-3"><NuxtLink :to="`/monitoring/server/web/${w.id}`" class="font-medium text-foam hover:text-beacon transition">{{ w.name }}</NuxtLink></td>
               <td class="px-4 py-3 font-mono text-xs truncate max-w-xs" :title="w.url">{{ w.url }}</td>
               <td class="px-4 py-3">{{ w.last_code ?? '—' }}</td>
               <td class="px-4 py-3">{{ w.last_ms != null ? Math.round(w.last_ms) + ' ms' : '—' }}</td>

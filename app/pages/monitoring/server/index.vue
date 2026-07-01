@@ -77,7 +77,7 @@ function duration(p: any) {
         <section class="panel p-5">
           <div class="flex items-center justify-between mb-4">
             <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Top problems</h2>
-            <NuxtLink to="/monitoring/server/problems" class="text-xs text-beacon hover:underline">View all →</NuxtLink>
+            <NuxtLink to="/monitoring/problems" class="text-xs text-beacon hover:underline">View all →</NuxtLink>
           </div>
           <div class="space-y-2">
             <div v-for="p in topProblems" :key="p.id" class="flex items-center gap-3 p-2 rounded-lg bg-surface-2 border border-surface">

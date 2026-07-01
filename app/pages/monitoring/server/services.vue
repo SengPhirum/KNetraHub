@@ -5,9 +5,13 @@ const { hasApp, hasPermission } = useAuth()
 const toast = useToast()
 const canManage = computed(() => hasPermission('monitoring.manage'))
 
-const { data: services, status, refresh } = useAsyncData('serverServices', () => $fetch<any[]>('/api/server/services'), { default: () => [], server: false })
+const period = ref('24h')
+const periodItems = [{ value: '24h', label: '24 hours' }, { value: '7d', label: '7 days' }, { value: '30d', label: '30 days' }]
+const { data: resp, status, refresh } = useAsyncData('serverServices', () => $fetch<any>(`/api/server/services?period=${period.value}`), { watch: [period], default: () => ({ services: [] }), server: false })
 const { data: triggers } = useAsyncData('serverServiceTriggers', () => $fetch<any[]>('/api/server/triggers'), { default: () => [] })
 onMounted(() => { const t = setInterval(refresh, 20000); onUnmounted(() => clearInterval(t)) })
+
+const services = computed(() => resp.value?.services || [])
 
 // Flatten the parent/child tree into an ordered list with depth for indentation.
 const ordered = computed(() => {
@@ -42,14 +46,17 @@ async function save() {
 }
 async function del(s: any) { if (!confirm(`Delete service "${s.name}"?`)) return; await $fetch(`/api/server/services/${s.id}`, { method: 'DELETE' }); await refresh() }
 
-function slaClass(s: any) { return s.sla_24h >= s.sla_target ? 'text-green-500' : 'text-red-500' }
+function slaClass(s: any) { return s.sla >= s.sla_target ? 'text-green-500' : 'text-red-500' }
 </script>
 
 <template>
   <div>
     <PageHeader title="Services" subtitle="Business service tree with SLA rollup" icon="i-lucide-gauge-circle">
-      <template v-if="hasApp('monitoring') && canManage" #actions>
-        <UButton icon="i-lucide-plus" size="sm" @click="openCreate">Create service</UButton>
+      <template v-if="hasApp('monitoring')" #actions>
+        <div class="flex items-center gap-2">
+          <USelect v-model="period" :items="periodItems" value-key="value" label-key="label" size="sm" class="w-32" />
+          <UButton v-if="canManage" icon="i-lucide-plus" size="sm" @click="openCreate">Create service</UButton>
+        </div>
       </template>
     </PageHeader>
 
@@ -62,7 +69,7 @@ function slaClass(s: any) { return s.sla_24h >= s.sla_target ? 'text-green-500' 
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-(--color-muted)">
           <thead class="bg-surface-2 text-xs uppercase text-faint border-b border-surface">
-            <tr><th class="px-4 py-3 font-medium">Service</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium">SLA (24h)</th><th class="px-4 py-3 font-medium">Target</th><th class="px-4 py-3 font-medium text-right">Actions</th></tr>
+            <tr><th class="px-4 py-3 font-medium">Service</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium">SLA ({{ period }})</th><th class="px-4 py-3 font-medium">Target</th><th class="px-4 py-3 font-medium text-right">Actions</th></tr>
           </thead>
           <tbody class="divide-y divide-surface">
             <tr v-if="status === 'pending' && !ordered.length"><td colspan="5" class="px-4 py-8 text-center text-faint">Loading…</td></tr>
@@ -70,7 +77,7 @@ function slaClass(s: any) { return s.sla_24h >= s.sla_target ? 'text-green-500' 
             <tr v-for="s in ordered" :key="s.id" class="hover:bg-surface-2/50 transition">
               <td class="px-4 py-3 text-foam"><span :style="{ paddingLeft: (s.depth * 20) + 'px' }">{{ s.name }}</span></td>
               <td class="px-4 py-3"><UBadge :color="s.status === 'problem' ? 'error' : 'success'" variant="subtle" size="xs">{{ s.status === 'problem' ? 'Problem' : 'OK' }}</UBadge></td>
-              <td class="px-4 py-3 font-display font-semibold" :class="slaClass(s)">{{ s.sla_24h }}%</td>
+              <td class="px-4 py-3 font-display font-semibold" :class="slaClass(s)">{{ s.sla }}%</td>
               <td class="px-4 py-3 text-xs">{{ s.sla_target }}%</td>
               <td class="px-4 py-3 text-right"><UButton v-if="canManage" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete" @click="del(s)" /></td>
             </tr>

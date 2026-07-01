@@ -629,6 +629,23 @@ async function runMigrations(): Promise<void> {
       created_at TEXT NOT NULL
     );
 
+    -- Web scenario steps (Zabbix: an ordered list of HTTP requests; the scenario
+    -- is "up" only if every step passes its expected status + optional string).
+    CREATE TABLE IF NOT EXISTS server_web_steps (
+      id TEXT PRIMARY KEY,
+      scenario_id TEXT NOT NULL REFERENCES server_web_scenarios(id) ON DELETE CASCADE,
+      step_no INTEGER NOT NULL DEFAULT 1,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      expected_status INTEGER NOT NULL DEFAULT 200,
+      required_string TEXT,
+      last_status TEXT,
+      last_code INTEGER,
+      last_ms DOUBLE PRECISION,
+      last_check TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_server_web_steps_scenario ON server_web_steps (scenario_id, step_no);
+
     -- IPAM Module (phpIPAM MVP)
     CREATE TABLE IF NOT EXISTS ipmgt_subnets (
       id TEXT PRIMARY KEY,

@@ -54,74 +54,75 @@ const DOCK_GROUPS: NavGroup[] = [
   }
 ]
 
-// The Monitoring app's navigation (merged Network + Server). Shown only while
-// the user is inside the Monitoring app; items gated by the user's per-app
-// monitoring tier. Network (PRTG-style) and Server (Zabbix-style) are sections
-// within the one app; the data still lives under /api/net and /api/server.
+// The Monitoring app's navigation. Network (PRTG-style) and Server (Zabbix-style)
+// are NOT separate sections — the sidebar is one unified tree organised by
+// FUNCTION, interleaving network + server items under shared headers. Problems
+// are a single unified page (/monitoring/problems merges net alerts + server
+// problems). Data still lives under /api/net and /api/server underneath.
 const MONITORING_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { label: 'Overview', to: '/monitoring', icon: 'i-lucide-radar', permission: 'monitoring.view' }
+      { label: 'Overview', to: '/monitoring',         icon: 'i-lucide-radar',      permission: 'monitoring.view' },
+      { label: 'Network',  to: '/monitoring/network',  icon: 'i-lucide-network',    permission: 'monitoring.view' },
+      { label: 'Server',   to: '/monitoring/server',   icon: 'i-lucide-server-cog', permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Network',
+    label: 'Monitoring',
     items: [
-      { label: 'Dashboard', to: '/monitoring/network',         icon: 'i-lucide-network', permission: 'monitoring.view' },
-      { label: 'Devices',   to: '/monitoring/network/devices', icon: 'i-lucide-router',  permission: 'monitoring.view' },
-      { label: 'Sensors',   to: '/monitoring/network/sensors', icon: 'i-lucide-gauge',   permission: 'monitoring.view' },
-      { label: 'Maps',      to: '/monitoring/network/maps',    icon: 'i-lucide-map',     permission: 'monitoring.view' }
+      { label: 'Problems',    to: '/monitoring/problems',          icon: 'i-lucide-triangle-alert', permission: 'monitoring.view' },
+      { label: 'Sensors',     to: '/monitoring/network/sensors',   icon: 'i-lucide-gauge',          permission: 'monitoring.view' },
+      { label: 'Latest data', to: '/monitoring/server/latestdata', icon: 'i-lucide-list',           permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Network Traffic & Logs',
+    label: 'Assets',
     items: [
-      { label: 'Alerts',  to: '/monitoring/network/alerts', icon: 'i-lucide-bell-ring',        permission: 'monitoring.view' },
+      { label: 'Devices',           to: '/monitoring/network/devices',   icon: 'i-lucide-router',    permission: 'monitoring.view' },
+      { label: 'Hosts',             to: '/monitoring/server/hosts',      icon: 'i-lucide-server',    permission: 'monitoring.view' },
+      { label: 'Discover network',  to: '/monitoring/network/discovery', icon: 'i-lucide-scan-line', permission: 'monitoring.view' },
+      { label: 'Discover servers',  to: '/monitoring/server/discovery',  icon: 'i-lucide-scan-line', permission: 'monitoring.view' }
+    ]
+  },
+  {
+    label: 'Maps & Topology',
+    items: [
+      { label: 'Network map', to: '/monitoring/network/maps', icon: 'i-lucide-map',         permission: 'monitoring.view' },
+      { label: 'Server map',  to: '/monitoring/server/maps',  icon: 'i-lucide-map',         permission: 'monitoring.view' },
+      { label: 'Probes',      to: '/monitoring/network/probes', icon: 'i-lucide-radio-tower', permission: 'monitoring.view' }
+    ]
+  },
+  {
+    label: 'Traffic & Logs',
+    items: [
       { label: 'NetFlow', to: '/monitoring/network/flows',  icon: 'i-lucide-arrow-left-right', permission: 'monitoring.view' },
-      { label: 'Syslog',  to: '/monitoring/network/syslog', icon: 'i-lucide-scroll-text',      permission: 'monitoring.view' },
-      { label: 'Groups',  to: '/monitoring/network/groups', icon: 'i-lucide-folder-tree',      permission: 'monitoring.view' }
+      { label: 'Syslog',  to: '/monitoring/network/syslog', icon: 'i-lucide-scroll-text',      permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Network Infrastructure',
+    label: 'Insights',
     items: [
-      { label: 'Discovery', to: '/monitoring/network/discovery', icon: 'i-lucide-scan-line',   permission: 'monitoring.view' },
-      { label: 'Probes',    to: '/monitoring/network/probes',    icon: 'i-lucide-radio-tower', permission: 'monitoring.view' }
+      { label: 'Reports',     to: '/monitoring/network/reports', icon: 'i-lucide-file-text',    permission: 'monitoring.view' },
+      { label: 'AI Insights', to: '/monitoring/network/ai',      icon: 'i-lucide-sparkles',     permission: 'monitoring.view' },
+      { label: 'Services',    to: '/monitoring/server/services', icon: 'i-lucide-gauge-circle', permission: 'monitoring.view' },
+      { label: 'Web',         to: '/monitoring/server/web',      icon: 'i-lucide-globe',        permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Network Insights',
+    label: 'Configuration',
     items: [
-      { label: 'Reports',     to: '/monitoring/network/reports', icon: 'i-lucide-file-text', permission: 'monitoring.view' },
-      { label: 'AI Insights', to: '/monitoring/network/ai',      icon: 'i-lucide-sparkles',  permission: 'monitoring.view' }
+      { label: 'Device groups', to: '/monitoring/network/groups',     icon: 'i-lucide-folder-tree',     permission: 'monitoring.view' },
+      { label: 'Host groups',   to: '/monitoring/server/groups',      icon: 'i-lucide-folder-tree',     permission: 'monitoring.view' },
+      { label: 'Templates',     to: '/monitoring/server/templates',   icon: 'i-lucide-layout-template', permission: 'monitoring.view' },
+      { label: 'Triggers',      to: '/monitoring/server/triggers',    icon: 'i-lucide-zap',             permission: 'monitoring.view' },
+      { label: 'Alert rules',   to: '/monitoring/network/alerts',     icon: 'i-lucide-bell-ring',       permission: 'monitoring.view' },
+      { label: 'Maintenance',   to: '/monitoring/server/maintenance', icon: 'i-lucide-wrench',          permission: 'monitoring.view' },
+      { label: 'Actions',       to: '/monitoring/server/actions',     icon: 'i-lucide-bell-plus',       permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Server',
-    items: [
-      { label: 'Dashboard',   to: '/monitoring/server',            icon: 'i-lucide-server-cog',     permission: 'monitoring.view' },
-      { label: 'Hosts',       to: '/monitoring/server/hosts',      icon: 'i-lucide-server',         permission: 'monitoring.view' },
-      { label: 'Latest data', to: '/monitoring/server/latestdata', icon: 'i-lucide-list',           permission: 'monitoring.view' },
-      { label: 'Problems',    to: '/monitoring/server/problems',   icon: 'i-lucide-triangle-alert', permission: 'monitoring.view' },
-      { label: 'Maps',        to: '/monitoring/server/maps',       icon: 'i-lucide-map',            permission: 'monitoring.view' },
-      { label: 'Services',    to: '/monitoring/server/services',   icon: 'i-lucide-gauge-circle',   permission: 'monitoring.view' }
-    ]
-  },
-  {
-    label: 'Server Configuration',
-    items: [
-      { label: 'Host groups', to: '/monitoring/server/groups',      icon: 'i-lucide-folder-tree',  permission: 'monitoring.view' },
-      { label: 'Templates',   to: '/monitoring/server/templates',   icon: 'i-lucide-layout-template', permission: 'monitoring.view' },
-      { label: 'Triggers',    to: '/monitoring/server/triggers',    icon: 'i-lucide-zap',          permission: 'monitoring.view' },
-      { label: 'Discovery',   to: '/monitoring/server/discovery',   icon: 'i-lucide-scan-line',    permission: 'monitoring.view' },
-      { label: 'Web',         to: '/monitoring/server/web',         icon: 'i-lucide-globe',        permission: 'monitoring.view' },
-      { label: 'Maintenance', to: '/monitoring/server/maintenance', icon: 'i-lucide-wrench',       permission: 'monitoring.view' },
-      { label: 'Actions',     to: '/monitoring/server/actions',     icon: 'i-lucide-bell-ring',    permission: 'monitoring.view' }
-    ]
-  },
-  {
-    label: 'Monitoring admin',
+    label: 'Admin',
     items: [
       { label: 'Network settings', to: '/monitoring/network/settings', icon: 'i-lucide-settings', permission: 'monitoring.manage' },
       { label: 'Server settings',  to: '/monitoring/server/settings',  icon: 'i-lucide-settings', permission: 'monitoring.manage' }
