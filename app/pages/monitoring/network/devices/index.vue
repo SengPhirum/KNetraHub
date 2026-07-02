@@ -4,6 +4,8 @@ const toast = useToast()
 
 const { data: devices, status, refresh } = useAsyncData('netDevicesList', () => $fetch<any[]>('/api/net/devices'))
 const { data: templates } = useAsyncData('netDeviceTemplates', () => $fetch<any[]>('/api/net/templates'), { default: () => [] as any[] })
+const { data: groups } = useAsyncData('netGroupsForDeviceForm', () => $fetch<any[]>('/api/net/groups'), { default: () => [] as any[] })
+const groupSelectItems = computed(() => [{ value: '', label: 'No group' }, ...(groups.value || []).map((g: any) => ({ value: g.id, label: g.name }))])
 
 // --- Export / Import ---------------------------------------------------------
 // SNMP passwords are never exported (see export.get.ts) - a re-imported device
@@ -86,6 +88,8 @@ function blankDevice() {
     snmp_version: 'v2c',
     snmp_community: 'public',
     category: 'network',
+    type: 'Unknown',
+    group_id: '',
     ...defaultSnmpV3()
   }
 }
@@ -102,10 +106,12 @@ function applyTemplate(id: string) {
   selectedTemplate.value = id
   const t = (templates.value || []).find((x) => x.id === id)
   if (!t) return
-  const { hostname, ip } = newDevice.value
+  const { hostname, ip, type, group_id } = newDevice.value
   newDevice.value = {
     hostname,
     ip,
+    type,
+    group_id,
     poll_method: t.poll_method || 'snmp',
     snmp_version: t.snmp_version || 'v2c',
     snmp_community: t.snmp_community || 'public',
@@ -273,6 +279,12 @@ async function confirmDelete() {
           </UFormField>
           <UFormField label="Category">
             <USelect v-model="newDevice.category" :items="CATEGORY_SELECT_ITEMS" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Device Type">
+            <USelect v-model="newDevice.type" :items="DEVICE_TYPE_SELECT_ITEMS" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Group">
+            <USelect v-model="newDevice.group_id" :items="groupSelectItems" value-key="value" label-key="label" class="w-full" />
           </UFormField>
           <UFormField label="Polling Method">
             <USelect v-model="newDevice.poll_method" :items="[{value:'snmp', label:'SNMP'}, {value:'ping', label:'Ping Only'}]" value-key="value" label-key="label" class="w-full" />

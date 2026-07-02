@@ -4,6 +4,8 @@ const { hasApp } = useAuth()
 
 const { data: device, status, refresh } = useAsyncData(`netDevice-${route.params.id}`, () => $fetch(`/api/net/devices/${route.params.id}`))
 const { data: backups } = useAsyncData(`netDeviceBackups-${route.params.id}`, () => $fetch(`/api/net/devices/${route.params.id}/backups`))
+const { data: groups } = useAsyncData('netGroupsForDeviceForm', () => $fetch<any[]>('/api/net/groups'), { default: () => [] as any[] })
+const groupSelectItems = computed(() => [{ value: '', label: 'No group' }, ...(groups.value || []).map((g: any) => ({ value: g.id, label: g.name }))])
 
 const activeTab = ref('overview')
 const tabs = [
@@ -21,6 +23,8 @@ const settingsForm = reactive({
   snmp_version: '',
   snmp_community: '',
   category: '',
+  type: 'Unknown',
+  group_id: '',
   ...defaultSnmpV3()
 })
 
@@ -34,6 +38,8 @@ watch(device, (val) => {
       snmp_version: val.snmp_version,
       snmp_community: val.snmp_community,
       category: val.category,
+      type: val.type || 'Unknown',
+      group_id: val.group_id || '',
       // Fall back to v3 defaults so the selects always have a valid value even
       // for devices created before SNMPv3 support (null columns).
       snmp_sec_level: val.snmp_sec_level || v3.snmp_sec_level,
@@ -51,6 +57,7 @@ async function saveSettings() {
   saving.value = true
   try {
     await $fetch(`/api/net/devices/${route.params.id}`, { method: 'PUT', body: settingsForm })
+    await $fetch(`/api/net/devices/${route.params.id}/group`, { method: 'PUT', body: { group_id: settingsForm.group_id || null } })
     await refresh()
   } finally {
     saving.value = false
@@ -301,6 +308,12 @@ function downloadBackup(backup: any) {
           </UFormField>
           <UFormField label="Category">
             <USelect v-model="settingsForm.category" :items="CATEGORY_SELECT_ITEMS" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Device Type">
+            <USelect v-model="settingsForm.type" :items="DEVICE_TYPE_SELECT_ITEMS" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Group">
+            <USelect v-model="settingsForm.group_id" :items="groupSelectItems" value-key="value" label-key="label" class="w-full" />
           </UFormField>
           <div class="pt-4 border-t border-surface space-y-4">
             <UFormField label="Polling Method">

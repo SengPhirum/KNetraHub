@@ -175,7 +175,13 @@ export default defineNuxtConfig({
       snmpTimeoutMs: Number(process.env.NUXT_SERVER_SNMP_TIMEOUT_MS || 2000),
       pingTimeoutSeconds: Number(process.env.NUXT_SERVER_PING_TIMEOUT_SECONDS || 2),
       discoveryConcurrency: Number(process.env.NUXT_SERVER_DISCOVERY_CONCURRENCY || 64),
-      webTimeoutMs: Number(process.env.NUXT_SERVER_WEB_TIMEOUT_MS || 8000)
+      webTimeoutMs: Number(process.env.NUXT_SERVER_WEB_TIMEOUT_MS || 8000),
+      // SNMP trap receiver: opt-in (off by default — it opens a UDP listener).
+      // Defaults to 1162, not the standard 162, since binding <1024 needs root/
+      // CAP_NET_BIND_SERVICE; production deployments typically forward 162->1162.
+      trapEnabled: process.env.NUXT_SERVER_TRAP_ENABLED === 'true',
+      trapPort: Number(process.env.NUXT_SERVER_TRAP_PORT || 1162),
+      trapBindAddress: process.env.NUXT_SERVER_TRAP_BIND_ADDRESS || '0.0.0.0'
     },
 
     // --- Exposed to the client (safe values only) ---

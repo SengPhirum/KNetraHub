@@ -4,15 +4,17 @@ import {
   pingHost,
   snmpGetSystem,
   snmpGetHostMetrics,
+  snmpGetInterfaces,
+  snmpGetEntitySensors,
   snmpGetNumeric,
   uptimeFromTicks,
   mapLimit,
   type SnmpOpts,
-  type HostMetrics
+  type HostMetrics,
+  type SnmpInterface
 } from '../utils/netMonitor'
 import { recordServerItemSample } from '../utils/metrics'
-import { metricForItemKey, evaluateCondition } from '../utils/serverMonitor'
-import { notifyChannel } from '../utils/alertNotify'
+import { metricForItemKey, evaluateCondition, isHostUnderMaintenance, fireServerActions } from '../utils/serverMonitor'
 
 /**
  * Real Server poller (Zabbix engine). On each cycle it ICMP-pings every enabled
@@ -126,13 +128,17 @@ async function pollHost(host: any, cfg: ServerConfig) {
 
   if (ping.alive && host.poll_method === 'snmp') {
     const opts = snmpOpts(host, cfg)
-    const [sys, metrics] = await Promise.all([snmpGetSystem(host.ip, opts).catch(() => null), snmpGetHostMetrics(host.ip, opts).catch(() => null)])
+    const [sys, metrics, ifaces] = await Promise.all([
+      snmpGetSystem(host.ip, opts).catch(() => null),
+      snmpGetHostMetrics(host.ip, opts).catch(() => null),
+      snmpGetInterfaces(host.ip, opts).catch(() => [] as SnmpInterface[])
+    ])
     if (sys) {
       if (sys.sysName) sysName = sys.sysName
       if (sys.sysDescr) sysDescr = sys.sysDescr
       uptime = uptimeFromTicks(sys.sysUpTimeTicks)
     }
-    await collectSnmpItems(host, opts, metrics, now)
+    await collectSnmpItems(host, opts, metrics, sys, ifaces, now)
   }
 
   await db.query(
@@ -159,16 +165,122 @@ function snmpOpts(host: any, cfg: ServerConfig): SnmpOpts {
   }
 }
 
-// Resolve + record each enabled SNMP item's value (known key metric, else raw OID).
-async function collectSnmpItems(host: any, opts: SnmpOpts, metrics: HostMetrics | null, now: string) {
+// Item keys resolved directly from the interface list (status/counters/uptime)
+// rather than from HostMetrics or a raw OID get — handled as special cases in
+// collectSnmpItems below, so they never reach metricForItemKey/snmpGetNumeric.
+const INTERFACE_ITEM_KEYS = new Set([
+  'net.if.in', 'net.if.out', 'net.if.in.packets', 'net.if.out.packets',
+  'net.if.errors', 'net.if.discards', 'net.if.status', 'net.if.uptime', 'net.if.bandwidth.pct'
+])
+
+// Resolve + record each enabled SNMP item's value: a known host-metric key, an
+// interface-derived key (status/counters on the primary NIC), a text item
+// (sysDescr), or else a raw OID get.
+async function collectSnmpItems(host: any, opts: SnmpOpts, metrics: HostMetrics | null, sys: { sysDescr?: string } | null, ifaces: SnmpInterface[], now: string) {
   const db = getDb()
   const { rows: items } = await db.query(`SELECT * FROM server_items WHERE host_id = $1 AND status = 'enabled' AND type = 'snmp'`, [host.id])
+  if (!items.length) return
+  const primaryIface = ifaces.find((i) => i.operStatus === 'up' && i.type !== 'loopback') || ifaces[0] || null
+
+  // Entity-sensor (temperature/fan) walk is only issued when this host actually
+  // has a linked item for one of these — most hosts don't and the walk would
+  // just be wasted SNMP traffic.
+  const needsEntitySensors = items.some((i) => i.key_ === 'sensor.temperature' || i.key_ === 'sensor.fan')
+  const entitySensors = needsEntitySensors ? await snmpGetEntitySensors(host.ip, opts).catch(() => null) : null
+
+  let inBps: number | null = null
+  let outBps: number | null = null
+  let bandwidthItem: any = null
+
   for (const item of items) {
+    if (item.key_ === 'system.descr') {
+      if (sys?.sysDescr) await setItemTextValue(item.id, sys.sysDescr, now)
+      continue
+    }
+    if (item.key_ === 'sensor.temperature') {
+      if (entitySensors?.temperatureC != null) await setItemValue(item.id, entitySensors.temperatureC, now)
+      continue
+    }
+    if (item.key_ === 'sensor.fan') {
+      if (entitySensors?.fanRpm != null) await setItemValue(item.id, entitySensors.fanRpm, now)
+      continue
+    }
+    if (item.key_ === 'net.if.bandwidth.pct') { bandwidthItem = item; continue } // resolved after the loop
+    if (INTERFACE_ITEM_KEYS.has(item.key_)) {
+      switch (item.key_) {
+        case 'net.if.in':
+          inBps = await collectCounterItem(item, primaryIface?.inOctets ?? null, now, 8)
+          break
+        case 'net.if.out':
+          outBps = await collectCounterItem(item, primaryIface?.outOctets ?? null, now, 8)
+          break
+        case 'net.if.in.packets':
+          await collectCounterItem(item, primaryIface?.inUcastPkts ?? null, now, 1)
+          break
+        case 'net.if.out.packets':
+          await collectCounterItem(item, primaryIface?.outUcastPkts ?? null, now, 1)
+          break
+        case 'net.if.errors':
+          await collectCounterItem(item, sumOrNull(primaryIface?.inErrors, primaryIface?.outErrors), now, 1)
+          break
+        case 'net.if.discards':
+          await collectCounterItem(item, sumOrNull(primaryIface?.inDiscards, primaryIface?.outDiscards), now, 1)
+          break
+        case 'net.if.status':
+          if (primaryIface) await setItemValue(item.id, primaryIface.operStatus === 'up' ? 1 : 0, now)
+          break
+        case 'net.if.uptime':
+          if (primaryIface?.lastChangeTicks != null) await setItemValue(item.id, Math.floor(primaryIface.lastChangeTicks / 100), now)
+          break
+      }
+      continue
+    }
     let value: number | null | undefined
     if (metrics) value = metricForItemKey(item.key_, metrics)
     if (value === undefined) value = item.snmp_oid ? await snmpGetNumeric(host.ip, opts, item.snmp_oid) : null
     if (value != null) await setItemValue(item.id, value, now)
   }
+
+  // Bandwidth %: derived from the in/out rates just computed above plus the
+  // interface's negotiated speed, not its own counter.
+  if (bandwidthItem && primaryIface?.speedMbps && (inBps != null || outBps != null)) {
+    const usedMbps = ((inBps || 0) + (outBps || 0)) / 1e6
+    const pct = Math.max(0, Math.min(100, Math.round((usedMbps / primaryIface.speedMbps) * 1000) / 10))
+    await setItemValue(bandwidthItem.id, pct, now)
+  }
+}
+
+function sumOrNull(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null && b == null) return null
+  return (a || 0) + (b || 0)
+}
+
+// Counter-type item (e.g. interface octet/packet/error counters): derive a
+// per-second rate from the delta against the item's previously stored raw
+// reading, then stash the new raw reading for next cycle. `multiplier` is 8
+// for byte counters (→ bits/sec) or 1 for plain per-second counts (packets,
+// errors, discards). The first cycle just seeds the counter (no rate yet).
+async function collectCounterItem(item: any, raw: number | null, now: string, multiplier: number): Promise<number | null> {
+  if (raw == null) return null
+  const db = getDb()
+  let rate: number | null = null
+  if (item.raw_counter != null && item.raw_counter_at) {
+    const seconds = (Date.parse(now) - Date.parse(item.raw_counter_at)) / 1000
+    if (seconds > 0) {
+      const delta = raw - Number(item.raw_counter)
+      if (delta >= 0) {
+        rate = (delta * multiplier) / seconds
+        await setItemValue(item.id, rate, now)
+      }
+    }
+  }
+  await db.query('UPDATE server_items SET raw_counter = $1, raw_counter_at = $2 WHERE id = $3', [raw, now, item.id])
+  return rate
+}
+
+async function setItemTextValue(itemId: string, text: string, clock: string) {
+  const db = getDb()
+  await db.query('UPDATE server_items SET last_text = $1, last_clock = $2 WHERE id = $3', [text.slice(0, 500), clock, itemId])
 }
 
 async function ensureItem(hostId: string, key: string, name: string, units: string, type: string): Promise<string> {
@@ -234,46 +346,5 @@ async function openProblem(host: any, tr: any, now: string) {
      VALUES ($1,$2,$3,$4,$4,$5,$6,'problem',false,$7)`,
     [nanoid(), host.id, tr.id, tr.name, Number(tr.severity) || 0, now, suppressed]
   )
-  if (!suppressed) await fireActions(host, tr)
-}
-
-async function isHostUnderMaintenance(hostId: string): Promise<boolean> {
-  const db = getDb()
-  const nowIso = new Date().toISOString()
-  const { rows } = await db.query(
-    `SELECT host_ids, group_ids FROM server_maintenance WHERE active_since <= $1 AND active_till >= $1`,
-    [nowIso]
-  )
-  if (!rows.length) return false
-  const { rows: grpRows } = await db.query('SELECT group_id FROM server_host_group_members WHERE host_id = $1', [hostId])
-  const hostGroups = new Set(grpRows.map((r) => r.group_id))
-  for (const m of rows) {
-    const hostIds: string[] = safeArr(m.host_ids)
-    const groupIds: string[] = safeArr(m.group_ids)
-    if (hostIds.includes(hostId)) return true
-    if (groupIds.some((g) => hostGroups.has(g))) return true
-  }
-  return false
-}
-
-function safeArr(v: any): string[] {
-  try { const a = JSON.parse(v); return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [] } catch { return [] }
-}
-
-async function fireActions(host: any, tr: any) {
-  const db = getDb()
-  const sev = Number(tr.severity) || 0
-  const { rows: actions } = await db.query(`SELECT * FROM server_actions WHERE status = 'enabled' AND min_severity <= $1 AND channel_id IS NOT NULL`, [sev])
-  if (!actions.length) return
-  const msg = `🔴 PROBLEM (sev ${sev}) — ${host.name}: ${tr.name}`
-  for (const a of actions) {
-    try {
-      const ch = await db.query('SELECT type, config FROM alert_channels WHERE id = $1 AND enabled = true', [a.channel_id])
-      if (!ch.rows.length) continue
-      const config = typeof ch.rows[0].config === 'string' ? JSON.parse(ch.rows[0].config || '{}') : (ch.rows[0].config || {})
-      await notifyChannel({ type: ch.rows[0].type, config }, msg)
-    } catch (e: any) {
-      console.error('[serverPoller] action notify failed:', e?.message || e)
-    }
-  }
+  if (!suppressed) await fireServerActions(host.name, tr.name, Number(tr.severity) || 0)
 }

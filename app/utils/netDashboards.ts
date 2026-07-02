@@ -16,6 +16,9 @@ export type WidgetType =
   | 'device-grid'
   | 'sensors'
   | 'syslog'
+  | 'host-status-summary'
+  | 'problems-by-severity'
+  | 'top-problems'
 
 export interface Widget {
   i: string
@@ -46,7 +49,10 @@ export const WIDGET_TYPES: WidgetMeta[] = [
   { type: 'top-talkers', title: 'Top Talkers', icon: 'i-lucide-arrow-left-right', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } },
   { type: 'device-grid', title: 'Device Availability', icon: 'i-lucide-server', defaultSize: { w: 12, h: 4 }, minSize: { w: 4, h: 3 } },
   { type: 'sensors', title: 'Sensors', icon: 'i-lucide-gauge', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } },
-  { type: 'syslog', title: 'Syslog Feed', icon: 'i-lucide-scroll-text', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } }
+  { type: 'syslog', title: 'Syslog Feed', icon: 'i-lucide-scroll-text', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } },
+  { type: 'host-status-summary', title: 'Host Status Summary', icon: 'i-lucide-server-cog', defaultSize: { w: 12, h: 2 }, minSize: { w: 4, h: 2 } },
+  { type: 'problems-by-severity', title: 'Problems by Severity', icon: 'i-lucide-bar-chart-3', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } },
+  { type: 'top-problems', title: 'Top Problems', icon: 'i-lucide-siren', defaultSize: { w: 6, h: 5 }, minSize: { w: 3, h: 3 } }
 ]
 
 export function widgetMeta(type: WidgetType): WidgetMeta {
@@ -65,14 +71,16 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
   {
     key: 'noc',
     name: 'NOC Overview',
-    description: 'At-a-glance health: status tiles, up/down split, device map, and live alerts.',
+    description: 'At-a-glance health across network and server: status tiles, up/down split, device map, alerts, and problems.',
     icon: 'i-lucide-monitor-dot',
     layout: [
       { type: 'status-summary', x: 0, y: 0, w: 12, h: 2 },
-      { type: 'status-doughnut', x: 0, y: 2, w: 4, h: 4 },
-      { type: 'device-grid', x: 4, y: 2, w: 8, h: 4 },
-      { type: 'alerts', x: 0, y: 6, w: 6, h: 5 },
-      { type: 'top-talkers', x: 6, y: 6, w: 6, h: 5 }
+      { type: 'host-status-summary', x: 0, y: 2, w: 12, h: 2 },
+      { type: 'status-doughnut', x: 0, y: 4, w: 4, h: 4 },
+      { type: 'device-grid', x: 4, y: 4, w: 8, h: 4 },
+      { type: 'alerts', x: 0, y: 8, w: 4, h: 5 },
+      { type: 'top-problems', x: 4, y: 8, w: 4, h: 5 },
+      { type: 'top-talkers', x: 8, y: 8, w: 4, h: 5 }
     ]
   },
   {

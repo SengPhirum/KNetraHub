@@ -34,6 +34,13 @@ export default defineEventHandler(async (event) => {
     body.snmp_priv_protocol || null,
     body.snmp_priv_password || null
   ])
-  
+
+  if (body.group_id) {
+    await db.query(
+      'INSERT INTO net_device_groups (device_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [id, body.group_id]
+    )
+  }
+
   return { id }
 })

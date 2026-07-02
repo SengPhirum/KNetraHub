@@ -9,8 +9,8 @@ export default defineEventHandler(async (event) => {
     UPDATE net_devices
     SET hostname = $1, ip = $2, snmp_version = $3, snmp_community = $4, poll_method = $5, category = $6,
         snmp_sec_level = $7, snmp_auth_user = $8, snmp_auth_protocol = $9, snmp_auth_password = $10,
-        snmp_priv_protocol = $11, snmp_priv_password = $12
-    WHERE id = $13
+        snmp_priv_protocol = $11, snmp_priv_password = $12, type = $13
+    WHERE id = $14
   `, [
     body.hostname,
     body.ip,
@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
     body.snmp_auth_password || null,
     body.snmp_priv_protocol || null,
     body.snmp_priv_password || null,
+    body.type || 'Unknown',
     id
   ])
   

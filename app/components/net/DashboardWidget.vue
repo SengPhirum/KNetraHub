@@ -8,6 +8,9 @@ import TopTalkersWidget from './widgets/TopTalkersWidget.vue'
 import DeviceAvailabilityWidget from './widgets/DeviceAvailabilityWidget.vue'
 import SensorsWidget from './widgets/SensorsWidget.vue'
 import SyslogWidget from './widgets/SyslogWidget.vue'
+import HostStatusSummaryWidget from './widgets/HostStatusSummaryWidget.vue'
+import ProblemsBySeverityWidget from './widgets/ProblemsBySeverityWidget.vue'
+import TopProblemsWidget from './widgets/TopProblemsWidget.vue'
 import { widgetMeta, type Widget, type WidgetType } from '../../utils/netDashboards'
 
 const props = defineProps<{ widget: Widget; editing?: boolean }>()
@@ -22,7 +25,10 @@ const COMPONENTS: Record<WidgetType, any> = {
   'top-talkers': TopTalkersWidget,
   'device-grid': DeviceAvailabilityWidget,
   'sensors': SensorsWidget,
-  'syslog': SyslogWidget
+  'syslog': SyslogWidget,
+  'host-status-summary': HostStatusSummaryWidget,
+  'problems-by-severity': ProblemsBySeverityWidget,
+  'top-problems': TopProblemsWidget
 }
 
 const meta = computed(() => widgetMeta(props.widget.type))

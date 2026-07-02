@@ -103,41 +103,112 @@ async function seedServerConfig(db: ReturnType<typeof getDb>) {
     )
   }
 
-  const tplRes = await db.query('SELECT count(*) as cnt FROM server_templates')
-  if (Number(tplRes.rows[0].cnt) === 0) {
-    const tplId = nanoid()
+  // Each template + its items/triggers are seeded idempotently *per row* (not
+  // just gated on "does the template exist") so new default sensors added
+  // later also land on installs that already seeded an earlier version.
+  const linuxTplId = await ensureTemplate(db, now,
+    'Linux by SNMP',
+    'CPU / memory / swap / disk / load / network / process metrics via SNMP (Linux + Windows), with default thresholds'
+  )
+  // Items: key_ drives collection in serverMonitor.ts/serverPoller.ts (snmp_oid
+  // is informational for keys resolved specially — counters, the derived
+  // free-space/bandwidth-% items, and the sysDescr text item all ignore it).
+  await seedTemplateItems(db, linuxTplId, [
+    // name, key_, units, snmp_oid (reference), update_interval, value_type
+    ['CPU utilization',         'system.cpu.util',       '%',      '1.3.6.1.2.1.25.3.3.1.2',    60],
+    ['Memory utilization',      'vm.memory.util',        '%',      '1.3.6.1.2.1.25.2.3.1',      60],
+    ['Swap utilization',        'system.swap.util',      '%',      '1.3.6.1.4.1.2021.4.3.0',    60],
+    ['Root FS utilization',     'vfs.fs.size[/]',        '%',      '1.3.6.1.2.1.25.2.3.1',      60],
+    ['Root FS free space',      'vfs.fs.size[/,pfree]',  '%',      '',                          60],
+    ['System description',     'system.descr',           '',      '1.3.6.1.2.1.1.1.0',         300, 'text'],
+    ['System uptime',           'system.uptime',         'uptime', '1.3.6.1.2.1.1.3.0',         60],
+    ['Load average (1m)',       'system.cpu.load',       '',       '1.3.6.1.4.1.2021.10.1.3.1', 60],
+    ['Load average (5m)',       'system.cpu.load5',      '',       '1.3.6.1.4.1.2021.10.1.3.2', 60],
+    ['Load average (15m)',      'system.cpu.load15',     '',       '1.3.6.1.4.1.2021.10.1.3.3', 60],
+    ['Number of processes',     'proc.num',              '',       '1.3.6.1.2.1.25.1.6.0',      60],
+    ['Interface status',        'net.if.status',         '',       '1.3.6.1.2.1.2.2.1.8',       60],
+    ['Interface uptime',        'net.if.uptime',         'uptime', '1.3.6.1.2.1.2.2.1.9',       60],
+    ['Interface in traffic',    'net.if.in',              'bps',   '1.3.6.1.2.1.2.2.1.10',      60],
+    ['Interface out traffic',   'net.if.out',             'bps',   '1.3.6.1.2.1.2.2.1.16',      60],
+    ['Interface in packets',    'net.if.in.packets',      'pps',   '1.3.6.1.2.1.2.2.1.11',      60],
+    ['Interface out packets',   'net.if.out.packets',     'pps',   '1.3.6.1.2.1.2.2.1.17',      60],
+    ['Interface errors',        'net.if.errors',          '/s',    '',                          60],
+    ['Interface discards',      'net.if.discards',        '/s',    '',                          60],
+    ['Interface bandwidth usage', 'net.if.bandwidth.pct', '%',     '',                          60]
+  ])
+  // Triggers: item_key, name, operator, threshold, for_seconds, severity(0-5).
+  await seedTemplateTriggers(db, linuxTplId, [
+    ['system.cpu.util',  'High CPU utilization (>90% for 5m)',    '>', 90, 300, 3],
+    ['vm.memory.util',   'High memory utilization (>90% for 5m)', '>', 90, 300, 3],
+    ['vfs.fs.size[/]',   'Low free disk space on / (>90%)',       '>', 90, 0,   4],
+    ['net.if.status',    'Interface down',                        '<', 1,  60,  4]
+  ])
+
+  // A second, optional template for gear that exposes UPS-MIB (RFC 1628,
+  // networked UPS units) and/or ENTITY-SENSOR-MIB (RFC 3433, temperature/fan —
+  // mostly chassis/network hardware). Deliberately NOT part of "Linux by SNMP":
+  // most Linux/Windows hosts don't expose either MIB, so bundling them in would
+  // just show "no data" on almost every host. Link this only to devices that
+  // actually have it (a UPS, or switches/appliances with hardware sensors).
+  // Vendor-specific hardware (RAID controllers, PSU/physical-disk status,
+  // Windows services) has no universal standard OID, so it isn't seeded here —
+  // add those per-device via a custom-OID item instead.
+  const hwTplId = await ensureTemplate(db, now,
+    'UPS & Hardware Sensors (SNMP)',
+    'Battery/UPS (UPS-MIB) and temperature/fan (ENTITY-SENSOR-MIB) for gear that exposes them — link only to devices that actually have these sensors'
+  )
+  await seedTemplateItems(db, hwTplId, [
+    ['UPS battery status',            'ups.battery.status',  '',    '1.3.6.1.2.1.33.1.2.1', 60],
+    ['UPS battery charge remaining',  'ups.battery.charge',  '%',   '1.3.6.1.2.1.33.1.2.4', 60],
+    ['UPS battery runtime remaining', 'ups.battery.runtime', 'min', '1.3.6.1.2.1.33.1.2.3', 60],
+    ['UPS output source',             'ups.output.source',   '',    '1.3.6.1.2.1.33.1.4.1', 60],
+    ['Temperature',                   'sensor.temperature',  '°C',  '',                     60],
+    ['Fan speed',                     'sensor.fan',          'rpm', '',                     60]
+  ])
+  await seedTemplateTriggers(db, hwTplId, [
+    // battery status 3=low, 4=depleted (UPS-MIB BatteryStatus enum)
+    ['ups.battery.status', 'UPS battery low or depleted', '>=', 3, 0,  5],
+    // output source 5=battery (UPS-MIB OutputSource enum) — running on battery
+    ['ups.output.source',  'UPS running on battery power', '=', 5, 0,  3],
+    ['sensor.temperature', 'High temperature (>35°C)',      '>', 35, 60, 3]
+  ])
+}
+
+async function ensureTemplate(db: ReturnType<typeof getDb>, now: string, name: string, description: string): Promise<string> {
+  const found = await db.query('SELECT id FROM server_templates WHERE name = $1 LIMIT 1', [name])
+  if (found.rows.length) return found.rows[0].id
+  const id = nanoid()
+  await db.query(
+    `INSERT INTO server_templates (id, name, description, created_at) VALUES ($1, $2, $3, $4)`,
+    [id, name, description, now]
+  )
+  return id
+}
+
+type SeedItem = [name: string, key_: string, units: string, oid: string, interval: number, valueType?: string]
+
+async function seedTemplateItems(db: ReturnType<typeof getDb>, tplId: string, items: SeedItem[]) {
+  for (const [name, key_, units, oid, interval, valueType] of items) {
+    const exists = await db.query('SELECT 1 FROM server_template_items WHERE template_id = $1 AND key_ = $2', [tplId, key_])
+    if (exists.rows.length) continue
     await db.query(
-      `INSERT INTO server_templates (id, name, description, created_at) VALUES ($1, $2, $3, $4)`,
-      [tplId, 'Linux by SNMP', 'CPU / memory / disk / uptime via SNMP, with default thresholds', now]
+      `INSERT INTO server_template_items (id, template_id, name, key_, type, value_type, units, snmp_oid, update_interval)
+       VALUES ($1, $2, $3, $4, 'snmp', $5, $6, $7, $8)`,
+      [nanoid(), tplId, name, key_, valueType || 'numeric', units, oid, interval]
     )
-    // Items: key_ drives collection in serverMonitor.ts (snmp_oid is informational).
-    const items: [string, string, string, string, number][] = [
-      // name, key_, units, snmp_oid (reference), update_interval
-      ['CPU utilization',    'system.cpu.util',  '%',     '1.3.6.1.2.1.25.3.3.1.2', 60],
-      ['Memory utilization', 'vm.memory.util',   '%',     '1.3.6.1.4.1.2021.4',      60],
-      ['Root FS utilization','vfs.fs.size[/]',   '%',     '1.3.6.1.2.1.25.2.3.1',    60],
-      ['System uptime',      'system.uptime',    'uptime','1.3.6.1.2.1.1.3.0',       60],
-      ['CPU load (1m)',      'system.cpu.load',  '',      '1.3.6.1.4.1.2021.10.1.5.1', 60]
-    ]
-    for (const [name, key_, units, oid, interval] of items) {
-      await db.query(
-        `INSERT INTO server_template_items (id, template_id, name, key_, type, value_type, units, snmp_oid, update_interval)
-         VALUES ($1, $2, $3, $4, 'snmp', 'numeric', $5, $6, $7)`,
-        [nanoid(), tplId, name, key_, units, oid, interval]
-      )
-    }
-    // Triggers: item_key, name, operator, threshold, for_seconds, severity(0-5).
-    const triggers: [string, string, string, number, number, number][] = [
-      ['system.cpu.util', 'High CPU utilization (>90% for 5m)',    '>', 90, 300, 3],
-      ['vm.memory.util',  'High memory utilization (>90% for 5m)', '>', 90, 300, 3],
-      ['vfs.fs.size[/]',  'Low free disk space on / (>90%)',       '>', 90, 0,   4]
-    ]
-    for (const [itemKey, name, op, threshold, forSec, sev] of triggers) {
-      await db.query(
-        `INSERT INTO server_template_triggers (id, template_id, name, item_key, operator, threshold, for_seconds, severity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [nanoid(), tplId, name, itemKey, op, threshold, forSec, sev]
-      )
-    }
+  }
+}
+
+type SeedTrigger = [itemKey: string, name: string, op: string, threshold: number, forSec: number, severity: number]
+
+async function seedTemplateTriggers(db: ReturnType<typeof getDb>, tplId: string, triggers: SeedTrigger[]) {
+  for (const [itemKey, name, op, threshold, forSec, sev] of triggers) {
+    const exists = await db.query('SELECT 1 FROM server_template_triggers WHERE template_id = $1 AND item_key = $2', [tplId, itemKey])
+    if (exists.rows.length) continue
+    await db.query(
+      `INSERT INTO server_template_triggers (id, template_id, name, item_key, operator, threshold, for_seconds, severity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [nanoid(), tplId, name, itemKey, op, threshold, forSec, sev]
+    )
   }
 }

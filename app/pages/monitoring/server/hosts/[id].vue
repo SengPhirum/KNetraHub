@@ -4,6 +4,7 @@
 // selected item (from the server_item_history hypertable).
 const route = useRoute()
 const { hasApp } = useAuth()
+const { bitrate } = useFormat()
 
 const { data: host, refresh } = useAsyncData(`serverHost-${route.params.id}`, () => $fetch<any>(`/api/server/hosts/${route.params.id}`), { server: false })
 
@@ -33,11 +34,14 @@ const chartDatasets = computed(() => [{ label: hist.value?.name || 'Value', data
 const hasHistory = computed(() => (hist.value?.points || []).length > 0)
 
 function fmtValue(item: any) {
+  if (item.last_text != null) return item.last_text
   if (item.last_value == null) return '—'
-  if (item.key_ === 'system.uptime') {
+  if (item.key_ === 'system.uptime' || item.key_ === 'net.if.uptime') {
     const s = Number(item.last_value); const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600)
     return `${d}d ${h}h`
   }
+  if (item.key_ === 'net.if.in' || item.key_ === 'net.if.out') return bitrate(Number(item.last_value))
+  if (item.key_ === 'net.if.status') return Number(item.last_value) === 1 ? 'Up' : 'Down'
   return `${Math.round(Number(item.last_value) * 100) / 100}${item.units ? ' ' + item.units : ''}`
 }
 

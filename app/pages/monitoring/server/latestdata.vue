@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Zabbix "Latest data": every item's newest value across all hosts, searchable.
 const { hasApp } = useAuth()
+const { bitrate } = useFormat()
 
 const { data: items, status, refresh } = useAsyncData('serverLatestData', () => $fetch<any[]>('/api/server/items'), { default: () => [], server: false })
 onMounted(() => { const t = setInterval(refresh, 15000); onUnmounted(() => clearInterval(t)) })
@@ -12,8 +13,11 @@ const rows = computed(() => {
 })
 
 function fmtValue(i: any) {
+  if (i.last_text != null) return i.last_text
   if (i.last_value == null) return '—'
-  if (i.key_ === 'system.uptime') { const s = Number(i.last_value); return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` }
+  if (i.key_ === 'system.uptime' || i.key_ === 'net.if.uptime') { const s = Number(i.last_value); return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` }
+  if (i.key_ === 'net.if.in' || i.key_ === 'net.if.out') return bitrate(Number(i.last_value))
+  if (i.key_ === 'net.if.status') return Number(i.last_value) === 1 ? 'Up' : 'Down'
   return `${Math.round(Number(i.last_value) * 100) / 100}${i.units ? ' ' + i.units : ''}`
 }
 function age(clock: string | null) {

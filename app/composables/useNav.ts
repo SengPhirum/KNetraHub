@@ -59,18 +59,17 @@ const DOCK_GROUPS: NavGroup[] = [
 // are NOT separate sections — the sidebar is one unified tree organised by
 // FUNCTION, interleaving network + server items under shared headers. Features
 // that exist in both domains are single unified pages, not duplicated per
-// domain: Problems (/monitoring/problems), Discovery (/monitoring/discovery),
-// Maps (/monitoring/maps), Groups (/monitoring/groups), and Settings
-// (/monitoring/settings) each show a `type`/domain tag per row/node/section
-// instead of living on separate routes. Data still lives under /api/net and
-// /api/server underneath.
+// domain: the dashboard (/monitoring, a customizable widget canvas with widget
+// types for both domains), Problems (/monitoring/problems), Discovery
+// (/monitoring/discovery), Maps (/monitoring/maps), Groups (/monitoring/groups),
+// and Settings (/monitoring/settings) each show a `type`/domain tag per
+// row/node/section instead of living on separate routes. Data still lives
+// under /api/net and /api/server underneath.
 const MONITORING_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { label: 'Overview', to: '/monitoring',         icon: 'i-lucide-radar',      permission: 'monitoring.view' },
-      { label: 'Network',  to: '/monitoring/network',  icon: 'i-lucide-network',    permission: 'monitoring.view' },
-      { label: 'Server',   to: '/monitoring/server',   icon: 'i-lucide-server-cog', permission: 'monitoring.view' }
+      { label: 'Overview', to: '/monitoring', icon: 'i-lucide-radar', permission: 'monitoring.view' }
     ]
   },
   {
@@ -99,8 +98,9 @@ const MONITORING_GROUPS: NavGroup[] = [
   {
     label: 'Traffic & Logs',
     items: [
-      { label: 'NetFlow', to: '/monitoring/network/flows',  icon: 'i-lucide-arrow-left-right', permission: 'monitoring.view' },
-      { label: 'Syslog',  to: '/monitoring/network/syslog', icon: 'i-lucide-scroll-text',      permission: 'monitoring.view' }
+      { label: 'NetFlow',    to: '/monitoring/network/flows',  icon: 'i-lucide-arrow-left-right', permission: 'monitoring.view' },
+      { label: 'Syslog',     to: '/monitoring/network/syslog', icon: 'i-lucide-scroll-text',      permission: 'monitoring.view' },
+      { label: 'SNMP Traps', to: '/monitoring/server/traps',   icon: 'i-lucide-radio',            permission: 'monitoring.view' }
     ]
   },
   {

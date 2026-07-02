@@ -11,11 +11,12 @@ Date: 2026-07-02 UTC
 
 ## Source
 
-- Commit: `8fa4fb2`
+- Commit: `f47f8f8`
 - Previous tag: none
 
 ## Changes
 
+- feat: release v0.1.1 with enhanced Monitoring module and new import/export features (f47f8f8)
 - feat: deepen Monitoring maps/web/SLA + unify Network+Server nav and Problems (8fa4fb2)
 - feat: rebuild Monitoring app (Network+Server merge, sensor graphs, Zabbix server clone) (a665ae4)
 - feat: merge Network and Server modules into a unified Monitoring module with new routes and components feat: implement network settings page with device templates, categories, and poller summary feat: add syslog page for real-time device event logs feat: create host metrics page for server monitoring with detailed information feat: develop server dashboard with active problems and recent alerts overview feat: enhance permissions and roles for the new Monitoring module chore: update app routes to reflect the new Monitoring structure and remove legacy paths chore: refactor module registry to include Monitoring and remove old Network and Server entries fix: ensure proper access control for Monitoring features based on user permissions (29ed5f7)
@@ -64,47 +65,33 @@ Date: 2026-07-02 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M RELEASE_NOTES.md
+ M app/components/net/DashboardWidget.vue
+ M app/composables/useFormat.ts
  M app/composables/useNav.ts
- M app/middleware/legacy-monitoring.global.ts
- M app/pages/docker/index.vue
- M app/pages/docker/settings.vue
  M app/pages/monitoring/index.vue
+ M app/pages/monitoring/network/devices/[id].vue
  M app/pages/monitoring/network/devices/index.vue
-D  app/pages/monitoring/network/discovery.vue
-D  app/pages/monitoring/network/groups.vue
-D  app/pages/monitoring/network/maps.vue
- M app/pages/monitoring/network/probes.vue
- M app/pages/monitoring/network/sensors/index.vue
-D  app/pages/monitoring/network/settings.vue
-D  app/pages/monitoring/server/discovery.vue
-D  app/pages/monitoring/server/groups.vue
- M app/pages/monitoring/server/hosts/index.vue
-D  app/pages/monitoring/server/maps.vue
-D  app/pages/monitoring/server/settings.vue
- M app/pages/registries/index.vue
- M app/pages/registry/index.vue
- M release-notes/v0.1.1.md
- M server/api/server/maps/[id].put.ts
- M server/api/system/overview.get.ts
-?? app/pages/monitoring/discovery.vue
-?? app/pages/monitoring/groups.vue
-?? app/pages/monitoring/maps.vue
-?? app/pages/monitoring/settings.vue
-?? app/utils/fileIO.ts
-?? server/api/net/devices/export.get.ts
-?? server/api/net/devices/import.post.ts
-?? server/api/net/groups/export.get.ts
-?? server/api/net/groups/import.post.ts
-?? server/api/net/sensors/export.get.ts
-?? server/api/net/templates/export.get.ts
-?? server/api/net/templates/import.post.ts
-?? server/api/server/hostgroups/export.get.ts
-?? server/api/server/hostgroups/import.post.ts
-?? server/api/server/hosts/export.get.ts
-?? server/api/server/hosts/import.post.ts
-?? server/api/server/templates/[id]/export.get.ts
-?? server/api/server/templates/export.get.ts
-?? server/api/server/templates/import.post.ts
-?? server/utils/importExport.ts
+ M app/pages/monitoring/network/index.vue
+ M app/pages/monitoring/server/hosts/[id].vue
+ M app/pages/monitoring/server/index.vue
+ M app/pages/monitoring/server/latestdata.vue
+ M app/utils/netDashboards.ts
+ M nuxt.config.ts
+ M server/api/net/devices/[id].get.ts
+ M server/api/net/devices/[id].put.ts
+ M server/api/net/devices/index.post.ts
+ M server/plugins/seedSubsystems.ts
+ M server/plugins/serverPoller.ts
+ M server/utils/db.ts
+ M server/utils/netMonitor.ts
+ M server/utils/serverMonitor.ts
+?? app/components/net/widgets/HostStatusSummaryWidget.vue
+?? app/components/net/widgets/ProblemsBySeverityWidget.vue
+?? app/components/net/widgets/TopProblemsWidget.vue
+?? app/pages/monitoring/server/traps.vue
+?? app/utils/netDeviceTypes.ts
+?? server/api/net/devices/[id]/group.put.ts
+?? server/api/server/traps/
+?? server/plugins/trapReceiver.ts
+?? server/utils/trapMonitor.ts
 ```

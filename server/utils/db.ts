@@ -526,6 +526,11 @@ async function runMigrations(): Promise<void> {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_server_items_host ON server_items (host_id);
+    -- Counter-type items (e.g. interface traffic) need the previous raw reading
+    -- + its timestamp to derive a bits/sec rate; last_value/last_clock instead
+    -- hold the derived rate that gets charted.
+    ALTER TABLE server_items ADD COLUMN IF NOT EXISTS raw_counter DOUBLE PRECISION;
+    ALTER TABLE server_items ADD COLUMN IF NOT EXISTS raw_counter_at TEXT;
 
     -- Triggers: a threshold condition on an item that opens a problem (Zabbix
     -- trigger). last_state tracks ok/problem; since = when the breach began (for
@@ -645,6 +650,24 @@ async function runMigrations(): Promise<void> {
       last_check TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_server_web_steps_scenario ON server_web_steps (scenario_id, step_no);
+
+    -- SNMP trap log: incoming traps received by server/plugins/trapReceiver.ts
+    -- (NUXT_SERVER_TRAP_ENABLED=true), matched to a known host by source IP when
+    -- possible. Well-known traps (linkDown/linkUp/coldStart/authenticationFailure)
+    -- also open/resolve a server_problems row; every trap is logged here either way.
+    CREATE TABLE IF NOT EXISTS server_traps (
+      id TEXT PRIMARY KEY,
+      host_id TEXT REFERENCES server_hosts(id) ON DELETE SET NULL,
+      source_ip TEXT NOT NULL,
+      version TEXT NOT NULL,
+      trap_oid TEXT,
+      name TEXT NOT NULL,
+      severity_num INTEGER NOT NULL DEFAULT 3,
+      varbinds TEXT,
+      received_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_server_traps_host ON server_traps (host_id);
+    CREATE INDEX IF NOT EXISTS idx_server_traps_received ON server_traps (received_at DESC);
 
     -- IPAM Module (phpIPAM MVP)
     CREATE TABLE IF NOT EXISTS ipmgt_subnets (
