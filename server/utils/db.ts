@@ -8,6 +8,7 @@ types.setTypeParser(20, (val: string) => Number(val))
 
 let _pool: Pool | null = null
 let _migrated: Promise<void> | null = null
+let _dbReady: Promise<void> | null = null
 
 export function getDb(): Pool {
   if (!_pool) {
@@ -31,8 +32,26 @@ export function getDb(): Pool {
 /** Waits for Postgres to accept connections, retrying with backoff. The
  * Postgres/Timescale container may not be ready when the app container
  * starts - there's no reliable depends_on health-gating in a swarm stack
- * deploy, and Timescale's own first-boot init can itself take 10-30s. */
+ * deploy, and Timescale's own first-boot init can itself take 10-30s.
+ *
+ * Memoized like migrate() below: several Nitro plugins (db.ts,
+ * seedSubsystems.ts) each call this independently at boot, and without
+ * memoization every one of them ran its own concurrent 30-attempt retry
+ * loop - same outcome, but duplicated connection attempts and interleaved
+ * "not ready yet (attempt N/30)" log lines. On failure the memo is cleared
+ * (not cached as a rejection) so a later, separate wait can still succeed
+ * once Postgres actually comes up. */
 export async function waitForDb(maxAttempts = 30, delayMs = 2000): Promise<void> {
+  if (!_dbReady) {
+    _dbReady = attemptWaitForDb(maxAttempts, delayMs).catch((err) => {
+      _dbReady = null
+      throw err
+    })
+  }
+  return _dbReady
+}
+
+async function attemptWaitForDb(maxAttempts: number, delayMs: number): Promise<void> {
   const db = getDb()
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {

@@ -43,5 +43,10 @@ COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
+# start-period gives the entrypoint's DB wait + first migration room to run
+# before a slow start counts as unhealthy; Swarm's start-first rolling
+# update (docker-compose.yml) uses this to gate promoting the new task.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=45s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/api/system/health || exit 1
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
