@@ -45,6 +45,8 @@ for var in \
   NUXT_DB_PASSWORD \
   NUXT_DB_SSL \
   NUXT_DB_POOL_MAX \
+  NUXT_JWT_SECRET \
+  NUXT_AGENT_TOKEN
 ; do
   file_env "$var"
 done
