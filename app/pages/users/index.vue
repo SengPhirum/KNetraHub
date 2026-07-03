@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ middleware: 'admin' })
+
 const { user: me } = useAuth()
 const { relative } = useFormat()
 const toast = useToast()
@@ -24,7 +26,7 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
   filterOptions: userFilterOptions
 })
 
-const ROLES = ['viewer', 'operator', 'admin'] as const
+const ROLES = ['viewer', 'operator', 'manager', 'admin'] as const
 type Role = typeof ROLES[number]
 
 const ROLE_META: Record<Role, { icon: string; color: string; bg: string; description: string; can: string[] }> = {
@@ -42,12 +44,19 @@ const ROLE_META: Record<Role, { icon: string; color: string; bg: string; descrip
     description: 'Manage workloads; cannot touch users or settings',
     can: ['Everything viewers can do', 'Scale & redeploy services', 'Deploy and remove stacks', 'Create / delete networks, volumes']
   },
+  manager: {
+    icon: 'i-lucide-clipboard-check',
+    color: 'text-amber-300',
+    bg: 'bg-amber-500/10 text-amber-300',
+    description: 'Approval & oversight; no user or system settings access',
+    can: ['Everything operators can do', 'Review and export the audit log', 'Export reports', 'See each app\'s audit trail']
+  },
   admin: {
     icon: 'i-lucide-shield-check',
     color: 'text-beacon',
     bg: 'bg-beacon/10 text-beacon',
     description: 'Full control including users and registries',
-    can: ['Everything operators can do', 'Manage user accounts and roles', 'Configure Docker registries', 'View audit log']
+    can: ['Everything managers can do', 'Manage user accounts and roles', 'Configure Docker registries', 'Change security settings']
   }
 }
 
@@ -119,7 +128,7 @@ async function confirmDelete() {
     </PageHeader>
 
     <!-- Role legend -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
       <div v-for="(meta, role) in ROLE_META" :key="role" class="panel-flush p-3.5 flex flex-col gap-2">
         <div class="flex items-center gap-2">
           <UIcon :name="meta.icon" class="size-4 shrink-0" :class="meta.color" />

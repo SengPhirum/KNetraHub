@@ -15,7 +15,7 @@ import {
  */
 const KEY = 'app_role_map'
 
-const TIERS: AppTier[] = ['viewer', 'operator', 'admin']
+const TIERS: AppTier[] = ['viewer', 'operator', 'manager', 'admin']
 
 /**
  * The old `net` (Network) and `server` (Server) apps were merged into one

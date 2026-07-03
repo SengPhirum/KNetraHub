@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { migrate } from './db'
 import { encryptSecret, decryptSecret } from './secretCrypto'
 
-export type Role = 'admin' | 'operator' | 'viewer'
+export type Role = 'admin' | 'manager' | 'operator' | 'viewer'
 export type UserSource = 'local' | 'ldap' | 'oidc'
 
 export interface User {
@@ -17,6 +17,10 @@ export interface User {
   passwordHash?: string
   createdAt: string
   lastLogin?: string
+  /** Realm/group roles as of the user's last SSO login (oidc only today) -
+   *  a persisted snapshot so per-app access can be audited/reported on for
+   *  users who aren't currently logged in. See shared/utils/entitlements.ts. */
+  realmRoles?: string[]
 }
 
 export interface NotificationPreferences {
@@ -72,7 +76,17 @@ function rowToUser(row: any): User {
     source: row.source as UserSource,
     passwordHash: row.password_hash ?? undefined,
     createdAt: row.created_at,
-    lastLogin: row.last_login ?? undefined
+    lastLogin: row.last_login ?? undefined,
+    realmRoles: row.realm_roles ? safeParseRealmRoles(row.realm_roles) : undefined
+  }
+}
+
+function safeParseRealmRoles(raw: string): string[] | undefined {
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(String) : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -134,21 +148,25 @@ export async function upsertExternalUser(input: {
   email?: string
   role: Role
   source: Exclude<UserSource, 'local'>
+  /** SSO realm/group roles for this login, persisted for audit/reporting
+   *  (see User.realmRoles). LDAP doesn't carry these today - pass undefined. */
+  realmRoles?: string[]
 }): Promise<User> {
   const db = getDb()
   const { rows: existingRows } = await db.query('SELECT * FROM users WHERE lower(username) = lower($1)', [input.username])
   const existing = existingRows[0]
+  const realmRolesJson = input.realmRoles ? JSON.stringify(input.realmRoles) : null
 
   if (existing) {
     await db.query(
-      'UPDATE users SET display_name = $1, email = $2, role = $3, source = $4 WHERE id = $5',
-      [input.displayName, input.email ?? null, input.role, input.source, existing.id]
+      'UPDATE users SET display_name = $1, email = $2, role = $3, source = $4, realm_roles = COALESCE($5, realm_roles) WHERE id = $6',
+      [input.displayName, input.email ?? null, input.role, input.source, realmRolesJson, existing.id]
     )
   } else {
     const id = nanoid()
     await db.query(
-      'INSERT INTO users (id, username, display_name, email, role, source, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [id, input.username, input.displayName, input.email ?? null, input.role, input.source, new Date().toISOString()]
+      'INSERT INTO users (id, username, display_name, email, role, source, realm_roles, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [id, input.username, input.displayName, input.email ?? null, input.role, input.source, realmRolesJson, new Date().toISOString()]
     )
   }
 
@@ -327,12 +345,17 @@ export async function audit(entry: Omit<AuditEntry, 'id' | 'ts'>): Promise<void>
       'INSERT INTO audit (id, ts, actor, action, target, detail) VALUES ($1, $2, $3, $4, $5, $6)',
       [nanoid(), new Date().toISOString(), entry.actor, entry.action, entry.target ?? null, entry.detail ?? null]
     )
-    // Keep only the 1000 most recent entries
-    await client.query(`
-      DELETE FROM audit WHERE id NOT IN (
-        SELECT id FROM audit ORDER BY ts DESC LIMIT 1000
-      )
-    `)
+    // Retention, not a rolling window: banking audit trails need a long
+    // history, so this defaults far higher than an operational log would
+    // (NUXT_AUDIT_RETENTION_ROWS, see nuxt.config.ts) - trim, don't silently
+    // cap at a small number.
+    const retentionRows = useRuntimeConfig().audit.retentionRows
+    await client.query(
+      `DELETE FROM audit WHERE id NOT IN (
+        SELECT id FROM audit ORDER BY ts DESC LIMIT $1
+      )`,
+      [retentionRows]
+    )
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK')

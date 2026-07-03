@@ -4,7 +4,7 @@ interface SessionUser {
   id: string
   username: string
   displayName: string
-  role: 'admin' | 'operator' | 'viewer'
+  role: 'admin' | 'manager' | 'operator' | 'viewer'
   source: 'local' | 'ldap' | 'oidc'
   /** Keycloak realm roles carried for reference/debugging (access uses `apps`). */
   realmRoles: string[]
@@ -39,8 +39,8 @@ export function useAuth() {
     await navigateTo('/login')
   }
 
-  const can = (min: 'viewer' | 'operator' | 'admin') => {
-    const rank = { viewer: 1, operator: 2, admin: 3 }
+  const can = (min: 'viewer' | 'operator' | 'manager' | 'admin') => {
+    const rank = { viewer: 1, operator: 2, manager: 3, admin: 4 }
     if (!user.value) return false
     return rank[user.value.role] >= rank[min]
   }

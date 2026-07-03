@@ -12,7 +12,7 @@ import {
  * configured in Settings and stored in the DB (server/utils/appRoles.ts).
  */
 export type AppKey = keyof typeof APP_PERMISSIONS // 'docker' | 'monitoring' | 'ipmgt'
-export type AppTier = 'viewer' | 'operator' | 'admin'
+export type AppTier = 'viewer' | 'operator' | 'manager' | 'admin'
 
 export const APP_KEYS = Object.keys(APP_PERMISSIONS) as AppKey[]
 
@@ -22,8 +22,8 @@ export type AppRoleMap = Record<AppKey, Record<AppTier, string[]>>
 /** Resolved entitlements: the granted tier per app, or null if no access. */
 export type AppEntitlements = Record<AppKey, AppTier | null>
 
-const TIER_RANK: Record<AppTier, number> = { viewer: 1, operator: 2, admin: 3 }
-const TIERS: AppTier[] = ['admin', 'operator', 'viewer'] // highest first
+const TIER_RANK: Record<AppTier, number> = { viewer: 1, operator: 2, manager: 3, admin: 4 }
+const TIERS: AppTier[] = ['admin', 'manager', 'operator', 'viewer'] // highest first
 
 export function tierAtLeast(have: AppTier | null, min: AppTier): boolean {
   return have != null && TIER_RANK[have] >= TIER_RANK[min]
@@ -31,7 +31,7 @@ export function tierAtLeast(have: AppTier | null, min: AppTier): boolean {
 
 export function emptyAppRoleMap(): AppRoleMap {
   return APP_KEYS.reduce((acc, app) => {
-    acc[app] = { viewer: [], operator: [], admin: [] }
+    acc[app] = { viewer: [], operator: [], manager: [], admin: [] }
     return acc
   }, {} as AppRoleMap)
 }

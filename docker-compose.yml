@@ -18,6 +18,20 @@ services:
       NUXT_AGENT_TOKEN: "change-me-to-a-long-random-string"
       # Postgres + TimescaleDB - app data and metrics history, one instance.
       # Keep credentials in sync with the timescaledb service below.
+      #
+      # Every NUXT_DB_* var here also accepts a "_FILE" sibling pointing at a
+      # file whose contents become the value (docker/docker-entrypoint.sh
+      # resolves it before the app starts) - the same convention the
+      # timescaledb image below uses for POSTGRES_PASSWORD_FILE. Prefer this
+      # over the plaintext lines below for NUXT_DB_PASSWORD in production, e.g.:
+      #   secrets:
+      #     - knetrahub_db_password
+      #   environment:
+      #     NUXT_DB_PASSWORD_FILE: "/run/secrets/knetrahub_db_password"
+      # (create the secret once with `docker secret create knetrahub_db_password -`,
+      # then reference the same secret name from the timescaledb service's
+      # POSTGRES_PASSWORD_FILE below - no more manually keeping two plaintext
+      # values in sync.)
       NUXT_DB_HOST: "timescaledb"
       NUXT_DB_PORT: "5432"
       NUXT_DB_NAME: "knetrahub"
@@ -116,13 +130,16 @@ services:
   # (users/settings/audit/...) and Timescale hypertables for node/container
   # metrics history (queried by the app's /api/*/metrics routes).
   timescaledb:
-    image: timescale/timescaledb:2.17.2-pg16
+    image: registry.kdsb.com.kh/timescale/timescaledb:2.28.2-pg17
     networks:
       - net
     environment:
       POSTGRES_DB: knetrahub
       POSTGRES_USER: knetrahub
-      # Keep in sync with the app service's NUXT_DB_PASSWORD above.
+      # Keep in sync with the app service's NUXT_DB_PASSWORD above (or, better,
+      # switch both services to the same Docker secret - see the app service's
+      # NUXT_DB_PASSWORD_FILE comment above; this image already supports
+      # POSTGRES_PASSWORD_FILE natively).
       POSTGRES_PASSWORD: "change-me-to-a-long-random-string"
     volumes:
       - timescale-data:/var/lib/postgresql/data

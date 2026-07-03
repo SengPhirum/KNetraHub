@@ -27,6 +27,7 @@
     "bcryptjs": "^3.0.2",
     "chart.js": "^4.4.7",
     "dockerode": "^5.0.0",
+    "exceljs": "^4.4.0",
     "grid-layout-plus": "^1.1.1",
     "jose": "^6.0.11",
     "ldapts": "^8.1.8",

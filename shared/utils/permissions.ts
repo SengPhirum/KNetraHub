@@ -5,10 +5,10 @@ import type { Role } from '../../server/utils/store'
 
 /**
  * Fine-grained permission model. Originally layered on the global
- * viewer/operator/admin role; now it is *also* the vocabulary for per-app
- * access (see shared/utils/entitlements.ts): every permission belongs to an
- * app, and an app tier (viewer/operator/admin) grants a subset of that app's
- * permissions. ROLE_PERMISSIONS (by global role) is kept for portal-level
+ * viewer/operator/manager/admin role; now it is *also* the vocabulary for
+ * per-app access (see shared/utils/entitlements.ts): every permission belongs
+ * to an app, and an app tier (viewer/operator/manager/admin) grants a subset
+ * of that app's permissions. ROLE_PERMISSIONS (by global role) is kept for portal-level
  * checks (admin.* / dashboard.view) and as the source of truth for which
  * permissions exist.
  *
@@ -18,7 +18,7 @@ import type { Role } from '../../server/utils/store'
  */
 export const PERMISSIONS = [
   // Global
-  'dashboard.view', 'alert.view', 'alert.manage', 'audit.view', 'report.view', 'report.export',
+  'dashboard.view', 'alert.view', 'alert.manage', 'audit.view', 'audit.export', 'report.view', 'report.export',
   // KNetraHub-Docker
   'docker.view', 'docker.manage', 'docker.deploy', 'docker.audit',
   // KNetraHub-Monitoring (merged Network + Server)
@@ -33,26 +33,35 @@ export const PERMISSIONS = [
 export type Permission = typeof PERMISSIONS[number]
 
 /**
- * Per-app permissions, split by tier. viewer ⊂ operator ⊂ admin within each
- * app. This is the single source of truth that both the global-role mapping
- * (below) and the per-app entitlement model (entitlements.ts) build on.
+ * Per-app permissions, split by tier. viewer ⊂ operator ⊂ manager ⊂ admin
+ * within each app. This is the single source of truth that both the
+ * global-role mapping (below) and the per-app entitlement model
+ * (entitlements.ts) build on.
+ *
+ * `manager` sits between operator and admin: approval/oversight visibility
+ * (e.g. seeing an app's audit trail) on top of everything operator can do,
+ * but not the app's own system-configuration actions (still admin-only).
  */
-type AppTierPermissions = { viewer: Permission[]; operator: Permission[]; admin: Permission[] }
+type AppTier = 'viewer' | 'operator' | 'manager' | 'admin'
+type AppTierPermissions = Record<AppTier, Permission[]>
 
 export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierPermissions> = {
   docker: {
     viewer: ['docker.view'],
     operator: ['docker.manage', 'docker.deploy'],
-    admin: ['docker.audit']
+    manager: ['docker.audit'],
+    admin: []
   },
   monitoring: {
     viewer: ['monitoring.view'],
     operator: ['monitoring.scan', 'monitoring.metrics'],
-    admin: ['monitoring.manage', 'monitoring.configure', 'monitoring.service.manage', 'monitoring.alert']
+    manager: ['monitoring.alert'],
+    admin: ['monitoring.manage', 'monitoring.configure', 'monitoring.service.manage']
   },
   ipmgt: {
     viewer: ['ipmgt.view', 'ipmgt.export'],
     operator: ['ipmgt.create', 'ipmgt.update', 'ipmgt.assign'],
+    manager: [],
     admin: ['ipmgt.delete']
   }
 }
@@ -60,6 +69,9 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierP
 // Global permissions every authenticated viewer gets regardless of app access.
 const VIEWER_GLOBAL: Permission[] = ['dashboard.view', 'alert.view', 'report.view']
 const OPERATOR_GLOBAL: Permission[] = ['alert.manage']
+// Manager's global add-ons: approval/oversight, not system configuration -
+// reviewing the audit trail and exporting reports (see role docs).
+const MANAGER_GLOBAL: Permission[] = ['audit.view', 'audit.export', 'report.export']
 
 /**
  * Cumulative permission list for an app at a given tier (viewer..tier).
@@ -67,11 +79,12 @@ const OPERATOR_GLOBAL: Permission[] = ['alert.manage']
  */
 export function cumulativeAppPermissions(
   app: keyof typeof APP_PERMISSIONS,
-  tier: 'viewer' | 'operator' | 'admin'
+  tier: AppTier
 ): Permission[] {
   const set = APP_PERMISSIONS[app]
   const out = [...set.viewer]
-  if (tier === 'operator' || tier === 'admin') out.push(...set.operator)
+  if (tier === 'operator' || tier === 'manager' || tier === 'admin') out.push(...set.operator)
+  if (tier === 'manager' || tier === 'admin') out.push(...set.manager)
   if (tier === 'admin') out.push(...set.admin)
   return out
 }
@@ -81,6 +94,9 @@ const ALL_APP_VIEWER = Object.keys(APP_PERMISSIONS).flatMap((a) =>
 )
 const ALL_APP_OPERATOR = Object.keys(APP_PERMISSIONS).flatMap((a) =>
   cumulativeAppPermissions(a as keyof typeof APP_PERMISSIONS, 'operator')
+)
+const ALL_APP_MANAGER = Object.keys(APP_PERMISSIONS).flatMap((a) =>
+  cumulativeAppPermissions(a as keyof typeof APP_PERMISSIONS, 'manager')
 )
 
 /**
@@ -92,6 +108,7 @@ const ALL_APP_OPERATOR = Object.keys(APP_PERMISSIONS).flatMap((a) =>
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   viewer: [...VIEWER_GLOBAL, ...ALL_APP_VIEWER],
   operator: [...VIEWER_GLOBAL, ...OPERATOR_GLOBAL, ...ALL_APP_OPERATOR],
+  manager: [...VIEWER_GLOBAL, ...OPERATOR_GLOBAL, ...MANAGER_GLOBAL, ...ALL_APP_MANAGER],
   admin: [...PERMISSIONS]
 }
 

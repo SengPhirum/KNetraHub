@@ -11,11 +11,12 @@ Date: 2026-07-03 UTC
 
 ## Source
 
-- Commit: `8e44595`
+- Commit: `7d69a51`
 - Previous tag: none
 
 ## Changes
 
+- feat: update plugins to skip execution in static docs build (7d69a51)
 - feat: update deployment workflow to use pnpm and enhance app launch experience (8e44595)
 - feat: Enhance device management and SNMP trap handling (04054bd)
 - feat: release v0.1.1 with enhanced Monitoring module and new import/export features (f47f8f8)
@@ -67,11 +68,26 @@ Date: 2026-07-03 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M server/plugins/alerts.ts
- M server/plugins/autoredeploy.ts
- M server/plugins/db.ts
- M server/plugins/netPoller.ts
- M server/plugins/seedSubsystems.ts
- M server/plugins/serverPoller.ts
- M server/plugins/serviceEvents.ts
+ M .env.example
+ M app/composables/useAuth.ts
+ M app/composables/useNav.ts
+ M app/pages/admin/access.vue
+ M app/pages/audit/index.vue
+ M app/pages/users/index.vue
+ M app/utils/fileIO.ts
+ M nuxt.config.ts
+ M package.json
+ M pnpm-lock.yaml
+ M server/api/system/audit.get.ts
+ M server/utils/appRoles.ts
+ M server/utils/auth.ts
+ M server/utils/db.ts
+ M server/utils/openapi.ts
+ M server/utils/store.ts
+ M shared/utils/entitlements.ts
+ M shared/utils/permissions.ts
+?? app/middleware/manager.ts
+?? app/pages/admin/user-authority.vue
+?? server/api/system/user-authority.get.ts
+?? server/api/system/user-authority/
 ```

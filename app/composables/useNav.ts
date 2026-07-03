@@ -2,7 +2,7 @@ export interface NavItem {
   label: string
   to: string
   icon: string
-  minRole?: 'viewer' | 'operator' | 'admin'
+  minRole?: 'viewer' | 'operator' | 'manager' | 'admin'
   permission?: Permission
   target?: string
   /** Show only for local accounts (hidden for LDAP/OIDC, whose credentials live
@@ -167,6 +167,7 @@ const ADMIN_GROUPS: NavGroup[] = [
     label: 'Security',
     items: [
       { label: 'Users',          to: '/users',                icon: 'i-lucide-users',        minRole: 'admin' },
+      { label: 'User authority', to: '/admin/user-authority', icon: 'i-lucide-shield-half',  minRole: 'manager' },
       { label: 'App & Access',   to: '/admin/access',         icon: 'i-lucide-layout-grid',  minRole: 'admin' },
       { label: 'Authentication', to: '/admin/authentication', icon: 'i-lucide-shield-check', minRole: 'admin' }
     ]
@@ -174,7 +175,7 @@ const ADMIN_GROUPS: NavGroup[] = [
   {
     label: 'Logs',
     items: [
-      { label: 'Audit log',  to: '/audit',            icon: 'i-lucide-scroll-text', minRole: 'admin' },
+      { label: 'Audit log',  to: '/audit',            icon: 'i-lucide-scroll-text', minRole: 'manager' },
       { label: 'System log', to: '/admin/system-log', icon: 'i-lucide-file-text',   minRole: 'admin' }
     ]
   }

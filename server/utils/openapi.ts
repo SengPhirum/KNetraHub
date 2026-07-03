@@ -44,7 +44,7 @@ export function buildOpenApiSpec() {
             username: { type: 'string' },
             displayName: { type: 'string' },
             email: { type: 'string' },
-            role: { type: 'string', enum: ['viewer', 'operator', 'admin'] },
+            role: { type: 'string', enum: ['viewer', 'operator', 'manager', 'admin'] },
             source: { type: 'string', enum: ['local', 'ldap', 'oidc'] },
             createdAt: { type: 'string', format: 'date-time' },
             lastLogin: { type: 'string', format: 'date-time' }
@@ -874,7 +874,7 @@ export function buildOpenApiSpec() {
                     username: { type: 'string' },
                     displayName: { type: 'string' },
                     email: { type: 'string' },
-                    role: { type: 'string', enum: ['viewer', 'operator', 'admin'] },
+                    role: { type: 'string', enum: ['viewer', 'operator', 'manager', 'admin'] },
                     password: { type: 'string' }
                   }
                 }
@@ -897,7 +897,7 @@ export function buildOpenApiSpec() {
                 schema: {
                   type: 'object',
                   properties: {
-                    role: { type: 'string', enum: ['viewer', 'operator', 'admin'] },
+                    role: { type: 'string', enum: ['viewer', 'operator', 'manager', 'admin'] },
                     displayName: { type: 'string' },
                     email: { type: 'string' },
                     password: { type: 'string', description: 'Local accounts only' }

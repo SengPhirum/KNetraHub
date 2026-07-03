@@ -688,5 +688,10 @@ async function runMigrations(): Promise<void> {
       description TEXT,
       state TEXT NOT NULL DEFAULT 'Available'
     );
+
+    -- SSO realm/group roles as of the user's last login, snapshotted for the
+    -- User Authority report (audit review of who has access to what without
+    -- requiring every user to be currently logged in).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS realm_roles TEXT;
   `)
 }

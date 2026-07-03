@@ -1,12 +1,18 @@
 <script setup lang="ts">
 // Admin > Security > App & Access. Maps Keycloak realm roles to per-app access
-// tiers (viewer/operator/admin). Stored in the DB; the local admin is always a
+// tiers (viewer/operator/manager/admin). Stored in the DB; the local admin is always a
 // superuser regardless. Was the "Apps & Access" tab in the old /settings.
 definePageMeta({ middleware: 'admin' })
 
 const toast = useToast()
 
-const APP_TIERS = ['viewer', 'operator', 'admin'] as const
+const APP_TIERS = ['viewer', 'operator', 'manager', 'admin'] as const
+const TIER_DESCRIPTIONS: Record<typeof APP_TIERS[number], string> = {
+  viewer: 'Read-only',
+  operator: 'Day-to-day actions',
+  manager: 'Approval & oversight, no system config',
+  admin: 'Full control'
+}
 const accessApps = getModuleRegistry()
 type RoleMap = Record<string, Record<string, string[]>>
 const { data: appRoleMap, refresh: refreshAppRoles } = useFetch<RoleMap>('/api/settings/app-roles', { lazy: true })
@@ -76,7 +82,7 @@ async function saveAccess() {
               v-for="tier in APP_TIERS"
               :key="tier"
               :label="tier.charAt(0).toUpperCase() + tier.slice(1)"
-              :description="tier === 'viewer' ? 'Read-only' : tier === 'operator' ? 'Day-to-day actions' : 'Full control'"
+              :description="TIER_DESCRIPTIONS[tier]"
             >
               <UInput
                 v-model="accessForm[app.key]![tier]"

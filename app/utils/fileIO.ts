@@ -3,9 +3,8 @@
 // download and opening a file picker are the same two lines everywhere, so
 // they live here once rather than being copy-pasted per page.
 
-/** Trigger a browser download of `content` as `filename`. */
-export function downloadText(filename: string, content: string, mime = 'application/json'): void {
-  const blob = new Blob([content], { type: mime })
+/** Trigger a browser download of a Blob (e.g. a server-generated .xlsx). */
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -14,6 +13,11 @@ export function downloadText(filename: string, content: string, mime = 'applicat
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/** Trigger a browser download of `content` as `filename`. */
+export function downloadText(filename: string, content: string, mime = 'application/json'): void {
+  downloadBlob(filename, new Blob([content], { type: mime }))
 }
 
 export function downloadJson(filename: string, data: unknown): void {
@@ -52,6 +56,6 @@ export function pickAndReadFile(accept = '.json,.csv'): Promise<{ name: string; 
 function stamp(): string {
   return new Date().toISOString().slice(0, 10)
 }
-export function exportFilename(base: string, ext: 'json' | 'csv'): string {
+export function exportFilename(base: string, ext: 'json' | 'csv' | 'xlsx'): string {
   return `${base}-${stamp()}.${ext}`
 }

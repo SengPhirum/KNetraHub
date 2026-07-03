@@ -132,6 +132,14 @@ export default defineNuxtConfig({
       retentionDays: Number(process.env.NUXT_METRICS_RETENTION_DAYS || 30)
     },
 
+    // How many audit-log rows to retain. This is a compliance trail, not an
+    // operational log, so the default is deliberately large - override for
+    // your bank's retention policy (or a Timescale/archival job if you need
+    // longer than row-count trimming can reasonably hold).
+    audit: {
+      retentionRows: Number(process.env.NUXT_AUDIT_RETENTION_ROWS || 200000)
+    },
+
     // Background poller that redeploys services opted into the
     // knetrahub.autoredeploy label when their registry's image digest changes.
     autoredeploy: {

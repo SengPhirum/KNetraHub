@@ -152,7 +152,7 @@ export async function requireUser(event: H3Event): Promise<SessionUser> {
   return user
 }
 
-const RANK: Record<Role, number> = { viewer: 1, operator: 2, admin: 3 }
+const RANK: Record<Role, number> = { viewer: 1, operator: 2, manager: 3, admin: 4 }
 
 // The appAccess middleware resolves the caller's tier for the app that owns the
 // route and stashes it here. requireRole/requirePermission then enforce against

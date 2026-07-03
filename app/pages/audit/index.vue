@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ middleware: 'manager' })
+
 const { relative } = useFormat()
 
 const { data, status, error, refreshing, refresh } = useApiCache('audit', () => $fetch<any[]>('/api/system/audit'))
