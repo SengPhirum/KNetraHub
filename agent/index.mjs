@@ -8,6 +8,7 @@
 // as before (KNETRAHUB_AGENT_MODE is accepted too, as an alias, for the same
 // reason). Each collector owns its own report loop/interval/target endpoint;
 // this file only decides which collectors to start.
+import './fileEnv.mjs' // must stay first - see that file's header comment
 import { run as runDocker } from './collectors/docker.mjs'
 import { run as runServer } from './collectors/server.mjs'
 import { run as runNetwork } from './collectors/network.mjs'

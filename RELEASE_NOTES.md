@@ -11,11 +11,12 @@ Date: 2026-07-03 UTC
 
 ## Source
 
-- Commit: `2955e57`
+- Commit: `fc428d9`
 - Previous tag: none
 
 ## Changes
 
+- feat: update release notes for v0.1.1 with health check endpoint and database readiness enhancements (fc428d9)
 - feat: add health check endpoint and enhance database readiness handling in entrypoint (2955e57)
 - feat: add NUXT_JWT_SECRET and NUXT_AGENT_TOKEN to environment variable setup (82bac79)
 - feat: introduce manager role and enhance user authority management (264b841)
@@ -65,3 +66,15 @@ Date: 2026-07-03 UTC
 - feat: major UX overhaul — SPA cache, Moby Blue theme, roles/settings split, author/license (658e837)
 - Init (7cf7e9c)
 - Init (33f6c2b)
+
+## Local Changes Included In Build Context
+
+The working tree had uncommitted changes before this release script ran.
+
+```text
+M  .env.example
+M  agent/Dockerfile
+A  agent/fileEnv.mjs
+M  agent/index.mjs
+M  docker-compose.yml
+```

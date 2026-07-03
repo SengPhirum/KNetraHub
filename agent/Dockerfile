@@ -5,6 +5,6 @@
 # manager, smaller attack surface than alpine (entrypoint is already `node`).
 FROM gcr.io/distroless/nodejs22-debian12
 WORKDIR /agent
-COPY index.mjs ./
+COPY index.mjs fileEnv.mjs ./
 COPY collectors ./collectors
 CMD ["index.mjs"]

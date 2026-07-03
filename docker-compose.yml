@@ -14,7 +14,10 @@ services:
     environment:
       NUXT_JWT_SECRET: "change-me-to-a-long-random-string"
       NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
-      # Shared secret with the knetrahub-agent service below - keep them in sync.
+      # Shared secret with the knetrahub-agent service below - keep them in
+      # sync (or point both at the same Docker secret: this var also accepts
+      # NUXT_AGENT_TOKEN_FILE, and the agent service accepts the equivalent
+      # KNETRAHUB_AGENT_TOKEN_FILE - see that service's comment below).
       NUXT_AGENT_TOKEN: "change-me-to-a-long-random-string"
       # Postgres + TimescaleDB - app data and metrics history, one instance.
       # Keep credentials in sync with the timescaledb service below.
@@ -99,6 +102,19 @@ services:
       - net
     environment:
       KNETRAHUB_AGENT_URL: "http://knetrahub_app:3000/api/agent/report"
+      # Must match the app service's NUXT_AGENT_TOKEN above (different var
+      # name, same value - the app validates incoming reports against it).
+      # This image is distroless (no shell, see agent/Dockerfile), so _FILE
+      # resolution happens in agent/fileEnv.mjs instead of a shell
+      # entrypoint - functionally the same as the app's docker-entrypoint.sh.
+      # Prefer this over the plaintext line below in production, e.g.:
+      #   secrets:
+      #     - knetrahub_agent_token
+      #   environment:
+      #     KNETRAHUB_AGENT_TOKEN_FILE: "/run/secrets/knetrahub_agent_token"
+      # (reference the same secret name from the app service's
+      # NUXT_AGENT_TOKEN_FILE above - one shared secret, not two plaintext
+      # values to keep in sync.)
       KNETRAHUB_AGENT_TOKEN: "change-me-to-a-long-random-string"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
