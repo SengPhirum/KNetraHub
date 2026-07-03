@@ -11,11 +11,12 @@ Date: 2026-07-03 UTC
 
 ## Source
 
-- Commit: `82bac79`
+- Commit: `2955e57`
 - Previous tag: none
 
 ## Changes
 
+- feat: add health check endpoint and enhance database readiness handling in entrypoint (2955e57)
 - feat: add NUXT_JWT_SECRET and NUXT_AGENT_TOKEN to environment variable setup (82bac79)
 - feat: introduce manager role and enhance user authority management (264b841)
 - feat: update plugins to skip execution in static docs build (7d69a51)
@@ -64,16 +65,3 @@ Date: 2026-07-03 UTC
 - feat: major UX overhaul — SPA cache, Moby Blue theme, roles/settings split, author/license (658e837)
 - Init (7cf7e9c)
 - Init (33f6c2b)
-
-## Local Changes Included In Build Context
-
-The working tree had uncommitted changes before this release script ran.
-
-```text
-M  Dockerfile
-M  RELEASE_NOTES.md
-M  docker/docker-entrypoint.sh
-M  release-notes/v0.1.1.md
-A  server/api/system/health.get.ts
-M  server/utils/db.ts
-```
