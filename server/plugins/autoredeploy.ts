@@ -10,6 +10,7 @@ import { audit } from '../utils/store'
 // persisted: the running service's own spec (repo:tag@sha256:...) already
 // IS the last-seen digest, read fresh every tick.
 export default defineNitroPlugin(() => {
+  if (useRuntimeConfig().public.staticDocs) return
   const cfg = useRuntimeConfig().autoredeploy
   if (!cfg.enabled) return
   pollAutoredeploy()

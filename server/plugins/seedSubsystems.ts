@@ -2,6 +2,8 @@ import { getDb, waitForDb, migrate } from '../utils/db'
 import { nanoid } from 'nanoid'
 
 export default defineNitroPlugin(async (nitroApp) => {
+  if (useRuntimeConfig().public.staticDocs) return
+
   // Only run this in development or if specifically requested, or as a one-time MVP seed
   nitroApp.hooks.hook('request', async () => {
     // We hook into the first request to ensure db is ready, but we only run once

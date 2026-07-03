@@ -24,6 +24,7 @@ import { metricForItemKey, evaluateCondition, isHostUnderMaintenance, fireServer
  * Disable with NUXT_SERVER_POLLING_ENABLED=false.
  */
 export default defineNitroPlugin(() => {
+  if (useRuntimeConfig().public.staticDocs) return
   const cfg = useRuntimeConfig().server as ServerConfig
   if (!cfg?.pollingEnabled) {
     console.log('[serverPoller] disabled (set NUXT_SERVER_POLLING_ENABLED=true to enable)')

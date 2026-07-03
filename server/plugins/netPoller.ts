@@ -20,6 +20,7 @@ import { recordNetSample, recordSensorReadings } from '../utils/metrics'
  * simulated data. Disable with NUXT_NET_POLLING_ENABLED=false.
  */
 export default defineNitroPlugin(() => {
+  if (useRuntimeConfig().public.staticDocs) return
   const cfg = useRuntimeConfig().net as NetConfig
   if (!cfg?.pollingEnabled) {
     console.log('[netPoller] disabled (set NUXT_NET_POLLING_ENABLED=true to enable real polling)')

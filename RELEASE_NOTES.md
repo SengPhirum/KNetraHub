@@ -11,11 +11,12 @@ Date: 2026-07-03 UTC
 
 ## Source
 
-- Commit: `04054bd`
+- Commit: `8e44595`
 - Previous tag: none
 
 ## Changes
 
+- feat: update deployment workflow to use pnpm and enhance app launch experience (8e44595)
 - feat: Enhance device management and SNMP trap handling (04054bd)
 - feat: release v0.1.1 with enhanced Monitoring module and new import/export features (f47f8f8)
 - feat: deepen Monitoring maps/web/SLA + unify Network+Server nav and Problems (8fa4fb2)
@@ -66,7 +67,11 @@ Date: 2026-07-03 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M app/components/AppLauncher.vue
- M app/components/SidebarNav.vue
- M app/layouts/default.vue
+ M server/plugins/alerts.ts
+ M server/plugins/autoredeploy.ts
+ M server/plugins/db.ts
+ M server/plugins/netPoller.ts
+ M server/plugins/seedSubsystems.ts
+ M server/plugins/serverPoller.ts
+ M server/plugins/serviceEvents.ts
 ```

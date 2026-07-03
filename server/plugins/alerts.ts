@@ -12,6 +12,7 @@ import { latestServiceUsageRows, nodeCapacityById, type UsageRow } from '../api/
 // -skip pattern so a continuously-true condition only fires once per rising
 // edge, not every tick.
 export default defineNitroPlugin(() => {
+  if (useRuntimeConfig().public.staticDocs) return
   const cfg = useRuntimeConfig().alerts
   if (!cfg.enabled) return
   pollAlerts()

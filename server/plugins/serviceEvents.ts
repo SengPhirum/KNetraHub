@@ -11,6 +11,8 @@ const POLL_INTERVAL_MS = 10_000
 // writes per open tab and die when the last tab closes. This plugin runs
 // once for the life of the server process.
 export default defineNitroPlugin(async () => {
+  if (useRuntimeConfig().public.staticDocs) return
+
   // Defensive: don't rely on server/plugins/db.ts having run first - both
   // migrate() and migrateMetrics() are memoized, so calling them again here
   // is cheap and removes any implicit plugin-ordering dependency.
