@@ -26,7 +26,7 @@ on:
       - 'app/components/DocsSidebar.vue'
       - 'nuxt.config.ts'
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -49,20 +49,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
+          cache: pnpm
 
       # Install all deps including better-sqlite3 native build
       # (ubuntu-latest ships Python 3, make, and g++ required by node-gyp)
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Generate static docs only (/documentation route)
       - name: Build static documentation
-        run: npm run build:docs
+        run: pnpm run build:docs
         env:
           NUXT_STATIC_DOCS: 'true'
           # ── CHANGE THIS ───────────────────────────────────────────────────

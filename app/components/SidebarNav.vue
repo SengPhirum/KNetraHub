@@ -24,10 +24,15 @@ const documentationGroup = computed(() => visibleGroups.value.find((g) => g.labe
 // Inside an app, the KNetraHub wordmark keeps the portal identity and the app's
 // name (Docker / Monitoring / IP Management) reads as a caption beneath it;
 // elsewhere the caption is empty and only the brand wordmark shows.
-const appCaption = computed(() => {
+const currentApp = computed(() => {
   const key = appKeyForRoute(route.path)
-  return key ? getModuleRegistry().find((m) => m.key === key)?.name : undefined
+  return key ? getModuleRegistry().find((m) => m.key === key) : undefined
 })
+const appCaption = computed(() => currentApp.value?.name)
+
+// Clicking the logo stays within the current app (its own root) rather than
+// jumping out to the portal launcher; outside an app it goes to the portal.
+const logoTarget = computed(() => currentApp.value?.routePath ?? '/')
 
 // An item is active when its `to` is the *longest* path-prefix of the current
 // route. Longest-match (rather than "any prefix") is what stops an app's
@@ -59,7 +64,7 @@ function isActive(to: string) {
   <div class="flex h-full flex-col">
     <!-- wordmark -->
     <NuxtLink
-      to="/"
+      :to="logoTarget"
       class="flex h-18 shrink-0 items-center border-b border-hull-soft px-4 py-3"
       @click="emit('navigate')"
     >

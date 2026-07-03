@@ -1,6 +1,6 @@
 # KNetraHub v0.1.1
 
-Date: 2026-07-02 UTC
+Date: 2026-07-03 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-07-02 UTC
 
 ## Source
 
-- Commit: `f47f8f8`
+- Commit: `04054bd`
 - Previous tag: none
 
 ## Changes
 
+- feat: Enhance device management and SNMP trap handling (04054bd)
 - feat: release v0.1.1 with enhanced Monitoring module and new import/export features (f47f8f8)
 - feat: deepen Monitoring maps/web/SLA + unify Network+Server nav and Problems (8fa4fb2)
 - feat: rebuild Monitoring app (Network+Server merge, sensor graphs, Zabbix server clone) (a665ae4)
@@ -65,33 +66,7 @@ Date: 2026-07-02 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
- M app/components/net/DashboardWidget.vue
- M app/composables/useFormat.ts
- M app/composables/useNav.ts
- M app/pages/monitoring/index.vue
- M app/pages/monitoring/network/devices/[id].vue
- M app/pages/monitoring/network/devices/index.vue
- M app/pages/monitoring/network/index.vue
- M app/pages/monitoring/server/hosts/[id].vue
- M app/pages/monitoring/server/index.vue
- M app/pages/monitoring/server/latestdata.vue
- M app/utils/netDashboards.ts
- M nuxt.config.ts
- M server/api/net/devices/[id].get.ts
- M server/api/net/devices/[id].put.ts
- M server/api/net/devices/index.post.ts
- M server/plugins/seedSubsystems.ts
- M server/plugins/serverPoller.ts
- M server/utils/db.ts
- M server/utils/netMonitor.ts
- M server/utils/serverMonitor.ts
-?? app/components/net/widgets/HostStatusSummaryWidget.vue
-?? app/components/net/widgets/ProblemsBySeverityWidget.vue
-?? app/components/net/widgets/TopProblemsWidget.vue
-?? app/pages/monitoring/server/traps.vue
-?? app/utils/netDeviceTypes.ts
-?? server/api/net/devices/[id]/group.put.ts
-?? server/api/server/traps/
-?? server/plugins/trapReceiver.ts
-?? server/utils/trapMonitor.ts
+ M app/components/AppLauncher.vue
+ M app/components/SidebarNav.vue
+ M app/layouts/default.vue
 ```

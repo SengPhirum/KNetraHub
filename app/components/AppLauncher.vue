@@ -15,6 +15,38 @@ const apps = computed(() =>
     .filter((m) => m.enabled)
     .map((m) => ({ ...m, accessible: hasApp(m.key as AppKey) }))
 )
+
+// "Dive into app" launch effect: a disc grows from the clicked icon until it
+// covers the viewport, then we navigate and fade it out over the new page —
+// entering an app reads as stepping through it rather than an abrupt swap.
+const launching = ref<{ top: number; left: number; size: number; growScale: number; icon: string; closing: boolean } | null>(null)
+
+function launchApp(event: MouseEvent, app: { routePath: string; icon: string; accessible: boolean }) {
+  if (!app.accessible) return
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+  event.preventDefault()
+
+  const card = event.currentTarget as HTMLElement
+  const iconEl = card.querySelector<HTMLElement>('[data-app-icon]') ?? card
+  const rect = iconEl.getBoundingClientRect()
+  const top = rect.top + rect.height / 2
+  const left = rect.left + rect.width / 2
+  const size = Math.max(rect.width, rect.height)
+  const farX = Math.max(left, window.innerWidth - left)
+  const farY = Math.max(top, window.innerHeight - top)
+  const growScale = (Math.hypot(farX, farY) * 2) / size
+
+  launching.value = { top, left, size, growScale, icon: app.icon, closing: false }
+
+  setTimeout(async () => {
+    await navigateTo(app.routePath)
+    await nextTick()
+    if (launching.value) launching.value.closing = true
+    setTimeout(() => { launching.value = null }, 320)
+  }, 420)
+}
 </script>
 
 <template>
@@ -36,9 +68,11 @@ const apps = computed(() =>
           : 'pointer-events-none cursor-not-allowed opacity-50 grayscale'"
         :tabindex="app.accessible ? undefined : -1"
         :aria-disabled="app.accessible ? undefined : 'true'"
+        @click="launchApp($event, app)"
       >
         <div class="flex items-center gap-3">
           <span
+            data-app-icon
             class="flex size-11 items-center justify-center rounded-xl ring-1"
             :class="app.accessible ? 'bg-beacon/12 ring-beacon/25' : 'bg-surface-2 ring-hull'"
           >
@@ -68,5 +102,62 @@ const apps = computed(() =>
         <p class="text-sm text-(--color-muted)">{{ app.description }}</p>
       </NuxtLink>
     </div>
+
+    <Teleport to="body">
+      <div v-if="launching" class="app-launch-overlay">
+        <div
+          class="app-launch-disc"
+          :class="{ 'is-closing': launching.closing }"
+          :style="{
+            top: `${launching.top}px`,
+            left: `${launching.left}px`,
+            width: `${launching.size}px`,
+            height: `${launching.size}px`,
+            '--grow-scale': launching.growScale
+          }"
+        >
+          <UIcon :name="launching.icon" class="app-launch-icon" />
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.app-launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  overflow: hidden;
+}
+.app-launch-disc {
+  position: fixed;
+  transform: translate(-50%, -50%) scale(1);
+  border-radius: 9999px;
+  background: var(--color-beacon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: app-launch-grow 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transition: opacity 0.32s ease;
+}
+.app-launch-disc.is-closing {
+  opacity: 0;
+}
+.app-launch-icon {
+  color: white;
+  width: 40%;
+  height: 40%;
+  animation: app-launch-icon-fade 0.42s ease forwards;
+}
+@keyframes app-launch-grow {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -50%) scale(var(--grow-scale, 40)); }
+}
+@keyframes app-launch-icon-fade {
+  0% { opacity: 1; transform: scale(1); }
+  45% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+</style>

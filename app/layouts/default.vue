@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, logout, hasApp, can } = useAuth()
+const { user, logout, can } = useAuth()
 const { fetchPreferences } = usePreferences()
 const route = useRoute()
 const mobileOpen = ref(false)
@@ -13,10 +13,12 @@ const isHome = computed(() => route.path === '/')
 // a clear "leave this app, back to the portal launcher" button in the header.
 const inApp = computed(() => appKeyForRoute(route.path) !== null)
 
-// "Deploy stack" is a Dock-app action; only surface it while inside Dock and
-// when the user can actually deploy (resolved against their docker tier).
-const inDock = computed(() => appKeyForRoute(route.path) === 'docker')
-const canDeploy = computed(() => inDock.value && hasApp('docker', 'operator'))
+// Current app's display name (Docker / Monitoring / IP Management), used for
+// the "Exit {App}" header button.
+const currentAppName = computed(() => {
+  const key = appKeyForRoute(route.path)
+  return key ? getModuleRegistry().find((m) => m.key === key)?.name : undefined
+})
 
 // close the mobile drawer on navigation
 watch(() => route.fullPath, () => { mobileOpen.value = false })
@@ -68,11 +70,11 @@ const { appearance } = useAppearance()
         <UButton
           v-if="inApp"
           to="/"
-          icon="i-lucide-arrow-left"
+          icon="i-lucide-door-open"
           color="neutral"
           variant="soft"
-          label="Apps"
-          title="Back to all apps"
+          :label="currentAppName ? `Exit ${currentAppName}` : 'Exit'"
+          :title="currentAppName ? `Exit ${currentAppName}, back to all apps` : 'Back to all apps'"
           class="shrink-0"
         />
 
@@ -89,16 +91,6 @@ const { appearance } = useAppearance()
         <div class="flex-1" />
 
         <ThemeModeControl compact />
-
-        <UButton
-          v-if="canDeploy"
-          to="/stacks"
-          icon="i-lucide-upload"
-          color="primary"
-          variant="soft"
-          class="hidden sm:inline-flex"
-          label="Deploy stack"
-        />
 
         <!-- Admin entry: only on the full-page home, only for portal admins.
              Opens the sidebar/admin experience (the AS-IS launcher with nav). -->
