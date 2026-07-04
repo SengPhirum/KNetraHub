@@ -1,18 +1,117 @@
 <script setup lang="ts">
+// Subnet detail: facts panel, usage, visual address grid (colour-coded), and a
+// defined-addresses table. Supports add / edit / release, find & reserve first
+// free.
 const route = useRoute()
+const toast = useToast()
 const { hasApp } = useAuth()
+const { canCreate, canUpdate, canDelete, canAssign, ipStatusMeta: statusMeta } = useIpam()
+const id = computed(() => route.params.id as string)
 
-const { data: subnet } = useAsyncData(`ipmgtSubnet-${route.params.id}`, () => $fetch(`/api/ipmgt/subnets/${route.params.id}`))
-const { data: ips } = useAsyncData(`ipmgtSubnetIps-${route.params.id}`, () => $fetch(`/api/ipmgt/subnets/${route.params.id}/ips`))
+const { data: subnet, status, error, refresh: refreshSubnet } = useAsyncData(
+  'ipamSubnetDetail', () => $fetch<any>(`/api/ipmgt/subnets/${id.value}`), { server: false, default: () => null, watch: [id] })
+const { data: grid, refresh: refreshGrid } = useAsyncData(
+  'ipamSubnetGrid', () => $fetch<any>(`/api/ipmgt/subnets/${id.value}/ips`), { server: false, default: () => null, watch: [id] })
+
+async function refreshAll() { await Promise.all([refreshSubnet(), refreshGrid()]) }
+
+const gridFilter = ref('')
+const visibleCells = computed(() => {
+  const cells = grid.value?.cells || []
+  const f = gridFilter.value.toLowerCase().trim()
+  if (!f) return cells
+  return cells.filter((c: any) => c.ip.toLowerCase().includes(f) || (c.record?.hostname || '').toLowerCase().includes(f))
+})
+const definedAddresses = computed(() => (grid.value?.cells || []).filter((c: any) => c.record))
+
+// ── Address create/edit ──────────────────────────────────────────────────
+const addrOpen = ref(false)
+const editingAddr = ref<any>(null)
+const presetIp = ref<string | null>(null)
+
+function addAddress(ip: string | null = null) { editingAddr.value = null; presetIp.value = ip; addrOpen.value = true }
+async function editAddress(recordId: string) {
+  try {
+    editingAddr.value = await $fetch<any>(`/api/ipmgt/addresses/${recordId}`)
+    presetIp.value = null
+    addrOpen.value = true
+  } catch (e: any) { toast.add({ title: 'Load failed', description: e?.data?.statusMessage, color: 'error' }) }
+}
+function onCellClick(cell: any) {
+  if (cell.record) { if (canUpdate.value) editAddress(cell.record.id) }
+  else if (cell.status === 'free' && canCreate.value) addAddress(cell.ip)
+}
+
+// ── First-free / reserve ───────────────────────────────────────────────────
+async function findFirstFree() {
+  try {
+    const { ip } = await $fetch<any>(`/api/ipmgt/subnets/${id.value}/first-free`)
+    toast.add({ title: `First free: ${ip}`, color: 'primary', icon: 'i-lucide-check' })
+    gridFilter.value = ip
+  } catch (e: any) { toast.add({ title: 'None free', description: e?.data?.statusMessage, color: 'warning' }) }
+}
+async function reserveFirstFree() {
+  try {
+    const res = await $fetch<any>(`/api/ipmgt/subnets/${id.value}/reserve`, { method: 'POST', body: { status: 'reserved' } })
+    toast.add({ title: `Reserved ${res.ip}`, color: 'primary', icon: 'i-lucide-check' })
+    await refreshAll()
+  } catch (e: any) { toast.add({ title: 'Reserve failed', description: e?.data?.statusMessage, color: 'error' }) }
+}
+
+// ── Release address ─────────────────────────────────────────────────────────
+const releaseTarget = ref<any>(null)
+const releasing = ref(false)
+async function confirmRelease() {
+  if (!releaseTarget.value) return
+  releasing.value = true
+  try {
+    await $fetch(`/api/ipmgt/addresses/${releaseTarget.value.id}`, { method: 'DELETE' })
+    toast.add({ title: 'Address released', color: 'primary', icon: 'i-lucide-check' })
+    releaseTarget.value = null
+    await refreshAll()
+  } catch (e: any) { toast.add({ title: 'Release failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { releasing.value = false }
+}
+
+// ── Edit / delete subnet ────────────────────────────────────────────────────
+const subnetFormOpen = ref(false)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+async function deleteSubnet(force = false) {
+  deleting.value = true
+  try {
+    await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE' })
+    toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
+    await navigateTo('/ipmgt/subnets')
+  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { deleting.value = false }
+}
+
+const facts = computed(() => {
+  const s = subnet.value
+  if (!s) return []
+  return [
+    ['Network', s.info?.network], ['CIDR', s.network], ['Netmask', s.info?.netmask],
+    ['Wildcard', s.info?.wildcard || '—'], ['Broadcast', s.info?.broadcast],
+    ['First usable', s.info?.firstUsable], ['Last usable', s.info?.lastUsable],
+    ['Gateway', s.gateway || '—'], ['Total', s.info?.total], ['Usable', s.info?.usable],
+    ['Section', s.section_name || '—'], ['VLAN', s.vlan_number ? `${s.vlan_number} · ${s.vlan_name}` : '—'],
+    ['VRF', s.vrf_name || '—'], ['Location', s.location || '—'], ['DNS servers', s.dns_servers || '—'], ['Owner', s.owner || '—']
+  ]
+})
 </script>
 
 <template>
   <div>
-    <PageHeader :title="subnet?.network || 'Loading...'" :subtitle="subnet?.name || ''" icon="i-lucide-book">
-      <template #actions>
-        <NuxtLink to="/ipmgt/subnets" class="text-sm font-medium text-(--color-muted) hover:text-foam flex items-center gap-1">
-          <UIcon name="i-lucide-arrow-left" class="size-4" /> Back to Subnets
-        </NuxtLink>
+    <PageHeader :title="subnet?.network || 'Subnet'" :subtitle="subnet?.name || 'Subnet detail'" icon="i-lucide-network">
+      <template v-if="hasApp('ipmgt') && subnet" #actions>
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-search-check" @click="findFirstFree">Find free</UButton>
+          <UButton v-if="canAssign" size="sm" color="neutral" variant="soft" icon="i-lucide-bookmark" @click="reserveFirstFree">Reserve free</UButton>
+          <UButton v-if="canCreate" size="sm" icon="i-lucide-plus" @click="addAddress()">Add address</UButton>
+          <UButton v-if="canUpdate" size="sm" variant="ghost" icon="i-lucide-pencil" aria-label="Edit subnet" @click="subnetFormOpen = true" />
+          <UButton v-if="canDelete" size="sm" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete subnet" @click="deleteOpen = true" />
+        </div>
       </template>
     </PageHeader>
 
@@ -21,70 +120,125 @@ const { data: ips } = useAsyncData(`ipmgtSubnetIps-${route.params.id}`, () => $f
       <p class="text-sm text-(--color-muted)">You don't have access to KNetraHub-IPMgt.</p>
     </div>
 
-    <div v-else-if="subnet" class="space-y-6">
-      <div class="panel p-5 grid grid-cols-2 md:grid-cols-4 gap-6">
-        <div>
-          <span class="text-xs font-medium uppercase text-(--color-muted)">Network Address</span>
-          <p class="mt-1 font-mono text-sm text-foam">{{ subnet.network }}</p>
-        </div>
-        <div>
-          <span class="text-xs font-medium uppercase text-(--color-muted)">Gateway</span>
-          <p class="mt-1 font-mono text-sm text-foam">{{ subnet.gateway }}</p>
-        </div>
-        <div>
-          <span class="text-xs font-medium uppercase text-(--color-muted)">VLAN</span>
-          <p class="mt-1 text-sm text-foam">{{ subnet.vlan }}</p>
-        </div>
-        <div>
-          <span class="text-xs font-medium uppercase text-(--color-muted)">Utilization</span>
-          <div class="mt-1 flex items-center gap-2">
-            <div class="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden max-w-[100px]">
-              <div class="h-full rounded-full bg-beacon transition-all" :style="{ width: `${subnet.usage}%` }"></div>
-            </div>
-            <p class="text-sm text-foam">{{ subnet.usage }}%</p>
-          </div>
-        </div>
-      </div>
+    <DataState v-else :status="status" :error="error">
+      <div v-if="subnet" class="space-y-6">
+        <NuxtLink to="/ipmgt/subnets" class="inline-flex items-center gap-1 text-xs text-faint hover:text-beacon"><UIcon name="i-lucide-arrow-left" class="size-3.5" /> Back to subnets</NuxtLink>
 
-      <section class="panel">
-        <div class="p-4 border-b border-surface flex items-center justify-between">
-          <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">IP Addresses</h2>
-          <div class="flex items-center gap-2">
-             <UInput icon="i-lucide-search" placeholder="Search IP or hostname..." size="sm" />
-          </div>
+        <!-- Facts + usage -->
+        <div class="grid gap-4 xl:grid-cols-3">
+          <section class="panel p-5 xl:col-span-2">
+            <h2 class="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Details</h2>
+            <dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+              <div v-for="[k, v] in facts" :key="k">
+                <dt class="text-xs text-faint">{{ k }}</dt>
+                <dd class="truncate font-mono text-sm text-foam" :title="String(v)">{{ v }}</dd>
+              </div>
+            </dl>
+            <p v-if="subnet.description" class="mt-4 border-t border-surface pt-3 text-sm text-(--color-muted)">{{ subnet.description }}</p>
+          </section>
+
+          <section class="panel p-5 flex flex-col justify-center">
+            <h2 class="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Utilization</h2>
+            <p class="font-display text-4xl font-bold text-foam">{{ subnet.usage?.percent || 0 }}%</p>
+            <p class="mt-1 text-xs text-(--color-muted)">{{ subnet.usage?.used || 0 }} used · {{ subnet.usage?.free || 0 }} free of {{ subnet.usage?.capacity || 0 }}</p>
+            <div class="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-surface-2">
+              <div class="h-full rounded-full" :class="usageBarClass(subnet.usage?.percent || 0)" :style="{ width: `${subnet.usage?.percent || 0}%` }" />
+            </div>
+            <div v-if="subnet.children?.length" class="mt-4 border-t border-surface pt-3">
+              <p class="mb-1 text-xs text-faint">Child subnets</p>
+              <NuxtLink v-for="c in subnet.children" :key="c.id" :to="`/ipmgt/subnets/${c.id}`" class="block font-mono text-xs text-beacon hover:underline">{{ c.network }}</NuxtLink>
+            </div>
+          </section>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-(--color-muted)">
+
+        <!-- Visual grid -->
+        <section class="panel p-5">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Address map</h2>
+            <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-2 text-xs text-faint">
+                <span v-for="k in ['free','used','reserved','dhcp','offline','deprecated','gateway']" :key="k" class="inline-flex items-center gap-1">
+                  <span class="size-2.5 rounded-sm" :class="statusMeta(k).swatch" /> {{ statusMeta(k).label }}
+                </span>
+              </div>
+              <UInput v-model="gridFilter" icon="i-lucide-search" size="xs" placeholder="Filter IP…" class="w-40" />
+            </div>
+          </div>
+          <p v-if="grid?.truncated" class="mb-2 text-xs text-amber-400">Showing first {{ grid.gridLimit }} of {{ grid.total }} addresses.</p>
+          <div class="flex flex-wrap gap-1">
+            <button v-for="c in visibleCells" :key="c.ip"
+                    class="group relative size-6 rounded-sm text-[0px] transition hover:ring-2 hover:ring-beacon"
+                    :class="statusMeta(c.status).swatch"
+                    :title="`${c.ip}${c.record?.hostname ? ' · ' + c.record.hostname : ''} (${statusMeta(c.status).label})`"
+                    @click="onCellClick(c)">{{ c.ip }}</button>
+          </div>
+        </section>
+
+        <!-- Defined addresses table -->
+        <section class="panel overflow-x-auto">
+          <div class="flex items-center justify-between px-4 py-3">
+            <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Defined addresses ({{ definedAddresses.length }})</h2>
+          </div>
+          <table class="w-full text-left text-sm">
             <thead class="bg-surface-2 text-xs uppercase text-faint">
               <tr>
-                <th class="px-4 py-2 font-medium">IP Address</th>
-                <th class="px-4 py-2 font-medium">State</th>
-                <th class="px-4 py-2 font-medium">Hostname</th>
-                <th class="px-4 py-2 font-medium">MAC Address</th>
-                <th class="px-4 py-2 font-medium">Description</th>
+                <th class="px-4 py-3 font-medium">Address</th>
+                <th class="px-4 py-3 font-medium">Hostname</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+                <th class="px-4 py-3 font-medium">Owner</th>
+                <th class="px-4 py-3 font-medium">MAC</th>
+                <th class="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-surface">
-              <tr v-for="addr in ips" :key="addr.id" class="hover:bg-surface-2/50 transition" :class="{'opacity-60': addr.state === 'Available'}">
-                <td class="px-4 py-2 font-mono text-foam font-medium">{{ addr.ip }}</td>
-                <td class="px-4 py-2">
-                  <span class="px-2 py-0.5 rounded text-xs font-medium"
-                        :class="{
-                          'bg-green-500/10 text-green-500': addr.state === 'Available',
-                          'bg-blue-500/10 text-blue-500': addr.state === 'Used',
-                          'bg-orange-500/10 text-orange-500': addr.state === 'Reserved'
-                        }">
-                    {{ addr.state }}
-                  </span>
+              <tr v-if="!definedAddresses.length"><td colspan="6" class="px-4 py-8 text-center text-sm text-faint">No addresses defined. Click a free cell above or “Add address”.</td></tr>
+              <tr v-for="c in definedAddresses" :key="c.ip" class="hover:bg-surface-2/40">
+                <td class="px-4 py-3 font-mono text-foam">{{ c.ip }}</td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ c.record.hostname || '—' }}</td>
+                <td class="px-4 py-3"><IpamIpStatusBadge :status="c.status" /></td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ c.record.owner || '—' }}</td>
+                <td class="px-4 py-3 font-mono text-xs text-faint">{{ c.record.mac || '—' }}</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    <UButton v-if="canUpdate" size="xs" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="editAddress(c.record.id)" />
+                    <UButton v-if="canUpdate" size="xs" variant="ghost" color="error" icon="i-lucide-x" aria-label="Release" @click="releaseTarget = c.record" />
+                  </div>
                 </td>
-                <td class="px-4 py-2">{{ addr.hostname }}</td>
-                <td class="px-4 py-2 font-mono text-xs">{{ addr.mac }}</td>
-                <td class="px-4 py-2">{{ addr.description }}</td>
               </tr>
             </tbody>
           </table>
+        </section>
+      </div>
+    </DataState>
+
+    <IpamAddressFormModal v-model:open="addrOpen" :address="editingAddr" :subnet-id="id" :preset-ip="presetIp" @saved="refreshAll" />
+    <IpamSubnetFormModal v-model:open="subnetFormOpen" :subnet="subnet" @saved="refreshAll" />
+
+    <UModal :open="!!releaseTarget" @update:open="(v: boolean) => { if (!v) releaseTarget = null }" title="Release address">
+      <template #body>
+        <p class="text-sm text-(--color-muted)">Release <span class="font-mono text-foam">{{ releaseTarget?.ip }}</span>? It becomes free again.</p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-3">
+          <UButton variant="ghost" @click="releaseTarget = null">Cancel</UButton>
+          <UButton color="error" :loading="releasing" @click="confirmRelease">Release</UButton>
         </div>
-      </section>
-    </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="deleteOpen" title="Delete subnet">
+      <template #body>
+        <p class="text-sm text-(--color-muted)">
+          Delete subnet <span class="font-mono text-foam">{{ subnet?.network }}</span> and all
+          <span class="text-foam">{{ subnet?.usage?.used || 0 }}</span> defined address(es)? This cannot be undone.
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-3">
+          <UButton variant="ghost" @click="deleteOpen = false">Cancel</UButton>
+          <UButton color="error" :loading="deleting" @click="deleteSubnet(true)">Delete subnet</UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

@@ -1,53 +1,142 @@
 <script setup lang="ts">
+// Subnets list: filter by section/version/text, live usage bars, create/edit/
+// delete. Reuses IpamSubnetFormModal for the form.
 const { hasApp } = useAuth()
+const { canCreate, canUpdate, canDelete } = useIpam()
+const route = useRoute()
+const toast = useToast()
 
-const { data: subnets } = useAsyncData('ipmgtSubnetsList', () => $fetch('/api/ipmgt/subnets'))
+const filters = reactive({
+  section_id: (route.query.section_id as string) || '',
+  version: '',
+  q: ''
+})
+
+const query = computed(() => {
+  const p = new URLSearchParams()
+  if (filters.section_id) p.set('section_id', filters.section_id)
+  if (filters.version) p.set('version', filters.version)
+  if (filters.q) p.set('q', filters.q)
+  return p.toString()
+})
+
+const { data: subnets, status, error, refresh } = useAsyncData('ipamSubnetsList',
+  () => $fetch<any[]>(`/api/ipmgt/subnets${query.value ? '?' + query.value : ''}`),
+  { server: false, default: () => [], watch: [query] })
+
+const { data: sections } = useAsyncData('ipamSubnetsSections', () => $fetch<any[]>('/api/ipmgt/sections'), { server: false, default: () => [] })
+const sectionItems = computed(() => [{ value: '', label: 'All sections' }, ...(sections.value || []).map((s: any) => ({ value: s.id, label: s.name }))])
+const versionItems = [{ value: '', label: 'All' }, { value: '4', label: 'IPv4' }, { value: '6', label: 'IPv6' }]
+
+const formOpen = ref(false)
+const editing = ref<any>(null)
+function openCreate() { editing.value = null; formOpen.value = true }
+function openEdit(s: any) { editing.value = s; formOpen.value = true }
+
+const deleteTarget = ref<any>(null)
+const deleting = ref(false)
+async function confirmDelete(force = false) {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/ipmgt/subnets/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE' })
+    toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
+    deleteTarget.value = null
+    await refresh()
+  } catch (e: any) {
+    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { deleting.value = false }
+}
 </script>
 
 <template>
   <div>
-    <PageHeader title="Subnets" subtitle="IPv4 and IPv6 managed subnets" icon="i-lucide-network" />
+    <PageHeader title="Subnets" subtitle="IPv4 and IPv6 managed subnets" icon="i-lucide-network">
+      <template v-if="hasApp('ipmgt') && canCreate" #actions>
+        <UButton icon="i-lucide-plus" size="sm" @click="openCreate">Add subnet</UButton>
+      </template>
+    </PageHeader>
 
     <div v-if="!hasApp('ipmgt')" class="panel flex flex-col items-center gap-2 p-10 text-center">
       <UIcon name="i-lucide-lock" class="size-6 text-faint" />
       <p class="text-sm text-(--color-muted)">You don't have access to KNetraHub-IPMgt.</p>
     </div>
 
-    <div v-else class="panel">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-(--color-muted)">
-          <thead class="bg-surface-2 text-xs uppercase text-faint">
-            <tr>
-              <th class="px-4 py-3 font-medium">Subnet</th>
-              <th class="px-4 py-3 font-medium">Description</th>
-              <th class="px-4 py-3 font-medium">VLAN</th>
-              <th class="px-4 py-3 font-medium">Usage</th>
-              <th class="px-4 py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-surface">
-            <tr v-for="sub in subnets" :key="sub.id" class="hover:bg-surface-2/50 transition">
-              <td class="px-4 py-3 font-mono text-foam font-medium">{{ sub.subnet }}</td>
-              <td class="px-4 py-3">{{ sub.name }}</td>
-              <td class="px-4 py-3">{{ sub.vlan }}</td>
-              <td class="px-4 py-3 min-w-[200px]">
-                <div class="flex items-center gap-3">
-                  <div class="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all" 
-                         :class="sub.usage > 80 ? 'bg-red-500' : (sub.usage > 60 ? 'bg-orange-500' : 'bg-green-500')"
-                         :style="{ width: `${sub.usage}%` }">
-                    </div>
-                  </div>
-                  <span class="text-xs text-faint w-8 text-right">{{ sub.usage }}%</span>
-                </div>
-              </td>
-              <td class="px-4 py-3 text-right">
-                <NuxtLink :to="`/ipmgt/subnets/${sub.id}`" class="text-beacon hover:underline">View IPs</NuxtLink>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <div v-else class="space-y-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <USelect v-model="filters.section_id" :items="sectionItems" value-key="value" label-key="label" size="sm" class="w-44" />
+        <USelect v-model="filters.version" :items="versionItems" value-key="value" label-key="label" size="sm" class="w-28" />
+        <UInput v-model="filters.q" icon="i-lucide-search" size="sm" placeholder="Search name or CIDR…" class="w-56" />
       </div>
+
+      <DataState :status="status" :error="error" :empty="!subnets.length"
+                 empty-label="No subnets match. Add one to get started." empty-icon="i-lucide-network">
+        <template #empty-action>
+          <UButton v-if="canCreate" class="mt-3" icon="i-lucide-plus" size="sm" @click="openCreate">Add subnet</UButton>
+        </template>
+        <div class="panel overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-surface-2 text-xs uppercase text-faint">
+              <tr>
+                <th class="px-4 py-3 font-medium">Subnet</th>
+                <th class="px-4 py-3 font-medium">Name</th>
+                <th class="px-4 py-3 font-medium">Section</th>
+                <th class="px-4 py-3 font-medium">VLAN</th>
+                <th class="px-4 py-3 font-medium">VRF</th>
+                <th class="px-4 py-3 font-medium min-w-[200px]">Usage</th>
+                <th class="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-surface">
+              <tr v-for="s in subnets" :key="s.id" class="hover:bg-surface-2/40">
+                <td class="px-4 py-3">
+                  <NuxtLink :to="`/ipmgt/subnets/${s.id}`" class="font-mono font-medium text-foam hover:text-beacon">{{ s.network }}</NuxtLink>
+                  <UBadge v-if="s.version === 6" color="info" variant="subtle" size="xs" class="ml-2">v6</UBadge>
+                </td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ s.name }}</td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ s.section_name || '—' }}</td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ s.vlan_number ? `${s.vlan_number}` : '—' }}</td>
+                <td class="px-4 py-3 text-(--color-muted)">{{ s.vrf_name || '—' }}</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                      <div class="h-full rounded-full" :class="usageBarClass(s.usage?.percent || 0)" :style="{ width: `${s.usage?.percent || 0}%` }" />
+                    </div>
+                    <span class="w-16 text-right text-xs text-faint">{{ s.usage?.used || 0 }}/{{ s.usage?.capacity || 0 }}</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    <UButton size="xs" variant="ghost" icon="i-lucide-eye" :to="`/ipmgt/subnets/${s.id}`" aria-label="View" />
+                    <UButton v-if="canUpdate" size="xs" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="openEdit(s)" />
+                    <UButton v-if="canDelete" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete" @click="deleteTarget = s" />
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </DataState>
     </div>
+
+    <IpamSubnetFormModal v-model:open="formOpen" :subnet="editing" :preset-section-id="filters.section_id || null" @saved="refresh" />
+
+    <UModal :open="!!deleteTarget" @update:open="(v: boolean) => { if (!v) deleteTarget = null }" title="Delete subnet">
+      <template #body>
+        <p class="text-sm text-(--color-muted)">
+          Delete subnet <span class="font-mono text-foam">{{ deleteTarget?.network }}</span>?
+          <template v-if="deleteTarget?.usage?.used">
+            It contains <span class="text-foam">{{ deleteTarget.usage.used }}</span> address(es) — force delete removes them too.
+          </template>
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-3">
+          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
+          <UButton v-if="deleteTarget?.usage?.used" color="error" variant="soft" :loading="deleting" @click="confirmDelete(true)">Force delete</UButton>
+          <UButton v-else color="error" :loading="deleting" @click="confirmDelete(false)">Delete</UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

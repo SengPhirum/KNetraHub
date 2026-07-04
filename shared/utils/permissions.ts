@@ -26,6 +26,7 @@ export const PERMISSIONS = [
   'monitoring.metrics', 'monitoring.service.manage', 'monitoring.alert',
   // KNetraHub-IPMgt
   'ipmgt.view', 'ipmgt.create', 'ipmgt.update', 'ipmgt.delete', 'ipmgt.assign', 'ipmgt.export',
+  'ipmgt.import', 'ipmgt.scan', 'ipmgt.request', 'ipmgt.approve', 'ipmgt.settings',
   // Admin
   'admin.users', 'admin.roles', 'admin.permissions', 'admin.settings', 'admin.modules'
 ] as const
@@ -60,9 +61,9 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierP
   },
   ipmgt: {
     viewer: ['ipmgt.view', 'ipmgt.export'],
-    operator: ['ipmgt.create', 'ipmgt.update', 'ipmgt.assign'],
-    manager: [],
-    admin: ['ipmgt.delete']
+    operator: ['ipmgt.create', 'ipmgt.update', 'ipmgt.assign', 'ipmgt.import', 'ipmgt.scan', 'ipmgt.request'],
+    manager: ['ipmgt.approve'],
+    admin: ['ipmgt.delete', 'ipmgt.settings']
   }
 }
 

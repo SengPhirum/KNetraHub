@@ -1,6 +1,6 @@
 # KNetraHub v0.1.1
 
-Date: 2026-07-03 UTC
+Date: 2026-07-04 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-07-03 UTC
 
 ## Source
 
-- Commit: `fc428d9`
+- Commit: `d038f7f`
 - Previous tag: none
 
 ## Changes
 
+- feat: add file environment variable resolution for KNETRAHUB_AGENT_TOKEN and update docker-compose for compatibility (d038f7f)
 - feat: update release notes for v0.1.1 with health check endpoint and database readiness enhancements (fc428d9)
 - feat: add health check endpoint and enhance database readiness handling in entrypoint (2955e57)
 - feat: add NUXT_JWT_SECRET and NUXT_AGENT_TOKEN to environment variable setup (82bac79)
@@ -72,9 +73,42 @@ Date: 2026-07-03 UTC
 The working tree had uncommitted changes before this release script ran.
 
 ```text
-M  .env.example
-M  agent/Dockerfile
-A  agent/fileEnv.mjs
-M  agent/index.mjs
-M  docker-compose.yml
+ M RELEASE_NOTES.md
+ M app/composables/useNav.ts
+ M app/pages/ipmgt/index.vue
+ M app/pages/ipmgt/settings.vue
+ M app/pages/ipmgt/subnets/[id].vue
+ M app/pages/ipmgt/subnets/index.vue
+ M release-notes/v0.1.1.md
+ M server/api/ipmgt/subnets/[id]/index.get.ts
+ M server/api/ipmgt/subnets/[id]/ips.get.ts
+ M server/api/ipmgt/subnets/index.get.ts
+ M server/plugins/seedSubsystems.ts
+ M server/utils/db.ts
+ M shared/utils/permissions.ts
+?? app/components/ipam/
+?? app/composables/useIpam.ts
+?? app/pages/ipmgt/addresses/
+?? app/pages/ipmgt/search.vue
+?? app/pages/ipmgt/sections/
+?? app/pages/ipmgt/tools.vue
+?? app/pages/ipmgt/vlans/
+?? app/pages/ipmgt/vrfs/
+?? server/api/ipmgt/addresses/
+?? server/api/ipmgt/calculator.get.ts
+?? server/api/ipmgt/dashboard.get.ts
+?? server/api/ipmgt/l2domains/
+?? server/api/ipmgt/search.get.ts
+?? server/api/ipmgt/sections/
+?? server/api/ipmgt/settings.get.ts
+?? server/api/ipmgt/settings.put.ts
+?? server/api/ipmgt/subnets/[id]/first-free.get.ts
+?? server/api/ipmgt/subnets/[id]/index.delete.ts
+?? server/api/ipmgt/subnets/[id]/index.put.ts
+?? server/api/ipmgt/subnets/[id]/reserve.post.ts
+?? server/api/ipmgt/subnets/index.post.ts
+?? server/api/ipmgt/vlans/
+?? server/api/ipmgt/vrfs/
+?? server/utils/ipam.ts
+?? server/utils/ipamStore.ts
 ```

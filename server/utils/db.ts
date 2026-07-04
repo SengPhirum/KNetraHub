@@ -708,6 +708,126 @@ async function runMigrations(): Promise<void> {
       state TEXT NOT NULL DEFAULT 'Available'
     );
 
+    -- ── IPAM Module: full phpIPAM-style schema (Phase 1) ─────────────────────
+    -- Sections (phpIPAM sections/tenants): a tree grouping subnets by
+    -- department/environment/branch/zone. strict_mode enforces that child
+    -- subnets nest within a parent subnet's range.
+    CREATE TABLE IF NOT EXISTS ipmgt_sections (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      parent_id TEXT REFERENCES ipmgt_sections(id) ON DELETE SET NULL,
+      strict_mode BOOLEAN NOT NULL DEFAULT false,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_sections_parent ON ipmgt_sections(parent_id);
+
+    -- L2 domains (phpIPAM VLAN domains): a namespace within which a VLAN id is
+    -- unique. The same VLAN id may repeat across different L2 domains.
+    CREATE TABLE IF NOT EXISTS ipmgt_l2domains (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      location TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ipmgt_vlans (
+      id TEXT PRIMARY KEY,
+      vlan_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      l2domain_id TEXT REFERENCES ipmgt_l2domains(id) ON DELETE SET NULL,
+      location TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vlans_vid ON ipmgt_vlans(vlan_id);
+
+    -- VRFs: allow overlapping IP space when subnets belong to different VRFs.
+    CREATE TABLE IF NOT EXISTS ipmgt_vrfs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      rd TEXT,
+      description TEXT,
+      owner TEXT,
+      location TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+
+    -- Extend the MVP subnet table into a full IPAM subnet. network still holds
+    -- the CIDR string (e.g. "10.0.1.0/24"); version/prefix/netmask are derived
+    -- and cached for display + fast filtering. vlan_ref/vrf_id/section_id link
+    -- to the tables above; parent_id nests subnets into a tree.
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS section_id TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS parent_id TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS vlan_ref TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS vrf_id TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 4;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS prefix INTEGER;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS netmask TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS dns_servers TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS location TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS owner TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS allow_requests BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS scan_enabled BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS ping_enabled BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS dns_resolve BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS dhcp_range BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS created_at TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS updated_at TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS created_by TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS updated_by TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_subnets_section ON ipmgt_subnets(section_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_subnets_parent ON ipmgt_subnets(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_subnets_vrf ON ipmgt_subnets(vrf_id);
+
+    -- Extend the MVP address table. status is the canonical lifecycle field
+    -- (used | reserved | dhcp | offline | deprecated | gateway); the legacy
+    -- "state" column is retained and mirrored for backward compatibility. Free
+    -- addresses are intentionally NOT stored — free == in-subnet minus rows here.
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS status TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS owner TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS device TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS dns_name TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS ptr TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS nat_to TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS note TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS last_seen TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS last_scanned TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS created_at TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS updated_at TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS created_by TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS updated_by TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_subnet ON ipmgt_ips(subnet_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_ip ON ipmgt_ips(ip);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_status ON ipmgt_ips(status);
+
+    -- Per-address change history (IP detail "History" tab).
+    CREATE TABLE IF NOT EXISTS ipmgt_ip_history (
+      id TEXT PRIMARY KEY,
+      ip_id TEXT,
+      subnet_id TEXT,
+      ip TEXT NOT NULL,
+      action TEXT NOT NULL,
+      actor TEXT,
+      detail TEXT,
+      changed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ip_history_ipid ON ipmgt_ip_history(ip_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ip_history_changed ON ipmgt_ip_history(changed_at DESC);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

@@ -131,20 +131,37 @@ const MONITORING_GROUPS: NavGroup[] = [
   }
 ]
 
-// The IP Management app's navigation.
+// The IP Management (IPAM) app's navigation — a phpIPAM-style tree grouped by
+// function: address space (sections/subnets/addresses), layer 2/3 (VLANs/VRFs),
+// tools (search/calculator) and admin settings.
 const IPMGT_GROUPS: NavGroup[] = [
   {
-    label: 'IP Management',
+    label: 'Address Space',
     items: [
-      { label: 'Overview',  to: '/ipmgt',           icon: 'i-lucide-radar',       permission: 'ipmgt.view' },
-      { label: 'Subnets',   to: '/ipmgt/subnets',   icon: 'i-lucide-network',     permission: 'ipmgt.view' },
-      { label: 'Addresses', to: '/ipmgt/addresses', icon: 'i-lucide-list-ordered',permission: 'ipmgt.view' }
+      { label: 'Dashboard',    to: '/ipmgt',           icon: 'i-lucide-layout-dashboard', permission: 'ipmgt.view' },
+      { label: 'Sections',     to: '/ipmgt/sections',  icon: 'i-lucide-folder-tree',      permission: 'ipmgt.view' },
+      { label: 'Subnets',      to: '/ipmgt/subnets',   icon: 'i-lucide-network',          permission: 'ipmgt.view' },
+      { label: 'IP Addresses', to: '/ipmgt/addresses', icon: 'i-lucide-list-ordered',     permission: 'ipmgt.view' }
+    ]
+  },
+  {
+    label: 'Layer 2 / Layer 3',
+    items: [
+      { label: 'VLANs', to: '/ipmgt/vlans', icon: 'i-lucide-layers',   permission: 'ipmgt.view' },
+      { label: 'VRFs',  to: '/ipmgt/vrfs',  icon: 'i-lucide-git-fork', permission: 'ipmgt.view' }
+    ]
+  },
+  {
+    label: 'Tools',
+    items: [
+      { label: 'Search',     to: '/ipmgt/search', icon: 'i-lucide-search',     permission: 'ipmgt.view' },
+      { label: 'Calculator', to: '/ipmgt/tools',  icon: 'i-lucide-calculator', permission: 'ipmgt.view' }
     ]
   },
   {
     label: 'IP Management admin',
     items: [
-      { label: 'Settings', to: '/ipmgt/settings', icon: 'i-lucide-settings', permission: 'ipmgt.delete' }
+      { label: 'Settings', to: '/ipmgt/settings', icon: 'i-lucide-settings', permission: 'ipmgt.settings' }
     ]
   }
 ]
