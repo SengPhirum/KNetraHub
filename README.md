@@ -1,4 +1,4 @@
-# KNetraHub
+# KNetraHub (Khmer Netra Hub)
 
 **A portal for everything in your infrastructure, one hub at a time.** 
 
