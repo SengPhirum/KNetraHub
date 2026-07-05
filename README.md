@@ -54,15 +54,20 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 
 ## 🏗️ Architecture
 
-KNetraHub is split into a **portal** (this repo's `app/` and `server/`) and **subsystems**, each independently buildable/deployable:
+KNetraHub is split into a **portal core** (this repo's root `app/` and `server/`) and **module layers** under `layers/`, all served in-process by one Nuxt app:
 
 ```text
-KNetraHub (portal)              <- login, user prefs, app launcher (home), settings, audit, access control
-├── Dock  (KNetraHub-Docker)    <- built in, in-repo app (existing Swarm pages, dashboard at /dock)
-├── KNetraHub-Net      (remote)  <- remotes/knetrahub-net + services/knetrahub-net-api
-├── KNetraHub-Server   (remote)  <- not built yet, same pattern as KNetraHub-Net
-└── KNetraHub-IPMgt    (remote)  <- not built yet, same pattern as KNetraHub-Net
+app/, server/, shared/           <- portal core: login/auth, launcher (home), admin settings,
+                                    preferences, users, audit, alert channels, shared UI/utils
+layers/
+├── docker/                      <- Docker Swarm management (nodes, services, stacks, tasks,
+│                                   containers, networks, volumes, secrets, configs, registries)
+├── monitoring/                  <- network devices (/monitoring/network, /api/net) and
+│                                   server hosts (/monitoring/server, /api/server) + pollers
+└── ipmgt/                       <- IP address management (/ipmgt, /api/ipmgt)
 ```
+
+Each layer is a [Nuxt layer](https://nuxt.com/docs/getting-started/layers) auto-registered from the `layers/` directory, mirroring the root structure (`app/pages`, `app/components`, `app/composables`, `app/utils`, `server/api`, `server/utils`, `server/plugins`). Everything merges into one build with unchanged URLs and component names — a module's code just lives in one folder now.
 
 The **home page is an app launcher**: it shows only the apps the signed-in user may reach. The sidebar is **contextual** - it surfaces an app's own navigation only while you're inside that app. 
 

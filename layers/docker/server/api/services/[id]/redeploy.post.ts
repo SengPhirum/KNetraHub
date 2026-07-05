@@ -1,0 +1,25 @@
+import { requireRole } from '~~/server/utils/auth'
+import { withServiceSpec } from '~~/layers/docker/server/utils/serviceMutation'
+import { audit } from '~~/server/utils/store'
+import { fireAlert } from '~~/server/utils/alertNotify'
+export default defineEventHandler(async (event) => {
+  const user = await requireRole(event, 'operator')
+  const id = getRouterParam(event, 'id')!
+  const result = await withServiceSpec(id, (spec) => {
+    // Bumping ForceUpdate alone recreates tasks but reuses whatever image
+    // digest is already pinned in the spec - it does NOT re-pull, so a
+    // newly-pushed image under the same tag is never picked up. Strip any
+    // pinned digest so Swarm re-resolves the tag against the registry too,
+    // the same way `docker service update --image <repo>:<tag>` (or the
+    // autoredeploy poller) does.
+    const container = spec.TaskTemplate?.ContainerSpec
+    if (container?.Image) container.Image = container.Image.split('@')[0]
+    spec.TaskTemplate = { ...spec.TaskTemplate, ForceUpdate: (spec.TaskTemplate?.ForceUpdate || 0) + 1 }
+  }).catch(async (err: any) => {
+    await fireAlert({ ruleType: 'deploy_failed', target: id, severity: 'critical', vars: { target: id, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
+    throw err
+  })
+  const { info } = result
+  await audit({ actor: user.username, action: 'service.redeploy', target: info.Spec.Name })
+  return { ok: true }
+})

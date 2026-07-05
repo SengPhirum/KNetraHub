@@ -2,10 +2,12 @@ import type { ModuleDefinition } from '../../shared/types/module'
 
 /**
  * KNetraHub module registry - the apps shown on the home launcher. Every app
- * is now served in-process by this app (SPA pages under app/pages + Nitro API
- * routes); there are no Module-Federation remotes anymore. A new app only
- * needs a registry entry plus its access wiring (permission + nav group), not
- * bespoke nav code.
+ * is served in-process by this app; there are no Module-Federation remotes
+ * anymore. Each module's sources live in their own Nuxt layer under
+ * layers/<key>/ (app/pages, app/components, server/api, server/utils, ...),
+ * auto-registered by Nuxt and merged into the app with unchanged URLs.
+ * A new app needs a layers/<key>/ folder, a registry entry, and its access
+ * wiring (permission + nav group), not bespoke nav code.
  */
 export function getModuleRegistry(): ModuleDefinition[] {
   const modules: ModuleDefinition[] = [
