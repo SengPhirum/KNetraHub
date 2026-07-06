@@ -36,10 +36,7 @@ async function submit() {
     <!-- Compact brand mark - shown when the hero panel is hidden (mobile/tablet); the
          layout's hero panel already carries the full lockup + thesis on lg+ screens. -->
     <div class="mb-8 text-center lg:hidden">
-      <span class="mx-auto mb-4 flex size-16 items-center justify-center">
-        <KNetraHubLogo variant="icon" class="size-16" />
-      </span>
-      <KNetraHubLogo size="md" class="mx-auto max-w-full" />
+      <KNetraHubLogo size="lg" class="mx-auto max-w-full" />
       <p class="mt-2 text-sm text-(--color-muted)">Docker orchestration, monitoring, and IP management — unified in one hub.</p>
     </div>
 

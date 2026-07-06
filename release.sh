@@ -191,7 +191,6 @@ DOCKER_BIN="$(resolve_command docker)" || fail "Missing required command: docker
 GIT_BIN="$(resolve_command git)" || fail "Missing required command: git"
 
 current_version="$("${NODE_BIN}" -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
-dirty_before="$("${GIT_BIN}" status --short 2>/dev/null || true)"
 
 validate_version() {
   "${NODE_BIN}" - "$1" <<'NODE'
@@ -317,11 +316,6 @@ release_notes_file="${RELEASE_NOTES_DIR}/v${next_version}.md"
   fi
   printf '\n## Changes\n\n'
   printf '%s\n' "${changes}"
-  if [[ -n "${dirty_before}" ]]; then
-    printf '\n## Local Changes Included In Build Context\n\n'
-    printf 'The working tree had uncommitted changes before this release script ran.\n\n'
-    printf '```text\n%s\n```\n' "${dirty_before}"
-  fi
 } > "${release_notes_file}"
 
 cp "${release_notes_file}" "${LATEST_RELEASE_NOTES}"
