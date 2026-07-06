@@ -11,11 +11,12 @@ Date: 2026-07-06 UTC
 
 ## Source
 
-- Commit: `8e23d35`
+- Commit: `8aaca61`
 - Previous tag: none
 
 ## Changes
 
+- fix: correct commit reference in release notes for v0.1.1; enhance authentication UI; implement registry management features; remove local changes section from release script (8aaca61)
 - fix: update release notes for v0.1.1 with correct commit reference and date; enhance authentication UI; implement registry management features; remove local changes section from release script (8e23d35)
 - fix: update release notes for v0.1.1 with correct commit reference and date refactor: move registry management to settings tab and update related components feat: enhance authentication UI with hero panel and improved login experience feat: implement registry management with add/edit/delete functionality and permissions fix: update permissions to include registry management (c1e4370)
 - fix: update release date and commit reference in release notes for v0.1.1 (b7a1e37)

@@ -65,12 +65,10 @@ function isActive(to: string) {
     <!-- wordmark -->
     <NuxtLink
       :to="logoTarget"
-      class="flex h-18 shrink-0 items-center border-b border-hull-soft px-4 py-3"
+      class="flex h-20 shrink-0 items-center border-b border-hull-soft px-4"
       @click="emit('navigate')"
     >
-      <span class="flex w-full items-center justify-center px-3 py-2">
-        <KNetraHubLogo size="sm" class="max-w-full" :caption="appCaption" />
-      </span>
+      <KNetraHubLogo size="md" class="max-w-full" :caption="appCaption" />
     </NuxtLink>
 
     <!-- nav -->
