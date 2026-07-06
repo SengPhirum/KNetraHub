@@ -1,6 +1,6 @@
 import { requireUser } from '~~/server/utils/auth'
-import { assertSwarm, useDocker } from '~~/server/utils/docker'
-import { listStacks } from '~~/server/utils/stack'
+import { assertSwarm, useDocker } from '~~/layers/docker/server/utils/docker'
+import { listStacks } from '~~/layers/docker/server/utils/stack'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)

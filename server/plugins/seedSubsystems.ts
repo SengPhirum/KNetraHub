@@ -1,6 +1,6 @@
 import { getDb, waitForDb, migrate } from '../utils/db'
 import { nanoid } from 'nanoid'
-import { cidrInfo, isValidCidr } from '../utils/ipam'
+import { cidrInfo, isValidCidr } from '~~/layers/ipmgt/server/utils/ipam'
 
 export default defineNitroPlugin(async (nitroApp) => {
   if (useRuntimeConfig().public.staticDocs) return

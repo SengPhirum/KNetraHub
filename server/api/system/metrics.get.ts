@@ -1,5 +1,5 @@
 import { requireUser } from '~~/server/utils/auth'
-import { assertSwarm, useDocker } from '~~/server/utils/docker'
+import { assertSwarm, useDocker } from '~~/layers/docker/server/utils/docker'
 import { getDb } from '~~/server/utils/db'
 
 const RANGES: Record<string, { lookback: string; bucket: string }> = {
