@@ -20,7 +20,7 @@ export const PERMISSIONS = [
   // Global
   'dashboard.view', 'alert.view', 'alert.manage', 'audit.view', 'audit.export', 'report.view', 'report.export',
   // KNetraHub-Docker
-  'docker.view', 'docker.manage', 'docker.deploy', 'docker.audit',
+  'docker.view', 'docker.manage', 'docker.deploy', 'docker.audit', 'docker.registry.manage',
   // KNetraHub-Monitoring (merged Network + Server)
   'monitoring.view', 'monitoring.manage', 'monitoring.scan', 'monitoring.configure',
   'monitoring.metrics', 'monitoring.service.manage', 'monitoring.alert',
@@ -50,7 +50,7 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierP
   docker: {
     viewer: ['docker.view'],
     operator: ['docker.manage', 'docker.deploy'],
-    manager: ['docker.audit'],
+    manager: ['docker.audit', 'docker.registry.manage'],
     admin: []
   },
   monitoring: {

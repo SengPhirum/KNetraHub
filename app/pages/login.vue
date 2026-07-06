@@ -33,39 +33,51 @@ async function submit() {
 
 <template>
   <div class="w-full max-w-sm">
-    <!-- wordmark + thesis -->
-    <div class="mb-8 text-center">
-      <span class="mx-auto mb-4 flex size-20 items-center justify-center">
-        <KNetraHubLogo variant="icon" class="size-20" />
+    <!-- Compact brand mark - shown when the hero panel is hidden (mobile/tablet); the
+         layout's hero panel already carries the full lockup + thesis on lg+ screens. -->
+    <div class="mb-8 text-center lg:hidden">
+      <span class="mx-auto mb-4 flex size-16 items-center justify-center">
+        <KNetraHubLogo variant="icon" class="size-16" />
       </span>
-      <KNetraHubLogo size="lg" class="mx-auto mb-3 max-w-full" />
-      <h1 class="sr-only">{{ appearance.appName }}</h1>
-      <p class="mt-1.5 text-sm text-(--color-muted)">Run your Docker Swarm from one hub.</p>
+      <KNetraHubLogo size="md" class="mx-auto max-w-full" />
+      <p class="mt-2 text-sm text-(--color-muted)">Docker orchestration, monitoring, and IP management — unified in one hub.</p>
     </div>
 
-    <form class="panel p-6 space-y-4" @submit.prevent="submit">
-      <div>
-        <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Username</label>
-        <UInput
-          v-model="username"
-          icon="i-lucide-user"
-          placeholder="admin"
-          autocomplete="username"
-          size="lg"
-          class="w-full"
-        />
+    <form class="panel p-6 space-y-5 sm:p-7" @submit.prevent="submit">
+      <div class="flex items-center gap-3">
+        <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 ring-1 ring-hull">
+          <UIcon name="i-lucide-log-in" class="size-5 text-beacon" />
+        </span>
+        <div class="min-w-0">
+          <h1 class="font-display text-lg font-semibold text-foam">Welcome back</h1>
+          <p class="text-xs text-faint">Sign in to {{ appearance.appName }} to continue</p>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Password</label>
-        <UInput
-          v-model="password"
-          type="password"
-          icon="i-lucide-lock"
-          placeholder="••••••••"
-          autocomplete="current-password"
-          size="lg"
-          class="w-full"
-        />
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Username</label>
+          <UInput
+            v-model="username"
+            icon="i-lucide-user"
+            placeholder="admin"
+            autocomplete="username"
+            size="lg"
+            class="w-full"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Password</label>
+          <UInput
+            v-model="password"
+            type="password"
+            icon="i-lucide-lock"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            size="lg"
+            class="w-full"
+          />
+        </div>
       </div>
 
       <p v-if="error" class="status-down flex items-center gap-2 text-sm">

@@ -469,6 +469,23 @@ export async function getRegistry(id: string): Promise<Registry | null> {
   }
 }
 
+/** Update a registry's details. `auth` is left untouched when omitted (edit without re-entering credentials). */
+export async function updateRegistry(id: string, input: { name: string; url: string; username: string; auth?: string }): Promise<Registry | null> {
+  const db = getDb()
+  if (input.auth) {
+    await db.query(
+      'UPDATE registries SET name = $2, url = $3, username = $4, auth = $5 WHERE id = $1',
+      [id, input.name, input.url, input.username, encryptSecret(input.auth)]
+    )
+  } else {
+    await db.query(
+      'UPDATE registries SET name = $2, url = $3, username = $4 WHERE id = $1',
+      [id, input.name, input.url, input.username]
+    )
+  }
+  return getRegistry(id)
+}
+
 export async function deleteRegistry(id: string): Promise<void> {
   await getDb().query('DELETE FROM registries WHERE id = $1', [id])
 }

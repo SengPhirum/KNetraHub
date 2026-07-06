@@ -10,13 +10,87 @@ const route = useRoute()
 const router = useRouter()
 const { bytes, relative } = useFormat()
 const toast = useToast()
+const { hasPermission } = useAuth()
+
+// Registry credential management (add/edit/verify/remove) lives on this page
+// now, gated by tier - not everyone with docker.view should be able to change
+// what a stack deploy authenticates against.
+const canManageRegistries = computed(() => hasPermission('docker.registry.manage'))
 
 // Client-only: these endpoints require a session cookie, which isn't forwarded
 // on internal SSR $fetch. The whole browser is interactive anyway.
-const { data: registries } = useAsyncData('registryBrowserRegistries', () => $fetch<any[]>('/api/registries'), {
-  default: () => [] as any[],
-  server: false
-})
+const { data: registries, refresh: refreshRegistries } = useApiCache('registries', () => $fetch<any[]>('/api/registries'))
+onMounted(refreshRegistries)
+
+const registryManagerOpen = ref(false)
+const registryModalOpen = ref(false)
+const registryModalMode = ref<'create' | 'edit'>('create')
+const registryForm = reactive({ id: '', name: '', url: '', username: '', password: '' })
+const savingRegistry = ref(false)
+
+function openCreateRegistry() {
+  registryModalMode.value = 'create'
+  Object.assign(registryForm, { id: '', name: '', url: '', username: '', password: '' })
+  registryModalOpen.value = true
+}
+function openEditRegistry(r: any) {
+  registryModalMode.value = 'edit'
+  Object.assign(registryForm, { id: r.id, name: r.name, url: r.url, username: r.username, password: '' })
+  registryModalOpen.value = true
+}
+
+async function saveRegistry() {
+  if (!registryForm.name || !registryForm.url) { toast.add({ title: 'Name and URL required', color: 'warning' }); return }
+  savingRegistry.value = true
+  try {
+    if (registryModalMode.value === 'create') {
+      const created = await $fetch<any>('/api/registries', { method: 'POST', body: { ...registryForm } })
+      registries.value = [...(registries.value ?? []), created]
+      toast.add({ title: `Added ${registryForm.name}`, color: 'primary', icon: 'i-lucide-container' })
+    } else {
+      const updated = await $fetch<any>(`/api/registries/${registryForm.id}`, { method: 'PATCH', body: { ...registryForm } })
+      registries.value = (registries.value ?? []).map((r: any) => (r.id === updated.id ? updated : r))
+      toast.add({ title: `Updated ${registryForm.name}`, color: 'primary', icon: 'i-lucide-container' })
+    }
+    registryModalOpen.value = false
+  } catch (e: any) {
+    toast.add({ title: 'Save failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally {
+    savingRegistry.value = false
+  }
+}
+
+// Per-registry connection check (Docker Registry v2 /v2/ probe).
+const registryVerifyState = reactive<Record<string, { state: 'checking' | 'ok' | 'fail'; message: string; latencyMs?: number }>>({})
+async function verifyRegistryEntry(r: any) {
+  registryVerifyState[r.id] = { state: 'checking', message: 'Checking…' }
+  try {
+    const res = await $fetch<any>(`/api/registries/${r.id}/verify`)
+    registryVerifyState[r.id] = { state: res.ok ? 'ok' : 'fail', message: res.message, latencyMs: res.latencyMs }
+    toast.add({
+      title: res.ok ? `${r.name} reachable` : `${r.name} check failed`,
+      description: `${res.message}${res.latencyMs != null ? ` · ${res.latencyMs}ms` : ''}`,
+      color: res.ok ? 'success' : 'error',
+      icon: res.ok ? 'i-lucide-plug-zap' : 'i-lucide-unplug'
+    })
+  } catch (e: any) {
+    registryVerifyState[r.id] = { state: 'fail', message: e?.data?.statusMessage || 'Verify failed' }
+    toast.add({ title: 'Verify failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
+
+async function removeRegistryEntry(r: any) {
+  if (!confirm(`Remove registry "${r.name}"?`)) return
+  const saved = [...(registries.value ?? [])]
+  registries.value = saved.filter((x: any) => x.id !== r.id)
+  try {
+    await $fetch(`/api/registries/${r.id}`, { method: 'DELETE' })
+    toast.add({ title: `Removed ${r.name}`, color: 'primary' })
+  } catch (e: any) {
+    registries.value = saved
+    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
 
 const regParam = computed(() => (route.query.reg as string) || '')
 const repoParam = computed(() => (route.query.repo as string) || '')
@@ -238,6 +312,8 @@ const pageIcon = computed(() =>
             class="w-48"
             :disabled="!(registries || []).length"
           />
+          <span class="whitespace-nowrap text-xs text-faint">{{ (registries || []).length }} configured</span>
+          <UButton icon="i-lucide-settings-2" color="neutral" variant="soft" size="sm" label="Manage" @click="registryManagerOpen = true" />
           <UInput v-model="search" icon="i-lucide-search" placeholder="Search repositories..." size="sm" class="w-56" />
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" size="sm" :loading="loadingRepos" @click="loadRepos" />
         </div>
@@ -251,66 +327,68 @@ const pageIcon = computed(() =>
 
     <!-- ─── Repositories view ─────────────────────────────────────────── -->
     <template v-if="view === 'repos'">
-      <div v-if="!(registries || []).length" class="panel flex flex-col items-center gap-2 p-10 text-center">
-        <UIcon name="i-lucide-container" class="size-7 text-beacon" />
-        <h2 class="font-display text-lg font-semibold text-foam">No registries configured</h2>
-        <p class="max-w-md text-sm text-(--color-muted)">Add a private registry's URL and credentials first, then browse its images here.</p>
-        <UButton class="mt-2" icon="i-lucide-plus" size="sm" to="/docker/settings">Add a registry</UButton>
-      </div>
-
-      <div v-else class="space-y-4">
-        <div class="panel flex items-center gap-3 px-5 py-3">
-          <UIcon name="i-lucide-package-search" class="size-5 text-beacon" />
-          <p class="text-sm text-(--color-muted)">
-            <span class="font-semibold text-foam">{{ totalImages }}</span> images in
-            <span class="font-semibold text-foam">{{ totalRepositories }}</span> repositories
-          </p>
+      <div class="space-y-4">
+        <div v-if="!(registries || []).length" class="panel flex flex-col items-center gap-2 p-10 text-center">
+          <UIcon name="i-lucide-container" class="size-7 text-beacon" />
+          <h2 class="font-display text-lg font-semibold text-foam">No registries configured</h2>
+          <p class="max-w-md text-sm text-(--color-muted)">Add a private registry's URL and credentials first, then browse its images here.</p>
+          <UButton class="mt-2" icon="i-lucide-settings-2" size="sm" label="Manage registries" @click="registryManagerOpen = true" />
         </div>
 
-        <div v-for="err in regErrors" :key="err.name" class="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-(--color-muted)">
-          <UIcon name="i-lucide-triangle-alert" class="size-4 text-rose-500 shrink-0" />
-          <span><span class="font-medium text-foam">{{ err.name }}</span>: {{ err.message }}</span>
-        </div>
+        <template v-else>
+          <div class="panel flex items-center gap-3 px-5 py-3">
+            <UIcon name="i-lucide-package-search" class="size-5 text-beacon" />
+            <p class="text-sm text-(--color-muted)">
+              <span class="font-semibold text-foam">{{ totalImages }}</span> images in
+              <span class="font-semibold text-foam">{{ totalRepositories }}</span> repositories
+            </p>
+          </div>
 
-        <div v-if="loadingRepos && !repos.length" class="panel p-10 text-center text-faint">Loading repositories...</div>
-        <div v-else-if="!groupedRows.length" class="panel p-10 text-center text-faint">
-          {{ search ? 'No repositories match your search.' : 'No repositories found.' }}
-        </div>
+          <div v-for="err in regErrors" :key="err.name" class="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-(--color-muted)">
+            <UIcon name="i-lucide-triangle-alert" class="size-4 text-rose-500 shrink-0" />
+            <span><span class="font-medium text-foam">{{ err.name }}</span>: {{ err.message }}</span>
+          </div>
 
-        <div v-else class="panel divide-y divide-surface">
-          <template v-for="row in groupedRows" :key="row.key">
-            <!-- Group (shared prefix) -->
-            <template v-if="row.type === 'group'">
-              <button class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-2/50" @click="toggleGroup(row.key)">
-                <UIcon name="i-lucide-chevron-right" class="size-4 text-faint transition-transform" :class="groupExpanded.has(row.key) ? 'rotate-90' : ''" />
-                <UIcon :name="groupExpanded.has(row.key) ? 'i-lucide-folder-open' : 'i-lucide-folder'" class="size-4 text-beacon shrink-0" />
-                <span class="font-mono text-sm text-foam">{{ row.prefix }}/</span>
-                <UBadge v-if="showRegistryBadge" size="xs" variant="subtle" color="neutral" class="shrink-0">{{ row.registryName }}</UBadge>
-                <UBadge size="xs" variant="soft" color="neutral" class="ml-auto shrink-0">{{ row.count }} images</UBadge>
-              </button>
-              <template v-if="groupExpanded.has(row.key)">
-                <button
-                  v-for="child in row.children"
-                  :key="child.key"
-                  class="flex w-full items-center gap-3 bg-surface-2/20 py-2.5 pl-12 pr-4 text-left transition hover:bg-surface-2/50"
-                  @click="openTags(child.repo)"
-                >
-                  <UIcon name="i-lucide-box" class="size-4 text-beacon shrink-0" />
-                  <span class="font-mono text-sm text-foam">{{ child.repo.name }}</span>
-                  <UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-faint" />
+          <div v-if="loadingRepos && !repos.length" class="panel p-10 text-center text-faint">Loading repositories...</div>
+          <div v-else-if="!groupedRows.length" class="panel p-10 text-center text-faint">
+            {{ search ? 'No repositories match your search.' : 'No repositories found.' }}
+          </div>
+
+          <div v-else class="panel divide-y divide-surface">
+            <template v-for="row in groupedRows" :key="row.key">
+              <!-- Group (shared prefix) -->
+              <template v-if="row.type === 'group'">
+                <button class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-2/50" @click="toggleGroup(row.key)">
+                  <UIcon name="i-lucide-chevron-right" class="size-4 text-faint transition-transform" :class="groupExpanded.has(row.key) ? 'rotate-90' : ''" />
+                  <UIcon :name="groupExpanded.has(row.key) ? 'i-lucide-folder-open' : 'i-lucide-folder'" class="size-4 text-beacon shrink-0" />
+                  <span class="font-mono text-sm text-foam">{{ row.prefix }}/</span>
+                  <UBadge v-if="showRegistryBadge" size="xs" variant="subtle" color="neutral" class="shrink-0">{{ row.registryName }}</UBadge>
+                  <UBadge size="xs" variant="soft" color="neutral" class="ml-auto shrink-0">{{ row.count }} images</UBadge>
                 </button>
+                <template v-if="groupExpanded.has(row.key)">
+                  <button
+                    v-for="child in row.children"
+                    :key="child.key"
+                    class="flex w-full items-center gap-3 bg-surface-2/20 py-2.5 pl-12 pr-4 text-left transition hover:bg-surface-2/50"
+                    @click="openTags(child.repo)"
+                  >
+                    <UIcon name="i-lucide-box" class="size-4 text-beacon shrink-0" />
+                    <span class="font-mono text-sm text-foam">{{ child.repo.name }}</span>
+                    <UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-faint" />
+                  </button>
+                </template>
               </template>
-            </template>
 
-            <!-- Leaf (single image) -->
-            <button v-else class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-2/50" @click="openTags(row.repo)">
-              <UIcon name="i-lucide-box" class="size-4 text-beacon shrink-0" />
-              <span class="font-mono text-sm text-foam">{{ row.repo.name }}</span>
-              <UBadge v-if="showRegistryBadge" size="xs" variant="subtle" color="neutral" class="shrink-0">{{ row.repo.registryName }}</UBadge>
-              <UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-faint" />
-            </button>
-          </template>
-        </div>
+              <!-- Leaf (single image) -->
+              <button v-else class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-2/50" @click="openTags(row.repo)">
+                <UIcon name="i-lucide-box" class="size-4 text-beacon shrink-0" />
+                <span class="font-mono text-sm text-foam">{{ row.repo.name }}</span>
+                <UBadge v-if="showRegistryBadge" size="xs" variant="subtle" color="neutral" class="shrink-0">{{ row.repo.registryName }}</UBadge>
+                <UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-faint" />
+              </button>
+            </template>
+          </div>
+        </template>
       </div>
     </template>
 
@@ -408,6 +486,79 @@ const pageIcon = computed(() =>
           <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="soft" label="Copy" @click="copyText(dockerfile)" />
         </div>
         <pre class="max-h-[60vh] overflow-auto rounded-lg bg-surface-2 p-4 font-mono text-xs text-(--color-muted) whitespace-pre-wrap">{{ dockerfile }}</pre>
+      </template>
+    </UModal>
+
+    <!-- Manage registries modal -->
+    <UModal v-model:open="registryManagerOpen" title="Registries" :ui="{ content: 'max-w-xl' }">
+      <template #body>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p class="text-xs text-(--color-muted)">Private image registry credentials, used to browse repositories and for stack deploys.</p>
+          <UButton v-if="canManageRegistries" icon="i-lucide-plus" color="primary" size="sm" label="Add registry" @click="openCreateRegistry" />
+        </div>
+
+        <div v-if="!(registries || []).length" class="rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
+          No registries configured{{ canManageRegistries ? ' yet.' : '. Ask an admin or manager to add one.' }}
+        </div>
+        <div v-else class="max-h-[60vh] divide-y divide-hull overflow-y-auto">
+          <div v-for="r in registries" :key="r.id" class="flex items-center justify-between gap-3 py-2.5">
+            <div class="min-w-0 flex items-center gap-3">
+              <span class="flex size-8 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-hull shrink-0">
+                <UIcon name="i-lucide-container" class="size-4 text-beacon" />
+              </span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-foam">{{ r.name || '—' }}</p>
+                <p class="truncate font-mono text-xs text-faint">{{ r.url || '—' }}<span v-if="r.username"> · {{ r.username }}</span></p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span
+                v-if="registryVerifyState[r.id]"
+                class="size-2 rounded-full"
+                :title="registryVerifyState[r.id].message"
+                :class="registryVerifyState[r.id].state === 'ok' ? 'bg-emerald-500' : registryVerifyState[r.id].state === 'fail' ? 'bg-rose-500' : 'bg-amber-500 animate-pulse'"
+              ></span>
+              <UButton
+                icon="i-lucide-plug-zap"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                aria-label="Verify registry"
+                :loading="registryVerifyState[r.id]?.state === 'checking'"
+                @click="verifyRegistryEntry(r)"
+              />
+              <template v-if="canManageRegistries">
+                <UButton icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="Edit registry" @click="openEditRegistry(r)" />
+                <UButton icon="i-lucide-trash-2" size="xs" color="error" variant="ghost" aria-label="Delete registry" @click="removeRegistryEntry(r)" />
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end">
+          <UButton color="neutral" variant="ghost" label="Close" @click="registryManagerOpen = false" />
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Add/edit registry modal -->
+    <UModal v-model:open="registryModalOpen" :title="registryModalMode === 'create' ? 'Add registry' : 'Edit registry'">
+      <template #body>
+        <div class="space-y-4">
+          <UFormField label="Name" required><UInput v-model="registryForm.name" class="w-full" placeholder="Docker Hub" /></UFormField>
+          <UFormField label="URL" required><UInput v-model="registryForm.url" class="w-full font-mono" placeholder="https://index.docker.io/v1/" /></UFormField>
+          <UFormField label="Username"><UInput v-model="registryForm.username" class="w-full" /></UFormField>
+          <UFormField label="Password / token">
+            <UInput v-model="registryForm.password" type="password" class="w-full" :placeholder="registryModalMode === 'edit' ? 'Leave blank to keep existing' : ''" />
+          </UFormField>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2 w-full">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="registryModalOpen = false" />
+          <UButton color="primary" :label="registryModalMode === 'create' ? 'Add' : 'Save'" icon="i-lucide-check" :loading="savingRegistry" @click="saveRegistry" />
+        </div>
       </template>
     </UModal>
   </div>

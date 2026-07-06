@@ -11,12 +11,13 @@ Date: 2026-07-06 UTC
 
 ## Source
 
-- Commit: `fc398b6`
+- Commit: `b7a1e37`
 - Previous tag: none
 
 ## Changes
 
-- refactor: group module sources into Nuxt layers (docker, monitoring, ipmgt) (fc398b6)
+- fix: update release date and commit reference in release notes for v0.1.1 (b7a1e37)
+- refactor: group module sources into Nuxt layers (docker, monitoring, ipmgt) (#2) (5b61984)
 - Revise project name in README (686289b)
 - feat: implement IPAM module phase 1 (sections, subnets, addresses, VLANs, VRFs, dashboard, tools) (7839212)
 - feat: add file environment variable resolution for KNETRAHUB_AGENT_TOKEN and update docker-compose for compatibility (d038f7f)
@@ -70,3 +71,22 @@ Date: 2026-07-06 UTC
 - feat: major UX overhaul — SPA cache, Moby Blue theme, roles/settings split, author/license (658e837)
 - Init (7cf7e9c)
 - Init (33f6c2b)
+
+## Local Changes Included In Build Context
+
+The working tree had uncommitted changes before this release script ran.
+
+```text
+ M RELEASE_NOTES.md
+ M app/composables/useNav.ts
+ M app/layouts/auth.vue
+ M app/pages/login.vue
+ M layers/docker/app/pages/docker/settings.vue
+ M layers/docker/app/pages/registry/index.vue
+ M layers/docker/server/api/registries/[id].delete.ts
+ M layers/docker/server/api/registries/index.post.ts
+ M release-notes/v0.1.1.md
+ M server/utils/store.ts
+ M shared/utils/permissions.ts
+?? layers/docker/server/api/registries/[id].patch.ts
+```

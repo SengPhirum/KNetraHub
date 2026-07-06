@@ -46,8 +46,6 @@ const DOCK_GROUPS: NavGroup[] = [
     ]
   },
   {
-    // Registries admin (add/verify/remove registry credentials) moved into a
-    // Settings tab (docker/settings.vue) rather than its own nav item/page.
     label: 'Administration',
     items: [
       { label: 'Settings', to: '/docker/settings', icon: 'i-lucide-settings', permission: 'docker.manage' }

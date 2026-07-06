@@ -47,71 +47,8 @@ const toast = useToast()
 
 const tabs = [
   { label: 'Integrations', icon: 'i-lucide-plug', slot: 'integrations' as const },
-  { label: 'Alerts', icon: 'i-lucide-bell', slot: 'alerts' as const },
-  { label: 'Registries', icon: 'i-lucide-container', slot: 'registries' as const }
+  { label: 'Alerts', icon: 'i-lucide-bell', slot: 'alerts' as const }
 ]
-
-// ─── Registries (moved here from the standalone /registries page - it's admin
-// configuration, not a top-level nav destination) ───────────────────────────
-const { data: registries, status: registriesStatus, error: registriesError, refreshing: registriesRefreshing, refresh: refreshRegistries } =
-  useApiCache('registries', () => $fetch<any[]>('/api/registries'))
-onMounted(refreshRegistries)
-const registrySortOptions = [
-  { label: 'Name', value: 'name' },
-  { label: 'URL', value: 'url' },
-  { label: 'Username', value: 'username' }
-]
-const { items: filteredRegistries, search: registrySearch, sortBy: registrySortBy, sortDir: registrySortDir, sortOptions: registrySortOpts } =
-  useListControls('registries', registries, { sortOptions: registrySortOptions, defaultSortBy: 'name' })
-
-const registryModalOpen = ref(false)
-const registryForm = reactive({ name: '', url: '', username: '', password: '' })
-function openCreateRegistry() { Object.assign(registryForm, { name: '', url: '', username: '', password: '' }); registryModalOpen.value = true }
-
-async function createRegistry() {
-  if (!registryForm.name || !registryForm.url) { toast.add({ title: 'Name and URL required', color: 'warning' }); return }
-  try {
-    const newReg = await $fetch<any>('/api/registries', { method: 'POST', body: { ...registryForm } })
-    registries.value = [...(registries.value ?? []), newReg]
-    toast.add({ title: `Added ${registryForm.name}`, color: 'primary', icon: 'i-lucide-container' })
-    registryModalOpen.value = false
-  } catch (e: any) {
-    toast.add({ title: 'Add failed', description: e?.data?.statusMessage, color: 'error' })
-    refreshRegistries()
-  }
-}
-
-// Per-registry connection check (Docker Registry v2 /v2/ probe).
-const registryVerifyState = reactive<Record<string, { state: 'checking' | 'ok' | 'fail'; message: string; latencyMs?: number }>>({})
-async function verifyRegistry(r: any) {
-  registryVerifyState[r.id] = { state: 'checking', message: 'Checking…' }
-  try {
-    const res = await $fetch<any>(`/api/registries/${r.id}/verify`)
-    registryVerifyState[r.id] = { state: res.ok ? 'ok' : 'fail', message: res.message, latencyMs: res.latencyMs }
-    toast.add({
-      title: res.ok ? `${r.name} reachable` : `${r.name} check failed`,
-      description: `${res.message}${res.latencyMs != null ? ` · ${res.latencyMs}ms` : ''}`,
-      color: res.ok ? 'success' : 'error',
-      icon: res.ok ? 'i-lucide-plug-zap' : 'i-lucide-unplug'
-    })
-  } catch (e: any) {
-    registryVerifyState[r.id] = { state: 'fail', message: e?.data?.statusMessage || 'Verify failed' }
-    toast.add({ title: 'Verify failed', description: e?.data?.statusMessage, color: 'error' })
-  }
-}
-
-async function removeRegistry(r: any) {
-  if (!confirm(`Remove registry "${r.name}"?`)) return
-  const saved = [...(registries.value ?? [])]
-  registries.value = saved.filter((x) => x.id !== r.id)
-  try {
-    await $fetch(`/api/registries/${r.id}`, { method: 'DELETE' })
-    toast.add({ title: `Removed ${r.name}`, color: 'primary' })
-  } catch (e: any) {
-    registries.value = saved
-    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
-  }
-}
 
 function sourceLabel(overridden?: boolean) {
   return overridden ? 'DB override' : 'Env default'
@@ -347,7 +284,7 @@ async function resetRule(type: string) {
 
 <template>
   <div>
-    <PageHeader title="Dock settings" subtitle="GitLab stack versioning, Swarm alerting, and registries for the Docker app" icon="i-lucide-settings">
+    <PageHeader title="Dock settings" subtitle="GitLab stack versioning and Swarm alerting for the Docker app" icon="i-lucide-settings">
       <template #actions>
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="soft" label="Back to Dock" to="/docker" />
       </template>
@@ -543,77 +480,6 @@ async function resetRule(type: string) {
             <div class="flex w-full justify-end gap-2">
               <UButton color="neutral" variant="ghost" label="Cancel" @click="channelModalOpen = false" />
               <UButton color="primary" label="Save" icon="i-lucide-save" :loading="savingChannel" @click="saveChannel" />
-            </div>
-          </template>
-        </UModal>
-      </template>
-
-      <template #registries>
-        <div class="pt-4">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <p class="text-sm text-(--color-muted)">Private image registry credentials, used by the Registries browser and stack deploys.</p>
-            <div class="flex items-center gap-2">
-              <ListControls
-                inline
-                v-model:search="registrySearch"
-                v-model:sort-by="registrySortBy"
-                v-model:sort-dir="registrySortDir"
-                :sort-options="registrySortOpts"
-                placeholder="Search registries"
-              />
-              <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="registriesRefreshing" @click="refreshRegistries()" />
-              <UButton icon="i-lucide-plus" color="primary" label="Add registry" @click="openCreateRegistry" />
-            </div>
-          </div>
-
-          <DataState :status="registriesStatus" :error="registriesError" :empty="!filteredRegistries.length" :refreshing="registriesRefreshing" empty-label="No registries configured." empty-icon="i-lucide-container">
-            <TransitionGroup name="list" tag="div" class="space-y-2">
-              <div v-for="r in filteredRegistries" :key="r.id" class="panel-flush p-3.5 flex items-center justify-between gap-3">
-                <div class="min-w-0 flex items-center gap-3">
-                  <span class="flex size-9 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-hull shrink-0">
-                    <UIcon name="i-lucide-container" class="size-4 text-beacon" />
-                  </span>
-                  <div class="min-w-0">
-                    <p class="truncate font-medium text-foam">{{ r.name || '—' }}</p>
-                    <p class="truncate font-mono text-xs text-faint">{{ r.url || '—' }}<span v-if="r.username"> · {{ r.username }}</span></p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <span
-                    v-if="registryVerifyState[r.id]"
-                    class="size-2 rounded-full"
-                    :title="registryVerifyState[r.id].message"
-                    :class="registryVerifyState[r.id].state === 'ok' ? 'bg-emerald-500' : registryVerifyState[r.id].state === 'fail' ? 'bg-rose-500' : 'bg-amber-500 animate-pulse'"
-                  ></span>
-                  <UButton
-                    icon="i-lucide-plug-zap"
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    label="Verify"
-                    :loading="registryVerifyState[r.id]?.state === 'checking'"
-                    @click="verifyRegistry(r)"
-                  />
-                  <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="removeRegistry(r)" />
-                </div>
-              </div>
-            </TransitionGroup>
-          </DataState>
-        </div>
-
-        <UModal v-model:open="registryModalOpen" title="Add registry">
-          <template #body>
-            <div class="space-y-4">
-              <UFormField label="Name" required><UInput v-model="registryForm.name" class="w-full" placeholder="Docker Hub" /></UFormField>
-              <UFormField label="URL" required><UInput v-model="registryForm.url" class="w-full font-mono" placeholder="https://index.docker.io/v1/" /></UFormField>
-              <UFormField label="Username"><UInput v-model="registryForm.username" class="w-full" /></UFormField>
-              <UFormField label="Password / token"><UInput v-model="registryForm.password" type="password" class="w-full" /></UFormField>
-            </div>
-          </template>
-          <template #footer>
-            <div class="flex justify-end gap-2 w-full">
-              <UButton color="neutral" variant="ghost" label="Cancel" @click="registryModalOpen = false" />
-              <UButton color="primary" label="Add" icon="i-lucide-check" @click="createRegistry" />
             </div>
           </template>
         </UModal>
