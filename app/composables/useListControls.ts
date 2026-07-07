@@ -40,6 +40,10 @@ interface UseListControlsOptions<T> {
    * equal between two items, e.g. break ties on a task's created date so
    * otherwise-identical rows land in a meaningful order. */
   tieBreaker?: (item: T) => unknown
+  /** Fixed direction for the tie-breaker, independent of the user's chosen
+   * sortDir - e.g. always newest-created-first. Defaults to following
+   * sortDir (the tie-breaker flips along with the primary sort). */
+  tieBreakerDir?: SortDirection
 }
 
 function resolveListSource<T>(source: any): T[] {
@@ -183,7 +187,8 @@ export function useListControls<T = any>(
 
       if (!options.tieBreaker) return 0
       const secondary = compareValues(options.tieBreaker(a), options.tieBreaker(b))
-      return sortDir.value === 'desc' ? -secondary : secondary
+      const dir = options.tieBreakerDir || sortDir.value
+      return dir === 'desc' ? -secondary : secondary
     })
   })
 

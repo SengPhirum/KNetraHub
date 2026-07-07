@@ -30,7 +30,8 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
   defaultSortBy: 'timestamp',
   defaultSortDir: 'desc',
   filterOptions: taskFilterOptions,
-  tieBreaker: (t: any) => t.createdAt
+  tieBreaker: (t: any) => t.createdAt,
+  tieBreakerDir: 'desc'
 })
 
 function memoryPercent(used?: number | null, limit?: number | null) {
