@@ -54,7 +54,7 @@ const { appearance } = useAppearance()
     <!-- Main column -->
     <div class="flex min-h-dvh flex-col" :class="{ 'lg:pl-64': !isHome }">
       <!-- top bar -->
-      <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
+      <header class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
         <UButton
           v-if="!isHome"
           class="lg:hidden"

@@ -11,11 +11,12 @@ Date: 2026-07-07 UTC
 
 ## Source
 
-- Commit: `7558328`
+- Commit: `a54adf4`
 - Previous tag: none
 
 ## Changes
 
+- fix: update release notes for v0.1.1 with correct date and commit reference; adjust header height in SidebarNav and default layout (a54adf4)
 - fix: update commit reference in release notes for v0.1.1; adjust header height in SidebarNav and default layout (7558328)
 - fix: correct commit reference in release notes for v0.1.1; enhance authentication UI; implement registry management features; remove local changes section from release script (8aaca61)
 - fix: update release notes for v0.1.1 with correct commit reference and date; enhance authentication UI; implement registry management features; remove local changes section from release script (8e23d35)
