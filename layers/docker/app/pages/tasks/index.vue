@@ -13,6 +13,7 @@ useIntervalFn(() => {
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
 const taskSortOptions = [
+  { label: 'Created', value: 'createdAt' },
   { label: 'Updated', value: 'timestamp' },
   { label: 'Service', value: 'service' },
   { label: 'Node', value: 'node' },
@@ -25,12 +26,16 @@ const taskFilterOptions = [
   { key: 'node', label: 'Node', getValue: (t: any) => t.node },
   { key: 'service', label: 'Service', getValue: (t: any) => t.service }
 ]
+// Default sort is by creation date, newest first, so a task's freshly
+// scheduled replacement always outranks the stale instance it's replacing -
+// sorting by "Updated" alone can rank a just-shut-down old task above the
+// new one it was replaced by, since the old task's status changes last.
 const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets } = useListControls('tasks', data, {
   sortOptions: taskSortOptions,
-  defaultSortBy: 'timestamp',
+  defaultSortBy: 'createdAt',
   defaultSortDir: 'desc',
   filterOptions: taskFilterOptions,
-  tieBreaker: (t: any) => t.createdAt,
+  tieBreaker: (t: any) => t.timestamp,
   tieBreakerDir: 'desc'
 })
 

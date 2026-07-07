@@ -32,6 +32,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
   - [Alerts](#alerts)
 - [🔐 Roles & Tiers](#-roles--tiers)
 - [🧩 How "Stacks" Work](#-how-stacks-work)
+- [📡 Monitoring (Network + Server)](#-monitoring-network--server)
 - [🗺️ Roadmap & Limitations](#️-roadmap--limitations)
 - [🛠️ Tech Stack](#️-tech-stack)
 - [📝 License & Author](#-license--author)
@@ -141,7 +142,7 @@ To run against a local disposable swarm instead of your host Docker engine:
 ```bash
 pnpm run dev:swarm
 ```
-This uses [`docker-compose.dev.yml`](./docker-compose.dev.yml) to start a lightweight Docker-in-Docker setup.
+This uses [`docker/docker-compose.dev.yml`](./docker/docker-compose.dev.yml) to start a lightweight Docker-in-Docker setup.
 
 Useful commands:
 ```bash
@@ -150,6 +151,9 @@ pnpm run dev:swarm -- logs -f swarm-manager
 pnpm run dev:swarm:down
 pnpm run dev:swarm:reset  # removes the disposable swarm volumes
 ```
+
+Equivalently, from a bash shell: `./service.sh dev`, `./service.sh dev --full` (second worker),
+`./service.sh dev --down`, `./service.sh dev --reset`, or `./service.sh dev -- <docker compose args>`.
 
 ---
 
@@ -162,14 +166,19 @@ node .output/server/index.mjs
 ```
 
 ### Deploying to Swarm
-Ship it as a swarm service, pinned to a manager node. Build and publish:
+Ship it as a swarm service, pinned to a manager node. Build and publish a versioned image:
 ```bash
-./release.sh
+./service.sh release
 ```
 
 Deploy the published image:
 ```bash
-docker stack deploy -c docker-compose.yml knetrahub
+docker stack deploy -c docker/docker-compose.yml knetrahub
+```
+
+Or, to build locally and deploy in one step (skips version bump + registry push):
+```bash
+./service.sh deploy
 ```
 
 ---
@@ -220,6 +229,112 @@ Configure via **Dock -> Settings -> Alerts**. Supports Telegram, MS Teams, and W
 ## 🧩 How "Stacks" Work
 
 Docker Swarm has no native stack API. KNetraHub parses your compose YAML, ensures declared overlay networks exist, and creates/updates services with the `com.docker.stack.namespace` label. It warns rather than failing on unsupported compose directives.
+
+---
+
+## 📡 Monitoring (Network + Server)
+
+The **Monitoring app** (`/monitoring`, layer `layers/monitoring/`) unifies real network-device
+monitoring (PRTG-style) and server/host monitoring (Zabbix-style) behind one nav and one
+`monitoring.view` / `monitoring.manage` permission pair. There is no simulated/dummy data:
+every status, latency, interface, and alert comes from an actual device or host. Network
+devices are polled by `server/plugins/netPoller.ts`; hosts by `server/plugins/serverPoller.ts`.
+Both use real **ICMP ping** and **SNMP v1/v2c/v3**.
+
+### How it works
+
+- **Poller:** every `NUXT_NET_POLL_INTERVAL_SECONDS` it ICMP-pings each device (status +
+  latency) and, for SNMP devices that respond, reads system info (sysName, sysDescr,
+  sysObjectID, uptime) and the interface table (admin/oper status, speed, MAC, MTU, and
+  **bit-rate computed from counter deltas**). SNMPv3 (noAuthNoPriv / authNoPriv / authPriv;
+  MD5/SHA/SHA-256/SHA-512 auth; DES/AES/AES-256 priv) is fully supported per-device.
+- **ICMP-latency sensor:** each device gets a live `ICMP Latency` sensor (ms).
+- **Auto-alerts:** when a device stops responding a **critical** alert opens; when it
+  recovers, the alert clears. Network alerts and Server problems both surface in one unified
+  **Monitoring → Problems** view (`/monitoring/problems`) — acknowledge works for either source.
+- **Discovery** (**Monitoring → Discovery**, `/monitoring/discovery`): a real ICMP/SNMP sweep
+  of a CIDR (max **1024 hosts** per scan) that creates a device for every responder; the
+  poller fills in interfaces on the next cycle.
+- **Paused devices are skipped:** a device with monitoring paused is left alone by the
+  poller — it shows as `paused` rather than flapping to `down`, and no "device down" alert
+  fires while it's offline for maintenance.
+- Flow (NetFlow) and Syslog collectors are not implemented; those pages stay empty until a
+  collector is added.
+
+### Prerequisites
+
+1. **Reachability** from the server running KNetraHub to your devices: ICMP echo allowed
+   (ping/status/latency) and UDP/161 open (SNMP polling + discovery identification).
+2. **A working `ping` binary** — the Docker image installs `iputils` automatically; on bare
+   metal ensure `ping` is on `PATH`.
+3. **SNMP enabled on the devices**, with a community string you know (commonly `public`
+   read-only) or v3 credentials. Each device stores its own version/community; otherwise the
+   env defaults below apply.
+
+### Configure (env)
+
+All optional — sensible defaults shown. See [`.env.example`](./.env.example).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NUXT_NET_POLLING_ENABLED` | `true` | Master switch for the poller |
+| `NUXT_NET_POLL_INTERVAL_SECONDS` | `60` | How often each device is polled |
+| `NUXT_NET_POLL_CONCURRENCY` | `16` | Devices polled in parallel |
+| `NUXT_NET_SNMP_COMMUNITY` | `public` | Default community (per-device value wins) |
+| `NUXT_NET_SNMP_VERSION` | `v2c` | Default SNMP version (`v1`/`v2c`) |
+| `NUXT_NET_SNMP_TIMEOUT_MS` | `2000` | Per-request SNMP timeout |
+| `NUXT_NET_PING_TIMEOUT_SECONDS` | `2` | Per-host ICMP timeout |
+| `NUXT_NET_DISCOVERY_CONCURRENCY` | `64` | Parallel hosts during a scan |
+
+### Add & organize devices
+
+- **Auto-discovery (recommended):** **Monitoring → Discovery**, needs the *operator* tier.
+  Enter a subnet (e.g. `192.168.1.0/24`), pick **Ping + SNMP**, **Ping only**, or **SNMP
+  only**, optionally set the SNMP community, and start the scan.
+- **Add one device:** **Monitoring → Network → Devices → Add Device.** Optionally pick a
+  **Template** to prefill category + SNMP settings, then enter hostname/IP and save — the
+  next poll cycle populates status, latency, and ports.
+- **Device templates** (**Monitoring → Settings → Templates** tab, needs *admin*): save a
+  reusable bundle of monitoring defaults (category, poll method, SNMP v1/v2c/v3 credentials)
+  under a name like *"Core Switch — SNMPv3"*.
+- **Categories** (**Monitoring → Settings → Categories** tab): a single fixed list shared by
+  the Add Device form and a device's Settings tab — `network`, `server`, `storage`, `iot`,
+  `ping-only`.
+- **Groups** (**Monitoring → Groups**, `/monitoring/groups`): logical groups by site/role/
+  owner; deleting a group never deletes devices.
+- **Pause/resume monitoring:** pause a device (detail page header or inventory row) before
+  planned maintenance; **Resume** returns it to polling.
+
+### Clean up old/dummy data
+
+Existing databases keep whatever was seeded before. Remove devices per-device (trash icon on
+**Monitoring → Network → Devices**, cascades to that device's interfaces/sensors/alerts), or
+via a full SQL reset:
+
+```sql
+TRUNCATE net_flows, net_syslog, net_backups, net_device_groups, net_sensors,
+         net_interfaces, net_alerts, net_devices RESTART IDENTITY CASCADE;
+```
+
+Fresh installs start empty automatically — no fake devices are seeded.
+
+### Verify it's working
+
+A device you can ping flips to **up** with a latency value within one poll interval;
+blocking ICMP flips it to **down** and opens a critical alert on **Monitoring → Problems**
+(restoring it clears the alert). For SNMP devices, the **Ports** tab on the device page lists
+interfaces, with in/out bit-rates appearing from the **second** poll onward (the first poll
+just seeds the counters).
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Everything shows **down** | ICMP blocked from the server, or `ping` binary missing |
+| Status up but **no SNMP data** | Wrong community/version, UDP/161 blocked, or device is v3 with no credentials set |
+| **No bit-rates** on interfaces | Only one poll has run — wait one more interval |
+| Discovery finds **nothing** | Wrong CIDR, firewall, or community; try `Ping only` first |
+| Scan rejected as **too large** | Range > 1024 hosts — scan a smaller subnet (e.g. `/24`) |
 
 ---
 

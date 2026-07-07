@@ -1,7 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 
 // Liveness/readiness probe for the orchestrator (Docker HEALTHCHECK, Swarm
-// rolling-update gating - see Dockerfile). Unauthenticated by design: it
+// rolling-update gating - see docker/Dockerfile). Unauthenticated by design: it
 // runs before any session exists and before the app is considered "up".
 // A single fast query, not waitForDb()'s long retry loop - this just
 // answers "is the DB reachable right now", on every poll.

@@ -90,6 +90,10 @@ async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<vo
   await db.query(`SELECT create_hypertable('container_metrics', 'time', if_not_exists => TRUE);`)
   await db.query(`CREATE INDEX IF NOT EXISTS idx_container_metrics_container_time ON container_metrics (container_id, time DESC);`)
   await db.query(`CREATE INDEX IF NOT EXISTS idx_container_metrics_task_time ON container_metrics (task_id, time DESC);`)
+  // Backs the service-scoped queries (dashboard metrics, /api/services/usage
+  // polled every 5s, service/stack detail) that filter/group by service_id -
+  // without this they fall back to a sequential scan of the recent chunk(s).
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_container_metrics_service_time ON container_metrics (service_id, time DESC);`)
 
   await db.query(`
     -- disk_usage: per-node disk sample
@@ -124,6 +128,8 @@ async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<vo
   `)
   await db.query(`SELECT create_hypertable('network_usage', 'time', if_not_exists => TRUE);`)
   await db.query(`CREATE INDEX IF NOT EXISTS idx_network_usage_container_time ON network_usage (container_id, time DESC);`)
+  // Backs the service-scoped network throughput query (service detail page).
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_network_usage_service_time ON network_usage (service_id, time DESC);`)
 
   await db.query(`
     -- node_heartbeat: lightweight "node agent reported in" event, decoupled

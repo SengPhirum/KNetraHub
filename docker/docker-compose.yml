@@ -1,6 +1,7 @@
 # Deploy KNetraHub itself as a swarm service.
-#   ./release.sh
-#   docker stack deploy -c docker-compose.yml knetrahub
+#   ./service.sh release
+#   docker stack deploy -c docker/docker-compose.yml knetrahub
+# (or ./service.sh deploy to build locally + deploy in one step)
 #
 # It must be scheduled on a MANAGER node (placement constraint below) so it
 # can reach the swarm control plane via the mounted Docker socket.
@@ -81,12 +82,18 @@ services:
         delay: 5s
         max_attempts: 3
         window: 30s
+      # Baseline for a small/medium swarm (roughly up to ~10 nodes, ~150
+      # containers). The dashboard and services/tasks lists fan out several
+      # concurrent Docker Engine API calls + Postgres queries per request, so
+      # give it enough CPU headroom to burst rather than queueing under the
+      # event loop. Scale reservations up with cluster size (more nodes/
+      # containers = more work per aggregation request).
       resources:
         reservations:
           cpus: '0.25'
           memory: 512M
         limits:
-          cpus: '0.50'
+          cpus: '1.00'
           memory: 2048M
       placement:
         constraints:
@@ -170,13 +177,20 @@ services:
         delay: 5s
         max_attempts: 5
         window: 30s
+      # Every node's agent writes multiple per-container rows here on each
+      # report cycle (node/disk/container/network metrics), and the
+      # dashboard/services/tasks pages read it back continuously (the
+      # services list polls /api/services/usage every 5s) - this is the
+      # service most likely to bottleneck under load, so give it the most
+      # headroom. Raise further for larger swarms or a shorter agent report
+      # interval.
       resources:
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.5'
+          memory: 1024M
         limits:
-          cpus: '1.00'
-          memory: 2048M
+          cpus: '2.00'
+          memory: 4096M
 
 volumes:
   timescale-data:

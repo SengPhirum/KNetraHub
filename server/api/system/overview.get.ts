@@ -1,20 +1,25 @@
 import { requireUser } from '~~/server/utils/auth'
 import { assertSwarm, useDocker } from '~~/layers/docker/server/utils/docker'
-import { listStacks } from '~~/layers/docker/server/utils/stack'
+import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   const info = await assertSwarm()
   const docker = useDocker()
 
-  const [nodes, services, tasks, networks, volumes, stacks] = await Promise.all([
+  const [nodes, services, tasks, networks, volumes] = await Promise.all([
     docker.listNodes(),
     docker.listServices(),
     docker.listTasks(),
     docker.listNetworks(),
-    docker.listVolumes().then((v) => v.Volumes || []),
-    listStacks()
+    docker.listVolumes().then((v) => v.Volumes || [])
   ])
+
+  // Stack count only, derived from the services list already fetched above -
+  // listStacks() independently re-fetches services/networks/volumes/tasks
+  // plus configs/secrets this endpoint doesn't need, doubling the Docker
+  // Engine API round-trips on every dashboard load/refresh for a single number.
+  const stackCount = new Set(services.map((s) => s.Spec?.Labels?.[STACK_LABEL]).filter(Boolean)).size
 
   const nodeSummary = {
     total: nodes.length || 1, // avoid divide-by-zero
@@ -51,7 +56,7 @@ export default defineEventHandler(async (event) => {
       runningTasks: taskStates['running'] || 0,
       networks: networks.length,
       volumes: volumes.length,
-      stacks: stacks.length
+      stacks: stackCount
     },
     taskStates,
     capacity: { cpus: cpuNanos / 1e9, memoryBytes: memBytes }
