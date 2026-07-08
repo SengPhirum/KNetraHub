@@ -3,8 +3,11 @@
 // former portal home; it moved to /dock when the home page became the app
 // launcher. Access is gated by the appAccess.global client middleware and the
 // server-side appAccess middleware (docker entitlement required).
+import { GridLayout, GridItem } from 'grid-layout-plus'
+import type { DashboardGridItem } from '~~/app/composables/usePreferences'
+
 const { bytes } = useFormat()
-const { prefs } = usePreferences()
+const { prefs, updatePreferences } = usePreferences()
 
 const { data, status, error, refreshing, refresh } = useApiCache('dashboard', async () => {
   const [overview, nodeUsage, metrics] = await Promise.all([
@@ -70,16 +73,9 @@ function ratioPercent(used: number, total: number) {
   return total > 0 ? (used / total) * 100 : 0
 }
 
-function clampPercent(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
-}
-
+const { usageRingStyle } = useUsageRing()
 function ringStyle(percent?: number | null) {
-  const safe = clampPercent(percent)
-  return {
-    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 76%, var(--color-surface-2)) 0)`
-  }
+  return usageRingStyle(percent, { hullPercent: 76 })
 }
 
 function compactBytes(value?: number | null) {
@@ -165,6 +161,92 @@ function formatPercent(value: number) {
 function formatVcpu(value: number) {
   return value.toFixed(value >= 10 ? 1 : 2)
 }
+
+// ── Overview + Task distribution grid (drag/resize, saved per user) ────────
+// Mirrors the Monitoring app's grid-layout-plus dashboard (see
+// layers/monitoring/app/pages/monitoring/index.vue), scoped down to this
+// page's two fixed boxes - no widget gallery/multiple dashboards needed here,
+// just "let the user drag/resize these two and remember it".
+const DASHBOARD_COLS = 12
+const DASHBOARD_ROW_HEIGHT = 36
+const DASHBOARD_MARGIN = 12
+const DEFAULT_LAYOUT: DashboardGridItem[] = [
+  { i: 'summary', x: 0, y: 0, w: 7, h: 4 },
+  { i: 'tasks', x: 7, y: 0, w: 5, h: 4 }
+]
+
+function cloneLayout(items: DashboardGridItem[]): DashboardGridItem[] {
+  return items.map((item) => ({ ...item }))
+}
+
+const editing = ref(false)
+const layout = ref<DashboardGridItem[]>(cloneLayout(DEFAULT_LAYOUT))
+const dirty = ref(false)
+let loadingLayout = false
+
+// grid-layout-plus's own container element doesn't reliably report a height
+// that matches its (absolutely-positioned) items once wrapped in ClientOnly -
+// it under-reports, which let the charts section below start before the top
+// boxes actually ended. Compute the real height ourselves from the layout
+// array (same formula the library uses: rows * rowHeight + gaps * margin) and
+// size an explicit wrapper with it, so the flex column always reserves the
+// right amount of space - including live as the user drags/resizes.
+const topGridHeightPx = computed(() => {
+  const maxRow = layout.value.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+  if (maxRow <= 0) return 0
+  return maxRow * DASHBOARD_ROW_HEIGHT + Math.max(0, maxRow - 1) * DASHBOARD_MARGIN
+})
+
+watch(() => prefs.value.dashboards?.docker, (saved) => {
+  loadingLayout = true
+  layout.value = saved?.length ? cloneLayout(saved) : cloneLayout(DEFAULT_LAYOUT)
+  dirty.value = false
+  nextTick(() => { loadingLayout = false })
+}, { immediate: true })
+
+// grid-layout-plus mutates layout items on drag/resize - flag unsaved changes.
+watch(layout, () => { if (!loadingLayout && editing.value) dirty.value = true }, { deep: true })
+
+function startEdit() { editing.value = true }
+function cancelEdit() {
+  loadingLayout = true
+  const saved = prefs.value.dashboards?.docker
+  layout.value = saved?.length ? cloneLayout(saved) : cloneLayout(DEFAULT_LAYOUT)
+  dirty.value = false
+  editing.value = false
+  nextTick(() => { loadingLayout = false })
+}
+function resetLayout() {
+  layout.value = cloneLayout(DEFAULT_LAYOUT)
+  dirty.value = true
+}
+async function saveLayout() {
+  await updatePreferences({ dashboards: { ...(prefs.value.dashboards || {}), docker: layout.value } })
+  dirty.value = false
+  editing.value = false
+}
+
+// ── Task distribution status → detail popup ─────────────────────────────────
+const taskModalOpen = ref(false)
+const activeTaskState = ref('')
+const modalTasks = ref<any[]>([])
+const modalLoading = ref(false)
+
+async function openTaskStatus(state: string) {
+  if (editing.value) return
+  activeTaskState.value = state
+  taskModalOpen.value = true
+  modalLoading.value = true
+  modalTasks.value = []
+  try {
+    const all = await $fetch<any[]>('/api/tasks')
+    modalTasks.value = all.filter((t: any) => t.state === state)
+  } catch {
+    modalTasks.value = []
+  } finally {
+    modalLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -175,70 +257,155 @@ function formatVcpu(value: number) {
           <span class="dot" :class="connected ? 'dot-running' : 'dot-idle'" />
           {{ connected ? 'Live' : prefs.refreshInterval > 0 ? `${prefs.refreshInterval}s` : 'Manual' }}
         </div>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" label="Refresh" :loading="refreshing" @click="refresh()" />
+        <template v-if="!editing">
+          <UButton icon="i-lucide-layout-grid" color="neutral" variant="ghost" label="Edit layout" @click="startEdit" />
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" label="Refresh" :loading="refreshing" @click="refresh()" />
+        </template>
+        <template v-else>
+          <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="ghost" label="Reset" @click="resetLayout" />
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" label="Cancel" @click="cancelEdit" />
+          <UButton icon="i-lucide-check" color="primary" label="Save layout" :disabled="!dirty" @click="saveLayout" />
+        </template>
       </template>
     </PageHeader>
 
     <DataState :status="status" :error="error" :refreshing="refreshing">
-      <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        <section class="panel dashboard-kpi p-5">
-          <div>
-            <p class="dashboard-kpi-label">Cluster</p>
-            <p class="dashboard-kpi-value">{{ d?.nodes?.total ?? 0 }} nodes</p>
-          </div>
-          <div class="space-y-2">
-            <span class="dashboard-count-pill">
-              <span>{{ d?.nodes?.managers ?? 0 }}</span>
-              {{ plural(d?.nodes?.managers ?? 0, 'manager') }}
-            </span>
-            <span class="dashboard-count-pill">
-              <span>{{ d?.nodes?.workers ?? 0 }}</span>
-              {{ plural(d?.nodes?.workers ?? 0, 'worker') }}
-            </span>
-          </div>
-        </section>
+      <div class="flex h-[calc(100dvh-9.375rem)] flex-col gap-4">
+        <div v-if="editing" class="flex items-center gap-2 rounded-lg border border-beacon/30 bg-beacon/10 px-3 py-2 text-xs text-(--color-muted)">
+          <UIcon name="i-lucide-move" class="size-4 text-beacon" />
+          Drag boxes by their title bar, resize from the bottom-right corner. {{ dirty ? 'Unsaved changes.' : '' }}
+        </div>
 
-        <section class="panel dashboard-kpi p-5">
-          <div>
-            <p class="dashboard-kpi-label">Disk</p>
-            <p class="dashboard-kpi-value">{{ compactBytes(diskUsedBytes) }}</p>
-          </div>
-          <div class="dashboard-ring size-20" :style="ringStyle(diskPercent)">
-            <div class="dashboard-ring-inner">
-              <p>{{ compactBytes(diskTotalBytes) }}</p>
-              <span>size</span>
-            </div>
-          </div>
-        </section>
+        <div class="shrink-0" :style="{ height: topGridHeightPx + 'px' }">
+        <ClientOnly>
+          <GridLayout
+            v-model:layout="layout"
+            :col-num="DASHBOARD_COLS"
+            :row-height="DASHBOARD_ROW_HEIGHT"
+            :is-draggable="editing"
+            :is-resizable="editing"
+            :margin="[12, 12]"
+            :responsive="false"
+            vertical-compact
+            class="-m-1.5"
+          >
+            <GridItem
+              v-for="item in layout"
+              :key="item.i"
+              :x="item.x"
+              :y="item.y"
+              :w="item.w"
+              :h="item.h"
+              :i="item.i"
+              :min-w="item.i === 'summary' ? 6 : 4"
+              :min-h="3"
+              drag-allow-from=".widget-drag"
+            >
+              <section v-if="item.i === 'summary'" class="panel flex h-full flex-col overflow-hidden">
+                <div class="widget-drag flex items-center gap-2 border-b border-surface px-3 py-2" :class="editing ? 'cursor-move select-none' : ''">
+                  <UIcon name="i-lucide-gauge" class="size-4 shrink-0 text-faint" />
+                  <span class="text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Overview</span>
+                </div>
+                <div class="min-h-0 flex-1 overflow-auto p-3">
+                  <div class="grid h-full grid-cols-2 gap-3 md:grid-cols-4">
+                    <div class="stat-tile">
+                      <div class="stat-tile-head">
+                        <UIcon name="i-lucide-boxes" class="size-3.5" />
+                        <span>Cluster</span>
+                      </div>
+                      <div class="stat-tile-body">
+                        <p class="stat-tile-figure">{{ d?.nodes?.total ?? 0 }}</p>
+                        <p class="stat-tile-figure-caption">nodes</p>
+                      </div>
+                      <p class="stat-tile-foot">
+                        {{ d?.nodes?.managers ?? 0 }} {{ plural(d?.nodes?.managers ?? 0, 'manager') }} · {{ d?.nodes?.workers ?? 0 }} {{ plural(d?.nodes?.workers ?? 0, 'worker') }}
+                      </p>
+                    </div>
 
-        <section class="panel dashboard-kpi p-5">
-          <div>
-            <p class="dashboard-kpi-label">Memory</p>
-            <p class="dashboard-kpi-value">{{ compactBytes(memoryUsedBytes) }}</p>
-          </div>
-          <div class="dashboard-ring size-20" :style="ringStyle(memoryPercent)">
-            <div class="dashboard-ring-inner">
-              <p>{{ compactBytes(memoryTotalBytes) }}</p>
-              <span>ram</span>
-            </div>
-          </div>
-        </section>
+                    <div class="stat-tile">
+                      <div class="stat-tile-head">
+                        <UIcon name="i-lucide-hard-drive" class="size-3.5" />
+                        <span>Disk</span>
+                      </div>
+                      <div class="stat-tile-body">
+                        <div class="dashboard-ring size-16" :style="ringStyle(diskPercent)">
+                          <div class="dashboard-ring-inner">
+                            <p>{{ formatPercent(diskPercent) }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="stat-tile-foot">{{ compactBytes(diskUsedBytes) }} of {{ compactBytes(diskTotalBytes) }}</p>
+                    </div>
 
-        <section class="panel dashboard-kpi p-5">
-          <div>
-            <p class="dashboard-kpi-label">CPU</p>
-            <p class="dashboard-kpi-value">{{ formatCores(cpuUsedCores) }}</p>
-          </div>
-          <div class="dashboard-ring size-20" :style="ringStyle(cpuPercent)">
-            <div class="dashboard-ring-inner">
-              <p>{{ Math.round(cpuTotalCores) }}</p>
-              <span>vCPU</span>
-            </div>
-          </div>
-        </section>
-      </div>
+                    <div class="stat-tile">
+                      <div class="stat-tile-head">
+                        <UIcon name="i-lucide-memory-stick" class="size-3.5" />
+                        <span>Memory</span>
+                      </div>
+                      <div class="stat-tile-body">
+                        <div class="dashboard-ring size-16" :style="ringStyle(memoryPercent)">
+                          <div class="dashboard-ring-inner">
+                            <p>{{ formatPercent(memoryPercent) }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="stat-tile-foot">{{ compactBytes(memoryUsedBytes) }} of {{ compactBytes(memoryTotalBytes) }}</p>
+                    </div>
 
-      <div class="mt-6 grid gap-4 xl:grid-cols-2">
+                    <div class="stat-tile">
+                      <div class="stat-tile-head">
+                        <UIcon name="i-lucide-cpu" class="size-3.5" />
+                        <span>CPU</span>
+                      </div>
+                      <div class="stat-tile-body">
+                        <div class="dashboard-ring size-16" :style="ringStyle(cpuPercent)">
+                          <div class="dashboard-ring-inner">
+                            <p>{{ formatPercent(cpuPercent) }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="stat-tile-foot">{{ formatCores(cpuUsedCores) }} of {{ Math.round(cpuTotalCores) }} vCPU</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section v-else class="panel flex h-full flex-col overflow-hidden">
+                <div class="widget-drag flex items-center gap-2 border-b border-surface px-3 py-2" :class="editing ? 'cursor-move select-none' : ''">
+                  <UIcon name="i-lucide-list-checks" class="size-4 shrink-0 text-faint" />
+                  <span class="text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Task distribution</span>
+                </div>
+                <div class="min-h-0 flex-1 overflow-auto p-3">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="[state, count] in taskEntries"
+                      :key="state"
+                      type="button"
+                      class="panel-flush flex items-center gap-2.5 px-3 py-2 transition"
+                      :class="editing ? 'cursor-default opacity-70' : 'cursor-pointer hover:ring-1 hover:ring-beacon/40'"
+                      :disabled="editing"
+                      @click="openTaskStatus(state)"
+                    >
+                      <StatusBadge :state="state" />
+                      <span class="font-mono text-sm font-semibold text-foam">{{ count }}</span>
+                    </button>
+                    <p v-if="!taskEntries.length" class="text-sm text-(--color-muted)">No tasks scheduled.</p>
+                  </div>
+                  <p class="mt-3 font-mono text-xs text-faint">
+                    Docker {{ d?.swarm?.dockerVersion || '-' }} &middot; swarm {{ (d?.swarm?.id || '').slice(0, 12) || '-' }}
+                  </p>
+                </div>
+              </section>
+            </GridItem>
+          </GridLayout>
+
+          <template #fallback>
+            <div class="panel p-10 text-center text-sm text-faint">Loading dashboard…</div>
+          </template>
+        </ClientOnly>
+        </div>
+
+        <div class="grid min-h-64 flex-1 auto-rows-fr grid-cols-1 gap-3 xl:grid-cols-2">
         <DashboardUsagePanel
           title="Memory usage by Service"
           :labels="memoryByService.labels"
@@ -267,74 +434,66 @@ function formatVcpu(value: number) {
           :format-value="formatPercent"
           y-title="[%]"
         />
-      </div>
-
-      <section class="panel mt-6 p-5">
-        <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted) mb-4">Task distribution</h2>
-        <div class="flex flex-wrap gap-2">
-          <div
-            v-for="[state, count] in taskEntries"
-            :key="state"
-            class="panel-flush flex items-center gap-2.5 px-3 py-2"
-          >
-            <StatusBadge :state="state" />
-            <span class="font-mono text-sm font-semibold text-foam">{{ count }}</span>
-          </div>
-          <p v-if="!taskEntries.length" class="text-sm text-(--color-muted)">No tasks scheduled.</p>
         </div>
-        <p class="mt-4 font-mono text-xs text-faint">
-          Docker {{ d?.swarm?.dockerVersion || '-' }} &middot; swarm {{ (d?.swarm?.id || '').slice(0, 12) || '-' }}
-        </p>
-      </section>
+      </div>
     </DataState>
+
+    <TaskStatusModal v-model:open="taskModalOpen" :state="activeTaskState" :tasks="modalTasks" :loading="modalLoading" />
   </div>
 </template>
 
 <style scoped>
-.dashboard-kpi {
+/* Each stat gets its own bounded card so a ring and the number/label it
+   belongs to are never ambiguous next to a neighboring stat. */
+.stat-tile {
   display: flex;
-  min-height: 8.75rem;
+  min-width: 0;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.4rem;
+  border-radius: 0.75rem;
+  background: var(--color-abyss);
+  border: 1px solid var(--color-hull-soft);
+  padding: 0.6rem 0.5rem;
+  text-align: center;
 }
 
-.dashboard-kpi-label {
-  font-size: 0.75rem;
+.stat-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  line-height: 1rem;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--color-muted);
 }
 
-.dashboard-kpi-value {
-  margin-top: 0.35rem;
-  font-family: var(--font-display);
-  font-size: 1.55rem;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--color-foam);
-}
-
-.dashboard-count-pill {
+.stat-tile-body {
   display: flex;
+  flex: 1;
+  min-height: 0;
   align-items: center;
-  gap: 0.5rem;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-hull) 42%, var(--color-surface-2));
-  padding: 0.35rem 0.75rem 0.35rem 0.35rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  justify-content: center;
+}
+
+.stat-tile-figure {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
   color: var(--color-foam);
 }
 
-.dashboard-count-pill span {
-  display: grid;
-  min-width: 1.45rem;
-  height: 1.45rem;
-  place-items: center;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-muted) 18%, var(--color-surface));
+.stat-tile-figure-caption {
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--color-muted);
+}
+
+.stat-tile-foot {
+  font-size: 0.66rem;
+  line-height: 1.1;
   color: var(--color-muted);
 }
 
@@ -344,7 +503,7 @@ function formatVcpu(value: number) {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  padding: 0.45rem;
+  padding: 0.3rem;
 }
 
 .dashboard-ring-inner {
@@ -360,20 +519,10 @@ function formatVcpu(value: number) {
 }
 
 .dashboard-ring-inner p {
-  max-width: 4rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1;
   color: var(--color-foam);
-}
-
-.dashboard-ring-inner span {
-  margin-top: 0.1rem;
-  font-size: 0.68rem;
-  line-height: 0.85rem;
-  color: var(--color-muted);
 }
 </style>

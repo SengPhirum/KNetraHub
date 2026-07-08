@@ -10,18 +10,18 @@ defineProps<{
 </script>
 
 <template>
-  <section class="panel dashboard-usage-panel p-4">
-    <h2 class="mb-4 text-center font-display text-base font-semibold text-foam">{{ title }}</h2>
+  <section class="panel dashboard-usage-panel flex h-full flex-col p-3">
+    <h2 class="mb-2 shrink-0 text-center font-display text-base font-semibold text-foam">{{ title }}</h2>
 
-    <div v-if="!labels.length || !datasets.length" class="flex h-56 items-center justify-center text-sm text-(--color-muted)">
+    <div v-if="!labels.length || !datasets.length" class="flex flex-1 items-center justify-center text-sm text-(--color-muted)">
       {{ emptyLabel || 'Waiting for usage samples.' }}
     </div>
-    <div v-else class="grid min-h-64 gap-4 lg:grid-cols-[minmax(0,1fr)_10.5rem]">
+    <div v-else class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_10.5rem]">
       <MetricsChart
         :labels="labels"
         :datasets="datasets"
         :format-value="formatValue"
-        :height="250"
+        fill-height
         :legend="false"
         :fill="true"
         :y-title="yTitle"
@@ -39,14 +39,14 @@ defineProps<{
 
 <style scoped>
 .dashboard-usage-panel {
-  min-height: 19rem;
+  min-height: 12rem;
 }
 
 .dashboard-usage-legend {
   display: flex;
-  max-height: 10.5rem;
+  max-height: 8rem;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
   overflow-y: auto;
   padding-right: 0.25rem;
   scrollbar-width: thin;

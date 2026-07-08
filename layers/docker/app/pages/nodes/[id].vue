@@ -100,17 +100,7 @@ const nodeBadges = computed(() => {
   return badges.map((label) => ({ label: String(label).toUpperCase(), class: badgeClass(String(label)) }))
 })
 
-// usage rings
-function clampPercent(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
-}
-function ringStyle(percent?: number | null) {
-  const safe = clampPercent(percent)
-  return {
-    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 72%, var(--color-surface-2)) 0)`
-  }
-}
+const { usageRingStyle } = useUsageRing()
 function ringDetail(label: string, percent?: number | null, hint?: string) {
   if (!usage.value?.available) return `${label}: waiting for node metrics.`
   return `${label}: ${percentLabel(percent)}${hint ? ` (${hint})` : ''}`
@@ -215,7 +205,7 @@ async function refreshAll() {
             <div class="mt-6 grid grid-cols-3 gap-3 text-center">
               <div>
                 <div class="summary-ring-wrap" :title="ringDetail('CPU', usage?.cpu?.percent, usage?.available ? `${Number(usage.cpu.cores || 0).toFixed(1)} used / ${cpus(desc?.Resources?.NanoCPUs ? desc.Resources.NanoCPUs / 1e9 : 0)}` : '')">
-                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(usage?.available ? usage.cpu.percent : 0)" tabindex="0">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="usageRingStyle(usage?.available ? usage.cpu.percent : 0)" tabindex="0">
                     <div class="summary-ring-inner">
                       <p class="font-mono text-sm font-semibold text-foam">{{ cpus((desc?.Resources?.NanoCPUs || 0) / 1e9) }}</p>
                       <p class="text-[10px] leading-tight text-faint">vCPU</p>
@@ -225,7 +215,7 @@ async function refreshAll() {
               </div>
               <div>
                 <div class="summary-ring-wrap" :title="ringDetail('Disk', usage?.disk?.percent, usage?.available && usage.disk.totalBytes ? `${bytes(usage.disk.usedBytes)} / ${bytes(usage.disk.totalBytes)}` : '')">
-                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(usage?.available ? usage.disk.percent : 0)" tabindex="0">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="usageRingStyle(usage?.available ? usage.disk.percent : 0)" tabindex="0">
                     <div class="summary-ring-inner">
                       <p class="font-mono text-xs font-semibold text-foam">{{ usage?.available && usage.disk.totalBytes ? bytes(usage.disk.totalBytes) : '—' }}</p>
                       <p class="text-[10px] leading-tight text-faint">disk</p>
@@ -235,7 +225,7 @@ async function refreshAll() {
               </div>
               <div>
                 <div class="summary-ring-wrap" :title="ringDetail('RAM', usage?.memory?.percent, usage?.available ? `${bytes(usage.memory.usedBytes)} / ${bytes(usage.memory.totalBytes)}` : '')">
-                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(usage?.available ? usage.memory.percent : 0)" tabindex="0">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="usageRingStyle(usage?.available ? usage.memory.percent : 0)" tabindex="0">
                     <div class="summary-ring-inner">
                       <p class="font-mono text-xs font-semibold text-foam">{{ bytes(desc?.Resources?.MemoryBytes) }}</p>
                       <p class="text-[10px] leading-tight text-faint">ram</p>

@@ -22,6 +22,9 @@ const props = defineProps<{
   datasets: { label: string; data: (number | null)[]; color?: string }[]
   formatValue?: (n: number) => string
   height?: number
+  /** Fill the parent's height instead of a fixed pixel height - the parent
+   *  must already have a definite (non-auto) height for this to resolve. */
+  fillHeight?: boolean
   fill?: boolean
   legend?: boolean
   yTitle?: string
@@ -94,7 +97,7 @@ const chartOptions = computed(() => ({
 </script>
 
 <template>
-  <div :style="{ height: (height || 220) + 'px' }">
+  <div :style="{ height: fillHeight ? '100%' : (height || 220) + 'px' }">
     <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>

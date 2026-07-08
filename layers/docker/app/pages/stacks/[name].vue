@@ -108,17 +108,7 @@ function percentLabel(value?: number | null) {
   return `${value.toFixed(value < 10 ? 1 : 0)}%`
 }
 
-function clampPercent(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
-}
-
-function ringStyle(percent?: number | null) {
-  const safe = clampPercent(percent)
-  return {
-    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 72%, var(--color-surface-2)) 0)`
-  }
-}
+const { usageRingStyle } = useUsageRing()
 
 function cpuRingPercent() {
   if (!currentUsage.value.available) return 0
@@ -290,7 +280,7 @@ async function deleteFromGitlab() {
               </div>
               <div class="min-w-0">
                 <div class="summary-ring-wrap" :title="cpuDetail()">
-                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(cpuRingPercent())" tabindex="0" :aria-label="cpuDetail()">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="usageRingStyle(cpuRingPercent())" tabindex="0" :aria-label="cpuDetail()">
                     <div class="summary-ring-inner">
                       <p class="font-mono text-sm font-semibold text-foam">{{ formatNanoCpus(resourceCpuNano) }}</p>
                       <p class="text-[11px] leading-tight text-faint">vCPU</p>
@@ -301,7 +291,7 @@ async function deleteFromGitlab() {
               </div>
               <div class="min-w-0">
                 <div class="summary-ring-wrap" :title="memoryDetail()">
-                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="ringStyle(memoryRingPercent())" tabindex="0" :aria-label="memoryDetail()">
+                  <div class="summary-ring mx-auto size-20 sm:size-24" :style="usageRingStyle(memoryRingPercent())" tabindex="0" :aria-label="memoryDetail()">
                     <div class="summary-ring-inner">
                       <p class="font-mono text-sm font-semibold text-foam">{{ formatBytes(resourceMemoryBytes) }}</p>
                       <p class="text-[11px] leading-tight text-faint">RAM</p>

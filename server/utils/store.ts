@@ -31,12 +31,24 @@ export interface NotificationPreferences {
   newLogin: boolean
 }
 
+export interface DashboardGridItem {
+  i: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface UserPreferences {
   theme: 'system' | 'dark' | 'light'
   refreshInterval: number   // seconds; 0 = manual
   density: 'default' | 'compact' | 'comfortable'
   lists: Record<string, { sortBy: string; sortDir: 'asc' | 'desc'; filters?: Record<string, string[]> }>
   notifications: NotificationPreferences
+  /** Saved drag/resize grid layouts for customizable dashboards, keyed by an
+   *  app-chosen dashboard id (e.g. "docker") - generic so any app's page can
+   *  persist its own widget positions without a dedicated table. */
+  dashboards: Record<string, DashboardGridItem[]>
 }
 
 export const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
@@ -251,14 +263,15 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
   const row = rows[0]
-  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS } }
+  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS }, dashboards: {} }
   const data = parsePreferenceData(row.data)
   return {
     theme: row.theme as UserPreferences['theme'],
     refreshInterval: row.refresh_interval as number,
     density: row.density as UserPreferences['density'],
     lists: sanitizeListPreferences(data.lists),
-    notifications: sanitizeNotifications(data.notifications)
+    notifications: sanitizeNotifications(data.notifications),
+    dashboards: sanitizeDashboardPreferences(data.dashboards)
   }
 }
 
@@ -304,6 +317,28 @@ function sanitizeListFilters(input: any): Record<string, string[]> | undefined {
   return Object.keys(filters).length ? filters : undefined
 }
 
+function sanitizeDashboardPreferences(input: any): UserPreferences['dashboards'] {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  const dashboards: UserPreferences['dashboards'] = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (!key || !Array.isArray(value)) continue
+    const items = value
+      .map((item: any): DashboardGridItem | null => {
+        if (!item || typeof item !== 'object') return null
+        const i = String(item.i || '')
+        const x = Number(item.x)
+        const y = Number(item.y)
+        const w = Number(item.w)
+        const h = Number(item.h)
+        if (!i || ![x, y, w, h].every(Number.isFinite)) return null
+        return { i, x, y, w, h }
+      })
+      .filter((item): item is DashboardGridItem => item !== null)
+    if (items.length) dashboards[key] = items
+  }
+  return dashboards
+}
+
 export async function updateUserPreferences(userId: string, patch: Partial<UserPreferences>): Promise<UserPreferences> {
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
@@ -312,7 +347,8 @@ export async function updateUserPreferences(userId: string, patch: Partial<UserP
   let nextData = currentData
   if (patch.lists !== undefined) nextData = { ...nextData, lists: sanitizeListPreferences(patch.lists) }
   if (patch.notifications !== undefined) nextData = { ...nextData, notifications: sanitizeNotifications(patch.notifications) }
-  const dataChanged = patch.lists !== undefined || patch.notifications !== undefined
+  if (patch.dashboards !== undefined) nextData = { ...nextData, dashboards: sanitizeDashboardPreferences(patch.dashboards) }
+  const dataChanged = patch.lists !== undefined || patch.notifications !== undefined || patch.dashboards !== undefined
 
   if (!existing) {
     await db.query(

@@ -26,17 +26,7 @@ const memorySeries = computed(() => metricsData.value?.series?.memory || [])
 const historyLabels = computed(() => cpuSeries.value.map((p: any) => timeLabel(p.time)))
 const hasMetrics = computed(() => cpuSeries.value.length > 0)
 
-function clampPercent(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
-}
-
-function ringStyle(percent?: number | null) {
-  const safe = clampPercent(percent)
-  return {
-    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 72%, var(--color-surface-2)) 0)`
-  }
-}
+const { usageRingStyle } = useUsageRing()
 
 function memoryPercent(used?: number | null, limit?: number | null) {
   if (!used || !limit) return null
@@ -113,7 +103,7 @@ function viewLogs() {
           <div class="mt-6 grid grid-cols-2 gap-3 text-center">
             <div>
               <div class="summary-ring-wrap" :title="cpuDetail()">
-                <div class="summary-ring mx-auto size-24" :style="ringStyle(cpuRingPercent())" tabindex="0" :aria-label="cpuDetail()">
+                <div class="summary-ring mx-auto size-24" :style="usageRingStyle(cpuRingPercent())" tabindex="0" :aria-label="cpuDetail()">
                   <div class="summary-ring-inner">
                     <p class="font-mono text-sm font-semibold text-foam">{{ cpuAllocatedNano ? cpus(cpuAllocatedNano / 1e9) : '—' }}</p>
                     <p class="text-[10px] leading-tight text-faint">vCPU</p>
@@ -124,7 +114,7 @@ function viewLogs() {
             </div>
             <div>
               <div class="summary-ring-wrap" :title="memoryDetail()">
-                <div class="summary-ring mx-auto size-24" :style="ringStyle(memoryRingPercent())" tabindex="0" :aria-label="memoryDetail()">
+                <div class="summary-ring mx-auto size-24" :style="usageRingStyle(memoryRingPercent())" tabindex="0" :aria-label="memoryDetail()">
                   <div class="summary-ring-inner">
                     <p class="font-mono text-xs font-semibold text-foam">{{ memoryAllocatedBytes ? bytes(memoryAllocatedBytes) : '—' }}</p>
                     <p class="text-[10px] leading-tight text-faint">ram</p>

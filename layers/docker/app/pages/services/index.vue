@@ -59,15 +59,12 @@ async function refreshUsage() {
 onMounted(refreshUsage)
 useIntervalFn(refreshUsage, 5000, { immediate: false })
 
-function clampPercent(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
+const { usageRingStyle, fulfillmentRingStyle } = useUsageRing()
+function replicaRingStyle(percent?: number | null) {
+  return fulfillmentRingStyle(percent, { hullPercent: 82, trackColor: 'transparent' })
 }
-function ringStyle(percent?: number | null) {
-  const safe = clampPercent(percent)
-  return {
-    background: `conic-gradient(var(--color-running) ${safe}%, color-mix(in srgb, var(--color-hull) 82%, transparent) 0)`
-  }
+function cpuMemRingStyle(percent?: number | null) {
+  return usageRingStyle(percent, { hullPercent: 82, trackColor: 'transparent' })
 }
 function memoryPercent(used?: number | null, limit?: number | null) {
   if (!used || !limit) return null
@@ -277,7 +274,7 @@ function memoryValue(svc: any) {
 
           <div class="mt-4 grid grid-cols-3 gap-3 text-center">
             <div>
-              <div class="summary-ring mx-auto size-20" :style="ringStyle(replicaPercent(svc))">
+              <div class="summary-ring mx-auto size-20" :style="replicaRingStyle(replicaPercent(svc))">
                 <div class="summary-ring-inner">
                   <p class="font-mono text-sm font-semibold text-foam">{{ replicaLabel(svc) }}</p>
                   <p class="text-[10px] leading-tight text-faint">replica</p>
@@ -285,7 +282,7 @@ function memoryValue(svc: any) {
               </div>
             </div>
             <div>
-              <div class="summary-ring mx-auto size-20" :style="ringStyle(cpuRingPercent(svc))">
+              <div class="summary-ring mx-auto size-20" :style="cpuMemRingStyle(cpuRingPercent(svc))">
                 <div class="summary-ring-inner">
                   <p class="font-mono text-xs font-semibold text-foam">{{ cpuValue(svc) }}</p>
                   <p class="text-[10px] leading-tight text-faint">vCPU</p>
@@ -293,7 +290,7 @@ function memoryValue(svc: any) {
               </div>
             </div>
             <div>
-              <div class="summary-ring mx-auto size-20" :style="ringStyle(memoryRingPercent(svc))">
+              <div class="summary-ring mx-auto size-20" :style="cpuMemRingStyle(memoryRingPercent(svc))">
                 <div class="summary-ring-inner">
                   <p class="font-mono text-xs font-semibold text-foam">{{ memoryValue(svc) }}</p>
                   <p class="text-[10px] leading-tight text-faint">RAM</p>
