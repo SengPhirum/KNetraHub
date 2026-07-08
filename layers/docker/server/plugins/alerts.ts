@@ -1,6 +1,6 @@
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { getDb } from '~~/server/utils/db'
-import { getAgentReport } from '~~/server/utils/agentReports'
+import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
 import { fireAlert } from '~~/server/utils/alertNotify'
 import { getAlertRule } from '~~/server/utils/alertRules'
 import { latestServiceUsageRows, nodeCapacityById, type UsageRow } from '~~/layers/docker/server/api/services/usage.get'

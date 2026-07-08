@@ -1,6 +1,6 @@
 # KNetraHub v0.1.1
 
-Date: 2026-07-07 UTC
+Date: 2026-07-08 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-07-07 UTC
 
 ## Source
 
-- Commit: `33d2557`
+- Commit: `ad63dc9`
 - Previous tag: none
 
 ## Changes
 
+- feat: add release notes for v0.1.1 with correct commit reference and date; enhance authentication UI; implement registry management features; remove local changes section from release script fix: update release notes for v0.1.1 with correct commit reference; adjust header height in SidebarNav and default layout refactor: move registry management to settings tab and update related components chore: migrate to pnpm, rebrand to KNetraHub, and enhance README chore: remove unused release.sh script and replace with service.sh for improved command handling feat: implement service.sh for managing release, development, and deployment commands fix: update docker-compose file path in dev-swarm script for correct execution context fix: enhance health check endpoint and improve database readiness handling fix: ensure proper access control for Monitoring features based on user permissions (ad63dc9)
 - fix: update release notes for v0.1.1 with correct commit reference; adjust header height in SidebarNav and default layout (33d2557)
 - fix: update release notes for v0.1.1 with correct date and commit reference; adjust header height in SidebarNav and default layout (a54adf4)
 - fix: update commit reference in release notes for v0.1.1; adjust header height in SidebarNav and default layout (7558328)

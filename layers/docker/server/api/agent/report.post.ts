@@ -1,4 +1,4 @@
-import { recordAgentReport } from '~~/server/utils/agentReports'
+import { recordAgentReport } from '~~/layers/docker/server/utils/agentReports'
 import { recordMetrics } from '~~/server/utils/metrics'
 
 /**

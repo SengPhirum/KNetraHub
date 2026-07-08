@@ -1,6 +1,6 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
-import { isZabbixExport, zabbixTemplateToNative, type NativeTemplate } from '~~/server/utils/importExport'
+import { isZabbixExport, zabbixTemplateToNative, type NativeTemplate } from '~~/layers/monitoring/server/utils/importExport'
 
 /**
  * Import one or more templates. Accepts THREE shapes, auto-detected:

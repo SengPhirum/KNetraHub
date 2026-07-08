@@ -25,8 +25,8 @@ export function downloadJson(filename: string, data: unknown): void {
 }
 
 /** Serialize rows to CSV for the Export-as-CSV buttons (Devices, Hosts). Mirrors
- *  server/utils/importExport.ts's toCsv - duplicated rather than shared because
- *  server/utils isn't part of the client bundle. */
+ *  layers/monitoring/server/utils/importExport.ts's toCsv - duplicated rather than
+ *  shared because server/utils isn't part of the client bundle. */
 export function toCsv(rows: Record<string, any>[], columns: string[]): string {
   const esc = (v: any) => {
     const s = v == null ? '' : String(v)

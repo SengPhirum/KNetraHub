@@ -1,6 +1,6 @@
 import { requireUser } from '~~/server/utils/auth'
 import { assertSwarm, useDocker } from '~~/layers/docker/server/utils/docker'
-import { getAgentReport } from '~~/server/utils/agentReports'
+import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
 
 type UsageResult = {
   id: string
