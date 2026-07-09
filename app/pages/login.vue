@@ -46,8 +46,8 @@ async function submit() {
           <UIcon name="i-lucide-log-in" class="size-5 text-beacon" />
         </span>
         <div class="min-w-0">
-          <h1 class="font-display text-lg font-semibold text-foam">Welcome back</h1>
-          <p class="text-xs text-faint">Sign in to {{ appearance.appName }} to continue</p>
+          <h1 class="truncate font-display text-2xl font-semibold text-foam">{{ appearance.appName }}</h1>
+          <p class="text-xs text-faint">Sign in to continue</p>
         </div>
       </div>
 

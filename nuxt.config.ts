@@ -9,6 +9,7 @@ const isDocsBuild = process.env.NUXT_STATIC_DOCS === 'true'
 // Leave empty (/) for a custom domain or user/org site.
 const docsBaseURL = process.env.NUXT_DOCS_BASE_URL || '/'
 const ssrEnabled = process.env.NUXT_SSR !== 'false'
+const appVersion = require('./package.json').version
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-06-01',
@@ -200,6 +201,7 @@ export default defineNuxtConfig({
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',
+      appVersion,
       staticDocs: isDocsBuild
     }
   },

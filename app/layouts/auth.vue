@@ -39,6 +39,8 @@ const netTriangles = [
   { points: '1340,560 1377,617 1303,617', d: '3.4s', dur: '12s' },
   { points: '860,320 890,368 830,368', d: '0.6s', dur: '9s' }
 ]
+
+const appVersion = useRuntimeConfig().public.appVersion
 </script>
 
 <template>
@@ -117,6 +119,10 @@ const netTriangles = [
     <div class="flex min-h-dvh items-center justify-center p-4 sm:p-8">
       <slot />
     </div>
+
+    <footer class="pointer-events-none fixed inset-x-0 bottom-0 z-10 py-2 text-center text-[11px] text-faint">
+      v{{ appVersion }}
+    </footer>
   </div>
 </template>
 

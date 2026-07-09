@@ -35,6 +35,7 @@ const userMenu = computed(() => [
 ])
 
 const { appearance } = useAppearance()
+const appVersion = useRuntimeConfig().public.appVersion
 </script>
 
 <template>
@@ -137,6 +138,8 @@ const { appearance } = useAppearance()
           <UIcon name="i-lucide-book-open-text" class="size-3.5" />
           <span>Documentation</span>
         </NuxtLink>
+
+        <p class="text-faint">v{{ appVersion }}</p>
 
         <p class="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 text-faint">
           <span>Made with</span>

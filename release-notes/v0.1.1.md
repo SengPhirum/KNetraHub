@@ -11,11 +11,12 @@ Date: 2026-07-09 UTC
 
 ## Source
 
-- Commit: `29bbeb3`
+- Commit: `fb14e32`
 - Previous tag: none
 
 ## Changes
 
+- feat: implement first-run setup wizard; add setup status API; refactor admin account creation logic; enhance sidebar navigation styles (fb14e32)
 - feat: enhance PWA offline readiness by adding globPatterns for precaching; update commit references in release notes (29bbeb3)
 - feat: implement PWA offline readiness notification; refactor data fetching in Docker pages for improved performance; enhance session handling in auth utility; add database indexes for net alerts (81bc7d6)
 - feat: centralize usage ring styles for CPU, RAM, and Disk across Docker app; refactor dashboard layout and preferences handling (4b56d1c)
