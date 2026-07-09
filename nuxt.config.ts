@@ -272,7 +272,14 @@ export default defineNuxtConfig({
       // staging" (installed app stuck showing stale/wrong pages on reload
       // or deep link). Disabling it makes every navigation always hit the
       // network; only static build assets are still precached for speed.
-      navigateFallback: null
+      navigateFallback: null,
+      // @vite-pwa/nuxt does NOT default globPatterns to the client build
+      // output for a server-rendered app (it only auto-adds patterns for
+      // static/generated builds) - without this, generateSW had nothing to
+      // glob, so the precache manifest only ever contained the two small
+      // Nuxt build-id JSON files, and "offline ready" was true in name only
+      // (the whole JS/CSS bundle still had to hit the network every time).
+      globPatterns: ['_nuxt/**/*.{js,css}']
     },
     includeAssets: [
       'favicon.ico',
