@@ -7,7 +7,9 @@ const toast = useToast()
 const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: scenario, refresh } = useAsyncData(`serverWeb-${route.params.id}`, () => $fetch<any>(`/api/server/web/${route.params.id}`), { server: false })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 const stepForm = reactive({ name: '', url: '', expected_status: 200, required_string: '' })
 const adding = ref(false)

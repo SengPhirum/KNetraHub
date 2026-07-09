@@ -6,10 +6,9 @@ const { data: alerts, status, refresh } = useAsyncData('netAlerts', () => $fetch
 })
 const { data: rules } = useAsyncData('netAlertRules', () => $fetch('/api/net/rules'))
 
-onMounted(() => {
-  const interval = setInterval(() => { if (!document.hidden) refresh() }, 10000)
-  onUnmounted(() => clearInterval(interval))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'net') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 10000, { immediate: false })
 
 const conditionLabel = (r: any) => `${r.metric} ${r.condition} ${r.threshold}`
 

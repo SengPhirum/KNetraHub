@@ -6,10 +6,9 @@ const { hasApp } = useAuth()
 
 const { data: traps, status, refresh } = useAsyncData('serverTraps', () => $fetch<any[]>('/api/server/traps'), { default: () => [], server: false })
 
-onMounted(() => {
-  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
-  onUnmounted(() => clearInterval(t))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'trap') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 </script>
 
 <template>

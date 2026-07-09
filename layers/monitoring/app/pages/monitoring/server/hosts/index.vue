@@ -9,10 +9,9 @@ const { data: hosts, status, refresh } = useAsyncData('serverHostsList', () => $
 const { data: groups } = useAsyncData('serverHostGroupsOpts', () => $fetch<any[]>('/api/server/hostgroups'), { default: () => [] })
 const { data: templates } = useAsyncData('serverTemplatesOpts', () => $fetch<any[]>('/api/server/templates'), { default: () => [] })
 
-onMounted(() => {
-  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
-  onUnmounted(() => clearInterval(t))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 // --- Export / Import ---------------------------------------------------------
 // Groups/templates round-trip by NAME (portable across environments); SNMP

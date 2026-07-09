@@ -21,10 +21,16 @@ const { data: probes, refresh: refreshProbes } = useAsyncData('mapsProbes', () =
 const deviceById = computed(() => new Map((devices.value || []).map((d: any) => [d.id, d])))
 const hostById = computed(() => new Map((hosts.value || []).map((h: any) => [h.id, h])))
 
-onMounted(() => {
-  const t = setInterval(() => { if (!document.hidden) { refreshDevices(); refreshHosts(); refreshProbes() } }, 15000)
-  onUnmounted(() => clearInterval(t))
+// Probes have no live push source (registered once, not on a poll cycle) -
+// they only refresh on the fallback interval below.
+const { connected } = useMonitoringEvents((evt) => {
+  if (evt.type === 'net') refreshDevices()
+  if (evt.type === 'server') refreshHosts()
 })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => {
+  if (!connected.value && pageVisibility.value === 'visible') { refreshDevices(); refreshHosts(); refreshProbes() }
+}, 15000, { immediate: false })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Topology tab: drag-canvas editor with mixed device/host nodes

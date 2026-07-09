@@ -15,6 +15,7 @@ import {
 } from '~~/layers/monitoring/server/utils/netMonitor'
 import { recordServerItemSample } from '~~/server/utils/metrics'
 import { metricForItemKey, evaluateCondition, isHostUnderMaintenance, fireServerActions } from '~~/layers/monitoring/server/utils/serverMonitor'
+import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
 
 /**
  * Real Server poller (Zabbix engine). On each cycle it ICMP-pings every enabled
@@ -59,6 +60,7 @@ async function pollAll(cfg: ServerConfig) {
     await mapLimit(hosts, concurrency, (h) => pollHost(h, cfg).catch((e) => console.error(`[serverPoller] ${h.ip} failed:`, e?.message || e)))
   }
   await pollWebScenarios(cfg).catch((e) => console.error('[serverPoller] web checks failed:', e?.message || e))
+  emitMonitoringEvent('server')
 }
 
 // Run each enabled web scenario's ordered steps (Zabbix multi-step web check).

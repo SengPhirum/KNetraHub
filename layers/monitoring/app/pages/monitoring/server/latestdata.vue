@@ -4,7 +4,9 @@ const { hasApp } = useAuth()
 const { bitrate } = useFormat()
 
 const { data: items, status, refresh } = useAsyncData('serverLatestData', () => $fetch<any[]>('/api/server/items'), { default: () => [], server: false })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 const search = ref('')
 const rows = computed(() => {

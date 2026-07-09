@@ -11,6 +11,7 @@ import {
   type SnmpOpts
 } from '~~/layers/monitoring/server/utils/netMonitor'
 import { recordNetSample, recordSensorReadings } from '~~/server/utils/metrics'
+import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
 
 /**
  * Real Network poller. On each cycle it ICMP-pings every device, and for SNMP
@@ -66,6 +67,7 @@ async function pollAllDevices(cfg: NetConfig) {
   await mapLimit(devices, concurrency, (d) => pollDevice(d, cfg).catch((e) => {
     console.error(`[netPoller] ${d.ip} failed:`, e?.message || e)
   }))
+  emitMonitoringEvent('net')
 }
 
 async function pollDevice(device: any, cfg: NetConfig) {

@@ -3,10 +3,9 @@ const { hasApp } = useAuth()
 
 const { data, status, refresh } = useAsyncData('netAi', () => $fetch('/api/net/ai'), { server: false })
 
-onMounted(() => {
-  const interval = setInterval(() => { if (!document.hidden) refresh() }, 20000)
-  onUnmounted(() => clearInterval(interval))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'net') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 20000, { immediate: false })
 </script>
 
 <template>

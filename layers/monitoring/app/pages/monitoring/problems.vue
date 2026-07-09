@@ -9,7 +9,14 @@ const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: netAlerts, refresh: refreshNet } = useAsyncData('unifiedNetAlerts', () => $fetch<any[]>('/api/net/alerts'), { default: () => [], server: false })
 const { data: srvProblems, refresh: refreshSrv } = useAsyncData('unifiedSrvProblems', () => $fetch<any[]>('/api/server/problems'), { default: () => [], server: false })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) { refreshNet(); refreshSrv() } }, 15000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => {
+  if (evt.type === 'net') refreshNet()
+  if (evt.type === 'server' || evt.type === 'trap') refreshSrv()
+})
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => {
+  if (!connected.value && pageVisibility.value === 'visible') { refreshNet(); refreshSrv() }
+}, 15000, { immediate: false })
 
 // Map the Network module's string severities onto the shared 0-5 scale.
 function netSeverity(s: string): number {

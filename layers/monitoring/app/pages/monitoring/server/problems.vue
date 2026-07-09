@@ -6,7 +6,9 @@ const toast = useToast()
 const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: problems, status, refresh } = useAsyncData('serverProblemsList', () => $fetch<any[]>('/api/server/problems'), { default: () => [], server: false })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server' || evt.type === 'trap') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 const showResolved = ref(false)
 const minSeverity = ref(0)

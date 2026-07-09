@@ -6,7 +6,9 @@ const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: triggers, status, refresh } = useAsyncData('serverTriggers', () => $fetch<any[]>('/api/server/triggers'), { default: () => [], server: false })
 const { data: hosts } = useAsyncData('serverTriggerHosts', () => $fetch<any[]>('/api/server/hosts'), { default: () => [] })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 const operators = ['>', '<', '>=', '<=', '=', '!='].map((o) => ({ value: o, label: o }))
 const hostItems = computed(() => (hosts.value || []).map((h) => ({ value: h.id, label: h.name })))

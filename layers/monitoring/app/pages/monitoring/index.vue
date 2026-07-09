@@ -52,9 +52,14 @@ watch(selected, (d: any) => {
 watch(layout, () => { if (!loadingLayout && editing.value) dirty.value = true }, { deep: true })
 
 // Live data refresh while viewing (paused during edits so a refetch can't yank
-// the grid out from under a drag, and paused while the tab is hidden).
+// the grid out from under a drag). Widgets span both net and server data, so
+// any poller/trap event triggers a refresh; the interval below is only a
+// fallback for when the SSE stream isn't connected.
+const { connected } = useMonitoringEvents(() => { if (!editing.value) refreshNuxtData() })
 const pageVisibility = useDocumentVisibility()
-useIntervalFn(() => { if (!editing.value && pageVisibility.value === 'visible') refreshNuxtData() }, 30000)
+useIntervalFn(() => {
+  if (!connected.value && !editing.value && pageVisibility.value === 'visible') refreshNuxtData()
+}, 30000)
 
 function nextY() { return layout.value.reduce((m, w) => Math.max(m, w.y + w.h), 0) }
 

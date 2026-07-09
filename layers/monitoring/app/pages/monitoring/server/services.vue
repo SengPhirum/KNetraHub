@@ -9,7 +9,9 @@ const period = ref('24h')
 const periodItems = [{ value: '24h', label: '24 hours' }, { value: '7d', label: '7 days' }, { value: '30d', label: '30 days' }]
 const { data: resp, status, refresh } = useAsyncData('serverServices', () => $fetch<any>(`/api/server/services?period=${period.value}`), { watch: [period], default: () => ({ services: [] }), server: false })
 const { data: triggers } = useAsyncData('serverServiceTriggers', () => $fetch<any[]>('/api/server/triggers'), { default: () => [] })
-onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 20000); onUnmounted(() => clearInterval(t)) })
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 20000, { immediate: false })
 
 const services = computed(() => resp.value?.services || [])
 

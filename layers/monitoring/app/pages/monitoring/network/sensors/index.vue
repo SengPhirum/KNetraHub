@@ -5,10 +5,9 @@ const { data: sensors, status, refresh } = useAsyncData('netSensors', () => $fet
   server: false
 })
 
-onMounted(() => {
-  const interval = setInterval(() => { if (!document.hidden) refresh() }, 10000)
-  onUnmounted(() => clearInterval(interval))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'net') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 10000, { immediate: false })
 
 const search = ref('')
 const typeFilter = ref('all')

@@ -25,10 +25,11 @@ const { data: metrics, refresh: refreshMetrics } = useAsyncData(
   { watch: [range], server: false, default: () => ({ channels: [], buckets: [], series: {}, coveragePercent: 0 }) }
 )
 
-onMounted(() => {
-  const t = setInterval(() => { if (!document.hidden) { refreshSensor(); refreshMetrics() } }, 30000)
-  onUnmounted(() => clearInterval(t))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'net') { refreshSensor(); refreshMetrics() } })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => {
+  if (!connected.value && pageVisibility.value === 'visible') { refreshSensor(); refreshMetrics() }
+}, 30000, { immediate: false })
 
 // State (mirrors the list, plus PRTG's "Unusual" when the latest reading
 // deviates from the sensor's own recent baseline — see the metrics endpoint).

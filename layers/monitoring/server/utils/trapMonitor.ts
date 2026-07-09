@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { getDb } from '~~/server/utils/db'
 import { isHostUnderMaintenance, fireServerActions } from '~~/layers/monitoring/server/utils/serverMonitor'
+import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
 
 /**
  * SNMP trap classification + handling for server/plugins/trapReceiver.ts. Every
@@ -81,6 +82,7 @@ export async function handleTrap(pdu: any, sourceIp: string): Promise<void> {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [nanoid(), host?.id || null, sourceIp, version, trapOid, name, severity, varbinds, now]
   )
+  emitMonitoringEvent('trap')
 
   if (!host) return // can't correlate to a known host - logged only
 

@@ -8,10 +8,9 @@ const { bitrate } = useFormat()
 
 const { data: host, refresh } = useAsyncData(`serverHost-${route.params.id}`, () => $fetch<any>(`/api/server/hosts/${route.params.id}`), { server: false })
 
-onMounted(() => {
-  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
-  onUnmounted(() => clearInterval(t))
-})
+const { connected } = useMonitoringEvents((evt) => { if (evt.type === 'server') refresh() })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refresh() }, 15000, { immediate: false })
 
 // Selected item → history graph.
 const selItem = ref<any>(null)
