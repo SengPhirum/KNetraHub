@@ -112,19 +112,28 @@ async function ensureAdmin() {
   const db = getDb()
   const { rows } = await db.query('SELECT COUNT(*) as n FROM users')
   if (rows[0].n > 0) return
-  const password = process.env.NUXT_ADMIN_PASSWORD || 'admin'
+  // Only auto-provision when both are explicitly set (a Docker/Compose env
+  // pre-creating the admin non-interactively). Otherwise leave the table
+  // empty - the first-run setup wizard (app/pages/setup.vue) is what prompts
+  // for a real admin password in that case, rather than silently seeding a
+  // guessable admin/admin default.
+  const username = process.env.NUXT_ADMIN_USERNAME
+  const password = process.env.NUXT_ADMIN_PASSWORD
+  if (!username || !password) return
   await db.query(
     'INSERT INTO users (id, username, display_name, role, source, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [
-      nanoid(),
-      process.env.NUXT_ADMIN_USERNAME || 'admin',
-      'Administrator',
-      'admin',
-      'local',
-      bcrypt.hashSync(password, 10),
-      new Date().toISOString()
-    ]
+    [nanoid(), username, 'Administrator', 'admin', 'local', bcrypt.hashSync(password, 10), new Date().toISOString()]
   )
+}
+
+/** Unauthenticated check for the first-run setup wizard: is there already an
+ *  admin account (created via the wizard, a prior deployment, or pre-seeded
+ *  via NUXT_ADMIN_USERNAME/PASSWORD)? */
+export async function adminExists(): Promise<boolean> {
+  await ensureAdmin()
+  const db = getDb()
+  const { rows } = await db.query("SELECT EXISTS(SELECT 1 FROM users WHERE role = 'admin') as exists")
+  return rows[0].exists
 }
 
 // ─── users ────────────────────────────────────────────────────────────────────

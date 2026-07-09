@@ -57,7 +57,7 @@ async function submit() {
           <UInput
             v-model="username"
             icon="i-lucide-user"
-            placeholder="admin"
+            placeholder="Username"
             autocomplete="username"
             size="lg"
             class="w-full"
@@ -107,15 +107,12 @@ async function submit() {
         />
       </template>
 
-      <p class="text-center text-xs text-faint">
+      <p v-if="providers?.ldapEnabled || providers?.oidcEnabled" class="text-center text-xs text-faint">
         <template v-if="providers?.ldapEnabled">
           <UIcon name="i-lucide-shield-check" class="size-3 inline" /> LDAP enabled · local accounts also accepted
         </template>
-        <template v-else-if="providers?.oidcEnabled">
-          <UIcon name="i-lucide-shield-check" class="size-3 inline" /> SSO enabled · local accounts also accepted
-        </template>
         <template v-else>
-          Local accounts · default <span class="font-mono">admin / admin</span>
+          <UIcon name="i-lucide-shield-check" class="size-3 inline" /> SSO enabled · local accounts also accepted
         </template>
       </p>
     </form>

@@ -40,12 +40,12 @@ const { appearance } = useAppearance()
 <template>
   <div class="min-h-dvh">
     <!-- Desktop sidebar (fixed) - hidden on the full-page portal home -->
-    <aside v-if="!isHome" class="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col panel-flush border-y-0 border-l-0 z-30">
+    <aside v-if="!isHome" class="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col sidebar-shell border-y-0 border-l-0 z-30">
       <SidebarNav />
     </aside>
 
     <!-- Mobile drawer -->
-    <USlideover v-if="!isHome" v-model:open="mobileOpen" side="left" :ui="{ content: 'w-[17rem] bg-abyss ring-1 ring-hull' }">
+    <USlideover v-if="!isHome" v-model:open="mobileOpen" side="left" :ui="{ content: 'w-[17rem] sidebar-shell' }">
       <template #content>
         <SidebarNav @navigate="mobileOpen = false" />
       </template>

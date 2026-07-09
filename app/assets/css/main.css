@@ -292,6 +292,14 @@ body {
   box-shadow: var(--panel-shadow-soft);
 }
 
+/* Sidebar nav shell - deliberately a step lighter/richer than the page canvas
+   (--color-ink) rather than --color-abyss, which sat almost indistinguishably
+   close to it and made the nav hard to visually separate from the content. */
+.sidebar-shell {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-2) 100%);
+  border: 1px solid var(--color-hull);
+}
+
 /* status dot */
 .dot {
   display: inline-block;
