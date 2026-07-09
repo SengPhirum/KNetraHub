@@ -33,6 +33,19 @@ function parseRoles(s: string): string[] {
   return [...new Set(s.split(/[,\n]/).map((r) => r.trim()).filter(Boolean))]
 }
 
+// Recommended role-naming convention: role.knetrahub_<slug>.<tier>. The slug
+// usually matches the app key, except Monitoring - its realm roles predate the
+// Network+Server merge and still use the original "network" naming.
+const TEMPLATE_SLUG: Record<string, string> = { monitoring: 'network' }
+function applyRecommendedTemplate() {
+  for (const app of accessApps) {
+    const slug = TEMPLATE_SLUG[app.key] || app.key
+    accessForm[app.key] = accessForm[app.key] || {}
+    for (const tier of APP_TIERS) accessForm[app.key]![tier] = `role.knetrahub_${slug}.${tier}`
+  }
+  toast.add({ title: 'Recommended template applied', description: 'Review the values below, then save to persist.', color: 'primary', icon: 'i-lucide-wand-2' })
+}
+
 async function saveAccess() {
   savingAccess.value = true
   try {
@@ -57,11 +70,21 @@ async function saveAccess() {
     <PageHeader title="App & Access" subtitle="Map identity-provider roles to per-app access tiers" icon="i-lucide-layout-grid" />
 
     <section class="panel p-5">
-      <header class="mb-2 flex flex-col gap-1">
-        <h3 class="font-display text-sm font-semibold text-foam flex items-center gap-2">
-          <UIcon name="i-lucide-layout-grid" class="size-4 text-beacon" />
-          App access by identity-provider role
-        </h3>
+      <header class="mb-2 flex flex-col gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-display text-sm font-semibold text-foam flex items-center gap-2">
+            <UIcon name="i-lucide-layout-grid" class="size-4 text-beacon" />
+            App access by identity-provider role
+          </h3>
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-wand-2"
+            label="Use recommended template"
+            @click="applyRecommendedTemplate"
+          />
+        </div>
         <p class="text-xs text-(--color-muted)">
           Map your Keycloak realm roles (the <code class="font-mono text-beacon">realm_access.roles</code>
           claim) to each app and tier. A user gets the highest tier whose role list

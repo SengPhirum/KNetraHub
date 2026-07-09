@@ -41,6 +41,11 @@ const netTriangles = [
 ]
 
 const appVersion = useRuntimeConfig().public.appVersion
+const buildDate = useRuntimeConfig().public.buildDate
+const buildDateLabel = computed(() => {
+  const d = new Date(buildDate)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+})
 </script>
 
 <template>
@@ -121,7 +126,7 @@ const appVersion = useRuntimeConfig().public.appVersion
     </div>
 
     <footer class="pointer-events-none fixed inset-x-0 bottom-0 z-10 py-2 text-center text-[11px] text-faint">
-      v{{ appVersion }}
+      v{{ appVersion }}<span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span>
     </footer>
   </div>
 </template>

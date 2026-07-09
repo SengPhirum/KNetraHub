@@ -36,6 +36,11 @@ const userMenu = computed(() => [
 
 const { appearance } = useAppearance()
 const appVersion = useRuntimeConfig().public.appVersion
+const buildDate = useRuntimeConfig().public.buildDate
+const buildDateLabel = computed(() => {
+  const d = new Date(buildDate)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+})
 </script>
 
 <template>
@@ -139,7 +144,7 @@ const appVersion = useRuntimeConfig().public.appVersion
           <span>Documentation</span>
         </NuxtLink>
 
-        <p class="text-faint">v{{ appVersion }}</p>
+        <p class="text-faint">v{{ appVersion }}<span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span></p>
 
         <p class="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 text-faint">
           <span>Made with</span>

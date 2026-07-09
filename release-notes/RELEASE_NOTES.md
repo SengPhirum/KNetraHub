@@ -11,11 +11,12 @@ Date: 2026-07-09 UTC
 
 ## Source
 
-- Commit: `a5256a0`
+- Commit: `e892f7f`
 - Previous tag: none
 
 ## Changes
 
+- feat: implement SSE monitoring events for real-time updates across monitoring pages; refactor polling logic to use event-driven approach (e892f7f)
 - feat: update .env.example with new monitoring and autoredeploy configurations; add default app name variable (a5256a0)
 - feat: display app version in footer of auth and default layouts; update login page header for improved clarity (4df1ebc)
 - feat: implement first-run setup wizard; add setup status API; refactor admin account creation logic; enhance sidebar navigation styles (fb14e32)

@@ -10,6 +10,10 @@ const isDocsBuild = process.env.NUXT_STATIC_DOCS === 'true'
 const docsBaseURL = process.env.NUXT_DOCS_BASE_URL || '/'
 const ssrEnabled = process.env.NUXT_SSR !== 'false'
 const appVersion = require('./package.json').version
+// Evaluated when nuxt.config.ts loads, i.e. at `nuxt build` time - baked into
+// the built output so it reflects when THIS build was produced, not when the
+// server process happens to start. Lets ops confirm the right build is live.
+const buildDate = new Date().toISOString()
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-06-01',
@@ -202,6 +206,7 @@ export default defineNuxtConfig({
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',
       appVersion,
+      buildDate,
       staticDocs: isDocsBuild
     }
   },
