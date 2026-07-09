@@ -1,12 +1,20 @@
 import { createEventStream } from 'h3'
+import { isNoisyDockerEvent, onDashboardPush, scheduleOverviewPush } from '~~/layers/docker/server/utils/dashboardSnapshot'
 
-// Broadcasts Docker daemon events to authenticated SSE clients.
+// Broadcasts Docker daemon events to authenticated SSE clients, plus the
+// dashboard's server-computed overview/nodeUsage/metrics snapshots (pushed
+// as their own named events so pages never need to re-$fetch the REST
+// endpoints after their first load - see dashboardSnapshot.ts).
 // Falls back to heartbeat-only when Docker is unreachable.
 export default defineEventHandler(async (event) => {
   await requireUser(event)
 
   const stream = createEventStream(event)
   let dockerStream: any = null
+
+  const offDashboardPush = onDashboardPush(async (evt) => {
+    try { await stream.push({ event: `dashboard-${evt.type}`, data: JSON.stringify(evt.data) }) } catch { /* client gone */ }
+  })
 
   // ── heartbeat ──────────────────────────────────────────────────────────────
   const heartbeat = setInterval(async () => {
@@ -27,6 +35,11 @@ export default defineEventHandler(async (event) => {
             resp.on('data', async (chunk: Buffer) => {
               try {
                 const evt = JSON.parse(chunk.toString())
+                // Container healthchecks fire an exec every ~10s per
+                // container - never a real state change, and forwarding them
+                // just makes every listening page look like it's polling.
+                if (isNoisyDockerEvent(evt.Type, evt.Action)) return
+
                 await stream.push({
                   event: evt.Type ?? 'docker',
                   data: JSON.stringify({
@@ -35,6 +48,8 @@ export default defineEventHandler(async (event) => {
                     name: evt.Actor?.Attributes?.name ?? evt.Actor?.ID ?? ''
                   })
                 })
+
+                if (['service', 'task', 'node', 'container'].includes(evt.Type)) scheduleOverviewPush()
               } catch { /* ignore parse errors */ }
             })
 
@@ -62,6 +77,7 @@ export default defineEventHandler(async (event) => {
   // ── cleanup ────────────────────────────────────────────────────────────────
   stream.onClosed(() => {
     clearInterval(heartbeat)
+    offDashboardPush()
     try { dockerStream?.destroy?.() } catch { /* ignore */ }
   })
 

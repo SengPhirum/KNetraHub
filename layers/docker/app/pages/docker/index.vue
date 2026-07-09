@@ -34,8 +34,14 @@ async function refresh() {
 }
 onMounted(refresh)
 
+// After the first load above, real-time updates arrive as server-pushed data
+// on the SSE stream (see server/utils/dashboardSnapshot.ts) - applied
+// directly to state below, no re-$fetch involved. useIntervalFn only exists
+// as a fallback for when the push connection itself is down.
 const { connected } = useDockerEvents((evt) => {
-  if (['service', 'task', 'node', 'container'].includes(evt.type)) refresh()
+  if (evt.type === 'dashboard-overview') summary.value = { ...(summary.value as any), overview: evt.data }
+  else if (evt.type === 'dashboard-nodeUsage') summary.value = { ...(summary.value as any), nodeUsage: evt.data }
+  else if (evt.type === 'dashboard-metrics') metrics.value = evt.data
 })
 
 useIntervalFn(() => {

@@ -2,6 +2,7 @@ export interface DockerEvent {
   type: string
   action: string
   name: string
+  data?: any
 }
 
 // Subscribes to the SSE Docker event stream and calls the handler for each event.
@@ -28,6 +29,15 @@ export function useDockerEvents(handler: (event: DockerEvent) => void) {
     for (const t of ['service', 'container', 'task', 'node', 'network', 'volume', 'secret', 'config', 'stack']) {
       es.addEventListener(t, (e) => {
         try { handler(JSON.parse((e as MessageEvent).data)) } catch { /* ignore */ }
+      })
+    }
+
+    // Server-computed dashboard snapshots (overview/nodeUsage/metrics) -
+    // carries the actual data, so the dashboard never needs to $fetch these
+    // again after its first load. See server/api/sse/events.get.ts.
+    for (const t of ['dashboard-overview', 'dashboard-nodeUsage', 'dashboard-metrics']) {
+      es.addEventListener(t, (e) => {
+        try { handler({ type: t, action: 'snapshot', name: '', data: JSON.parse((e as MessageEvent).data) }) } catch { /* ignore */ }
       })
     }
 

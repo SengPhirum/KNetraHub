@@ -39,7 +39,10 @@ const appVersion = useRuntimeConfig().public.appVersion
 const buildDate = useRuntimeConfig().public.buildDate
 const buildDateLabel = computed(() => {
   const d = new Date(buildDate)
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+  if (Number.isNaN(d.getTime())) return ''
+  const datePart = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return `${datePart} ${timePart}`
 })
 </script>
 
@@ -144,7 +147,10 @@ const buildDateLabel = computed(() => {
           <span>Documentation</span>
         </NuxtLink>
 
-        <p class="text-faint">v{{ appVersion }}<span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span></p>
+        <p class="text-faint">
+          v{{ appVersion }}
+          <ClientOnly><span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span></ClientOnly>
+        </p>
 
         <p class="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 text-faint">
           <span>Made with</span>

@@ -44,7 +44,10 @@ const appVersion = useRuntimeConfig().public.appVersion
 const buildDate = useRuntimeConfig().public.buildDate
 const buildDateLabel = computed(() => {
   const d = new Date(buildDate)
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+  if (Number.isNaN(d.getTime())) return ''
+  const datePart = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return `${datePart} ${timePart}`
 })
 </script>
 
@@ -126,7 +129,8 @@ const buildDateLabel = computed(() => {
     </div>
 
     <footer class="pointer-events-none fixed inset-x-0 bottom-0 z-10 py-2 text-center text-[11px] text-faint">
-      v{{ appVersion }}<span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span>
+      v{{ appVersion }}
+      <ClientOnly><span v-if="buildDateLabel"> &middot; {{ buildDateLabel }}</span></ClientOnly>
     </footer>
   </div>
 </template>

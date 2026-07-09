@@ -11,11 +11,12 @@ Date: 2026-07-09 UTC
 
 ## Source
 
-- Commit: `e892f7f`
+- Commit: `1de1236`
 - Previous tag: none
 
 ## Changes
 
+- feat: add build date display in footer of auth and default layouts; implement recommended role-naming template in access management (1de1236)
 - feat: implement SSE monitoring events for real-time updates across monitoring pages; refactor polling logic to use event-driven approach (e892f7f)
 - feat: update .env.example with new monitoring and autoredeploy configurations; add default app name variable (a5256a0)
 - feat: display app version in footer of auth and default layouts; update login page header for improved clarity (4df1ebc)
