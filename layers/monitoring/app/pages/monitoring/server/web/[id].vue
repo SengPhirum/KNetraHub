@@ -7,7 +7,7 @@ const toast = useToast()
 const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: scenario, refresh } = useAsyncData(`serverWeb-${route.params.id}`, () => $fetch<any>(`/api/server/web/${route.params.id}`), { server: false })
-onMounted(() => { const t = setInterval(refresh, 15000); onUnmounted(() => clearInterval(t)) })
+onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
 
 const stepForm = reactive({ name: '', url: '', expected_status: 200, required_string: '' })
 const adding = ref(false)

@@ -7,7 +7,7 @@ const { hasApp } = useAuth()
 const { data: traps, status, refresh } = useAsyncData('serverTraps', () => $fetch<any[]>('/api/server/traps'), { default: () => [], server: false })
 
 onMounted(() => {
-  const t = setInterval(refresh, 15000)
+  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
   onUnmounted(() => clearInterval(t))
 })
 </script>

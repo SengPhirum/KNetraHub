@@ -75,11 +75,16 @@ const composeSourceLabel = computed(() => {
   return 'No compose source'
 })
 const composeSourceTone = computed(() => data.value?.composeSource === 'gitlab' ? 'primary' : data.value?.composeSource === 'engine' ? 'warning' : 'neutral')
-const resourceCpuNano = computed(() => summary.value.reservedNanoCpus || summary.value.limitNanoCpus || 0)
-const resourceMemoryBytes = computed(() => summary.value.reservedMemoryBytes || summary.value.limitMemoryBytes || 0)
+// Prefer the hard limit as the usage ring's ceiling - reservation is only a
+// scheduling guarantee (what Swarm sets aside), not a cap the container is
+// held to, so comparing live usage against it made containers show as "at
+// capacity" the moment they used more than their reservation while still
+// well under their actual limit.
+const resourceCpuNano = computed(() => summary.value.limitNanoCpus || summary.value.reservedNanoCpus || 0)
+const resourceMemoryBytes = computed(() => summary.value.limitMemoryBytes || summary.value.reservedMemoryBytes || 0)
 const resourceHint = computed(() => {
-  if (summary.value.reservedNanoCpus || summary.value.reservedMemoryBytes) return 'reserved'
   if (summary.value.limitNanoCpus || summary.value.limitMemoryBytes) return 'limit'
+  if (summary.value.reservedNanoCpus || summary.value.reservedMemoryBytes) return 'reserved'
   return 'not set'
 })
 const tabs = computed(() => {

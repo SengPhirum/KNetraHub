@@ -6,7 +6,7 @@ const toast = useToast()
 const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: problems, status, refresh } = useAsyncData('serverProblemsList', () => $fetch<any[]>('/api/server/problems'), { default: () => [], server: false })
-onMounted(() => { const t = setInterval(refresh, 15000); onUnmounted(() => clearInterval(t)) })
+onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
 
 const showResolved = ref(false)
 const minSeverity = ref(0)

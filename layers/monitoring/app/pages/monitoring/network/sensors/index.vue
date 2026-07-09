@@ -6,7 +6,7 @@ const { data: sensors, status, refresh } = useAsyncData('netSensors', () => $fet
 })
 
 onMounted(() => {
-  const interval = setInterval(refresh, 10000)
+  const interval = setInterval(() => { if (!document.hidden) refresh() }, 10000)
   onUnmounted(() => clearInterval(interval))
 })
 

@@ -7,7 +7,7 @@ const { data: alerts, status, refresh } = useAsyncData('netAlerts', () => $fetch
 const { data: rules } = useAsyncData('netAlertRules', () => $fetch('/api/net/rules'))
 
 onMounted(() => {
-  const interval = setInterval(refresh, 10000)
+  const interval = setInterval(() => { if (!document.hidden) refresh() }, 10000)
   onUnmounted(() => clearInterval(interval))
 })
 

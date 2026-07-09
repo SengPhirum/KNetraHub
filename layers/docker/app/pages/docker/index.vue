@@ -9,14 +9,29 @@ import type { DashboardGridItem } from '~~/app/composables/usePreferences'
 const { bytes } = useFormat()
 const { prefs, updatePreferences } = usePreferences()
 
-const { data, status, error, refreshing, refresh } = useApiCache('dashboard', async () => {
-  const [overview, nodeUsage, metrics] = await Promise.all([
+// Split into two independent fetches rather than one combined Promise.all:
+// overview + nodeUsage resolve in ~100-200ms and drive the top panel (Overview
+// rings, Task distribution), but /api/system/metrics (6h history for the 4
+// charts below) is a much heavier query - bundling it into the same fetch
+// meant the whole page, including content that had nothing to do with it,
+// waited on the slowest of the three. Now the top panel renders as soon as
+// its own data is back; the charts below independently show their own
+// "waiting for data" state (already built into DashboardUsagePanel) until
+// the metrics call resolves.
+const { data: summary, status, error, refreshing, refresh: refreshSummary } = useApiCache('dashboard-summary', async () => {
+  const [overview, nodeUsage] = await Promise.all([
     $fetch('/api/system/overview'),
-    $fetch('/api/nodes/usage'),
-    $fetch('/api/system/metrics', { query: { range: '6h' } })
+    $fetch('/api/nodes/usage')
   ])
-  return { overview, nodeUsage, metrics }
+  return { overview, nodeUsage }
 })
+const { data: metrics, refreshing: metricsRefreshing, refresh: refreshMetrics } = useApiCache('dashboard-metrics', () =>
+  $fetch('/api/system/metrics', { query: { range: '6h' } })
+)
+
+async function refresh() {
+  await Promise.all([refreshSummary(), refreshMetrics()])
+}
 onMounted(refresh)
 
 const { connected } = useDockerEvents((evt) => {
@@ -27,9 +42,10 @@ useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
-const d = computed(() => (data.value as any)?.overview)
-const nodeUsage = computed<any[]>(() => (data.value as any)?.nodeUsage?.nodes || [])
-const metricData = computed(() => (data.value as any)?.metrics)
+const d = computed(() => (summary.value as any)?.overview)
+const nodeUsage = computed<any[]>(() => (summary.value as any)?.nodeUsage?.nodes || [])
+const metricData = computed(() => metrics.value as any)
+const buttonRefreshing = computed(() => refreshing.value || metricsRefreshing.value)
 
 const taskOrder = ['running', 'pending', 'preparing', 'starting', 'complete', 'shutdown', 'failed', 'rejected']
 const taskEntries = computed(() =>
@@ -259,7 +275,7 @@ async function openTaskStatus(state: string) {
         </div>
         <template v-if="!editing">
           <UButton icon="i-lucide-layout-grid" color="neutral" variant="ghost" label="Edit layout" @click="startEdit" />
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" label="Refresh" :loading="refreshing" @click="refresh()" />
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" label="Refresh" :loading="buttonRefreshing" @click="refresh()" />
         </template>
         <template v-else>
           <UButton icon="i-lucide-rotate-ccw" color="neutral" variant="ghost" label="Reset" @click="resetLayout" />

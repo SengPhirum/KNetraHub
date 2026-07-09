@@ -4,7 +4,7 @@ const { hasApp } = useAuth()
 const { data, status, refresh } = useAsyncData('netAi', () => $fetch('/api/net/ai'), { server: false })
 
 onMounted(() => {
-  const interval = setInterval(refresh, 20000)
+  const interval = setInterval(() => { if (!document.hidden) refresh() }, 20000)
   onUnmounted(() => clearInterval(interval))
 })
 </script>

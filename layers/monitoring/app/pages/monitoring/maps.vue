@@ -22,7 +22,7 @@ const deviceById = computed(() => new Map((devices.value || []).map((d: any) => 
 const hostById = computed(() => new Map((hosts.value || []).map((h: any) => [h.id, h])))
 
 onMounted(() => {
-  const t = setInterval(() => { refreshDevices(); refreshHosts(); refreshProbes() }, 15000)
+  const t = setInterval(() => { if (!document.hidden) { refreshDevices(); refreshHosts(); refreshProbes() } }, 15000)
   onUnmounted(() => clearInterval(t))
 })
 

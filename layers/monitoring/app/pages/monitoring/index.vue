@@ -52,8 +52,9 @@ watch(selected, (d: any) => {
 watch(layout, () => { if (!loadingLayout && editing.value) dirty.value = true }, { deep: true })
 
 // Live data refresh while viewing (paused during edits so a refetch can't yank
-// the grid out from under a drag).
-useIntervalFn(() => { if (!editing.value) refreshNuxtData() }, 30000)
+// the grid out from under a drag, and paused while the tab is hidden).
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (!editing.value && pageVisibility.value === 'visible') refreshNuxtData() }, 30000)
 
 function nextY() { return layout.value.reduce((m, w) => Math.max(m, w.y + w.h), 0) }
 

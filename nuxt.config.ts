@@ -124,7 +124,12 @@ export default defineNuxtConfig({
       user: process.env.NUXT_DB_USER || 'knetrahub',
       password: process.env.NUXT_DB_PASSWORD || 'knetrahub',
       ssl: process.env.NUXT_DB_SSL === 'true',
-      poolMax: Number(process.env.NUXT_DB_POOL_MAX || 10)
+      // The net + server pollers alone can each run up to pollConcurrency (16)
+      // concurrent DB-touching tasks - a pool of 10 was smaller than either
+      // poller's own concurrency, before counting interactive request traffic
+      // on top, so it queued connections under load. 40 gives both pollers
+      // headroom (16+16=32) plus room for regular API traffic.
+      poolMax: Number(process.env.NUXT_DB_POOL_MAX || 40)
     },
 
     // How long node/container metrics history is retained (Timescale retention policy)

@@ -91,7 +91,8 @@ useIntervalFn(() => {
     refreshUsage()
   }
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
-useIntervalFn(refreshUsage, 5000, { immediate: false })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
 
 async function refreshAll() {
   await Promise.all([refresh(), refreshUsage()])
@@ -168,23 +169,17 @@ function nodeUsage(n: any) {
   return usageById.value.get(n.id)
 }
 
-function safeMetricPercent(percent: number | undefined, available: boolean) {
-  if (!available || percent == null || !Number.isFinite(percent)) return 0
-  return Math.max(0, Math.min(100, Math.round(percent)))
-}
+const { clampPercent, ringColor } = useUsageRing()
 
-function metricColor(percent: number | undefined, available: boolean) {
-  if (!available || percent == null || !Number.isFinite(percent)) return 'var(--color-idle)'
-  if (percent >= 90) return 'var(--color-down)'
-  if (percent >= 75) return 'var(--color-pending)'
-  return 'var(--color-running)'
+function safeMetricPercent(percent: number | undefined, available: boolean) {
+  if (!available) return 0
+  return Math.round(clampPercent(percent))
 }
 
 function metricBarStyle(percent: number | undefined, available: boolean) {
-  const safePercent = safeMetricPercent(percent, available)
   return {
-    width: `${safePercent}%`,
-    background: metricColor(percent, available)
+    width: `${safeMetricPercent(percent, available)}%`,
+    background: available ? ringColor(clampPercent(percent)) : 'var(--color-idle)'
   }
 }
 

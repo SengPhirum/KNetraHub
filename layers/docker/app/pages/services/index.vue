@@ -57,7 +57,8 @@ async function refreshUsage() {
   }
 }
 onMounted(refreshUsage)
-useIntervalFn(refreshUsage, 5000, { immediate: false })
+const pageVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
 
 const { usageRingStyle, fulfillmentRingStyle } = useUsageRing()
 function replicaRingStyle(percent?: number | null) {
@@ -170,17 +171,22 @@ function portsLabel(ports: any[] = []) {
   }).join(', ')
 }
 
+// Prefer the hard limit as the usage ring's ceiling - reservation is only a
+// scheduling guarantee (what Swarm sets aside), not a cap the container is
+// held to, so comparing live usage against it made containers show as "at
+// capacity" the moment they used more than their reservation while still
+// well under their actual limit.
 function resourceNanoCpus(svc: any) {
-  return svc.resources?.reservedNanoCpusTotal || svc.resources?.limitNanoCpusTotal || 0
+  return svc.resources?.limitNanoCpusTotal || svc.resources?.reservedNanoCpusTotal || 0
 }
 
 function resourceMemory(svc: any) {
-  return svc.resources?.reservedMemoryBytesTotal || svc.resources?.limitMemoryBytesTotal || 0
+  return svc.resources?.limitMemoryBytesTotal || svc.resources?.reservedMemoryBytesTotal || 0
 }
 
 function resourceHint(svc: any) {
-  if (svc.resources?.reservedNanoCpusTotal || svc.resources?.reservedMemoryBytesTotal) return 'reserved'
   if (svc.resources?.limitNanoCpusTotal || svc.resources?.limitMemoryBytesTotal) return 'limit'
+  if (svc.resources?.reservedNanoCpusTotal || svc.resources?.reservedMemoryBytesTotal) return 'reserved'
   if (usageById.value.get(svc.id)?.available) return 'live usage'
   return 'not set'
 }

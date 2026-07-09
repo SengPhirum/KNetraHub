@@ -6,7 +6,7 @@ const canManage = computed(() => hasPermission('monitoring.manage'))
 
 const { data: scenarios, status, refresh } = useAsyncData('serverWeb', () => $fetch<any[]>('/api/server/web'), { default: () => [], server: false })
 const { data: hosts } = useAsyncData('serverWebHosts', () => $fetch<any[]>('/api/server/hosts'), { default: () => [] })
-onMounted(() => { const t = setInterval(refresh, 15000); onUnmounted(() => clearInterval(t)) })
+onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
 
 const hostItems = computed(() => [{ value: '', label: '— None —' }, ...(hosts.value || []).map((h) => ({ value: h.id, label: h.name }))])
 

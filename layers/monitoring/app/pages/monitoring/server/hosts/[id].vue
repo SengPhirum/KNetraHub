@@ -9,7 +9,7 @@ const { bitrate } = useFormat()
 const { data: host, refresh } = useAsyncData(`serverHost-${route.params.id}`, () => $fetch<any>(`/api/server/hosts/${route.params.id}`), { server: false })
 
 onMounted(() => {
-  const t = setInterval(refresh, 15000)
+  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
   onUnmounted(() => clearInterval(t))
 })
 

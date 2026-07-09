@@ -26,7 +26,7 @@ const { data: metrics, refresh: refreshMetrics } = useAsyncData(
 )
 
 onMounted(() => {
-  const t = setInterval(() => { refreshSensor(); refreshMetrics() }, 30000)
+  const t = setInterval(() => { if (!document.hidden) { refreshSensor(); refreshMetrics() } }, 30000)
   onUnmounted(() => clearInterval(t))
 })
 

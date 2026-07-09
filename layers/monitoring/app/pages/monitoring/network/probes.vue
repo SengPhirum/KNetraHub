@@ -6,7 +6,7 @@ const { data: probes, status, refresh } = useAsyncData('netProbes', () => $fetch
 })
 
 onMounted(() => {
-  const interval = setInterval(refresh, 15000)
+  const interval = setInterval(() => { if (!document.hidden) refresh() }, 15000)
   onUnmounted(() => clearInterval(interval))
 })
 

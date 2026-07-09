@@ -106,7 +106,24 @@ export function clearAuthSession(event: H3Event) {
   deleteCookie(event, COOKIE, { path: '/' })
 }
 
+// Per-app middleware (appAccess) and each endpoint's own requireUser/requireRole
+// both resolve the caller's session, which previously meant two round-trips to
+// the sessions table (cookie/JWT verify + a DB lookup for revocation) on every
+// single request. H3Event.context is unique per request, so memoizing here
+// collapses that back down to one resolution regardless of how many times
+// readSession is called while handling the request.
+const SESSION_CACHE_KEY = '_sessionUser' as const
+interface SessionCacheContext { [SESSION_CACHE_KEY]?: SessionUser | null }
+
 export async function readSession(event: H3Event): Promise<SessionUser | null> {
+  const ctx = event.context as SessionCacheContext
+  if (SESSION_CACHE_KEY in ctx) return ctx[SESSION_CACHE_KEY] ?? null
+  const user = await resolveSession(event)
+  ctx[SESSION_CACHE_KEY] = user
+  return user
+}
+
+async function resolveSession(event: H3Event): Promise<SessionUser | null> {
   const authHeader = getRequestHeader(event, 'authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const user = await lookupApiTokenUser(authHeader.slice(7))

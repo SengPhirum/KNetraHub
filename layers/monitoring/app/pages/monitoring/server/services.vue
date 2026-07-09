@@ -9,7 +9,7 @@ const period = ref('24h')
 const periodItems = [{ value: '24h', label: '24 hours' }, { value: '7d', label: '7 days' }, { value: '30d', label: '30 days' }]
 const { data: resp, status, refresh } = useAsyncData('serverServices', () => $fetch<any>(`/api/server/services?period=${period.value}`), { watch: [period], default: () => ({ services: [] }), server: false })
 const { data: triggers } = useAsyncData('serverServiceTriggers', () => $fetch<any[]>('/api/server/triggers'), { default: () => [] })
-onMounted(() => { const t = setInterval(refresh, 20000); onUnmounted(() => clearInterval(t)) })
+onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 20000); onUnmounted(() => clearInterval(t)) })
 
 const services = computed(() => resp.value?.services || [])
 

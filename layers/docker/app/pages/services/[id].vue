@@ -173,12 +173,17 @@ function portsLabel(portsValue: any[] = ports.value) {
   }).join(', ')
 }
 
+// Prefer the hard limit as the usage ring's ceiling - reservation is only a
+// scheduling guarantee (what Swarm sets aside), not a cap the container is
+// held to, so comparing live usage against it made containers show as "at
+// capacity" the moment they used more than their reservation while still
+// well under their actual limit.
 function resourceCpuNano() {
-  return resources.value.reservedNanoCpusTotal || resources.value.limitNanoCpusTotal || 0
+  return resources.value.limitNanoCpusTotal || resources.value.reservedNanoCpusTotal || 0
 }
 
 function resourceMemoryBytes() {
-  return resources.value.reservedMemoryBytesTotal || resources.value.limitMemoryBytesTotal || 0
+  return resources.value.limitMemoryBytesTotal || resources.value.reservedMemoryBytesTotal || 0
 }
 
 // Comparison ceiling for the ring fill: the service's own reservation/limit
@@ -194,8 +199,8 @@ function memoryCeilingBytes() {
 }
 
 function resourceBasis() {
-  if (resources.value.reservedNanoCpusTotal || resources.value.reservedMemoryBytesTotal) return 'reserved'
   if (resources.value.limitNanoCpusTotal || resources.value.limitMemoryBytesTotal) return 'limit'
+  if (resources.value.reservedNanoCpusTotal || resources.value.reservedMemoryBytesTotal) return 'reserved'
   if (currentUsage.value.nodeCpuNanos || currentUsage.value.nodeMemoryBytes) return 'node capacity'
   return 'not set'
 }

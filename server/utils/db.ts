@@ -250,6 +250,9 @@ async function runMigrations(): Promise<void> {
       status TEXT DEFAULT 'active',
       timestamp TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_net_alerts_timestamp ON net_alerts (timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_net_alerts_device ON net_alerts (device_id);
+    CREATE INDEX IF NOT EXISTS idx_net_alerts_status ON net_alerts (status);
 
     CREATE TABLE IF NOT EXISTS net_syslog (
       id TEXT PRIMARY KEY,

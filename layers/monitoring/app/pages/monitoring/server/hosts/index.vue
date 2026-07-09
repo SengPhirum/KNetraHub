@@ -10,7 +10,7 @@ const { data: groups } = useAsyncData('serverHostGroupsOpts', () => $fetch<any[]
 const { data: templates } = useAsyncData('serverTemplatesOpts', () => $fetch<any[]>('/api/server/templates'), { default: () => [] })
 
 onMounted(() => {
-  const t = setInterval(refresh, 15000)
+  const t = setInterval(() => { if (!document.hidden) refresh() }, 15000)
   onUnmounted(() => clearInterval(t))
 })
 

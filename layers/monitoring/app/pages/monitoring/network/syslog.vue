@@ -6,7 +6,7 @@ const { data: logs, status, refresh } = useAsyncData('netSyslog', () => $fetch('
 })
 
 onMounted(() => {
-  const interval = setInterval(refresh, 10000)
+  const interval = setInterval(() => { if (!document.hidden) refresh() }, 10000)
   onUnmounted(() => clearInterval(interval))
 })
 </script>

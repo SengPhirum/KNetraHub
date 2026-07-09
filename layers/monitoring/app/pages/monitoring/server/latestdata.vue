@@ -4,7 +4,7 @@ const { hasApp } = useAuth()
 const { bitrate } = useFormat()
 
 const { data: items, status, refresh } = useAsyncData('serverLatestData', () => $fetch<any[]>('/api/server/items'), { default: () => [], server: false })
-onMounted(() => { const t = setInterval(refresh, 15000); onUnmounted(() => clearInterval(t)) })
+onMounted(() => { const t = setInterval(() => { if (!document.hidden) refresh() }, 15000); onUnmounted(() => clearInterval(t)) })
 
 const search = ref('')
 const rows = computed(() => {
