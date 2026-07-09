@@ -85,10 +85,11 @@ async function exportXlsx() {
     <p class="mb-4 flex items-start gap-2 rounded-lg border border-hull-soft bg-surface-2/40 p-3 text-xs text-(--color-muted)">
       <UIcon name="i-lucide-info" class="size-3.5 mt-0.5 shrink-0 text-beacon" />
       <span>
-        Per-app tier is resolved from each user's realm roles matched against
-        <NuxtLink to="/admin/access" class="text-beacon hover:underline">App &amp; Access</NuxtLink>.
-        For SSO users this reflects their roles as of their <strong>last login</strong>, not a live directory lookup.
-        The local admin is always a superuser; other local accounts have no app access.
+        SSO/LDAP users' per-app tier is resolved from their realm roles matched against
+        <NuxtLink to="/admin/access" class="text-beacon hover:underline">App &amp; Access</NuxtLink>;
+        this reflects their roles as of their <strong>last login</strong>, not a live directory lookup.
+        Local users are assigned a tier directly per app (see <NuxtLink to="/users" class="text-beacon hover:underline">Users</NuxtLink>).
+        Any local admin-role account is always a superuser regardless of that assignment.
       </span>
     </p>
 

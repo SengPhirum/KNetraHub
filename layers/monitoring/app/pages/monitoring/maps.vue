@@ -333,7 +333,7 @@ function cardIcon(c: any) {
                 class="relative flex flex-col items-center justify-center gap-1.5 rounded-xl border p-3 transition aspect-square"
                 :class="c.up ? 'border-green-500/20 bg-green-500/5 hover:border-green-500/50' : 'border-red-500/20 bg-red-500/5 hover:border-red-500/50'"
               >
-                <UBadge :color="c.type === 'device' ? 'info' : 'primary'" variant="subtle" size="xs" class="absolute top-1 right-1 !px-1 !py-0 text-[9px]">{{ c.type === 'device' ? 'N' : 'S' }}</UBadge>
+                <UBadge :color="c.type === 'device' ? 'info' : 'primary'" variant="subtle" size="xs" class="absolute top-1 right-1 px-1! py-0! text-[9px]">{{ c.type === 'device' ? 'N' : 'S' }}</UBadge>
                 <UIcon :name="cardIcon(c)" class="size-6" :class="c.up ? 'text-green-500' : 'text-red-500'" />
                 <span class="text-[10px] font-medium text-foam text-center truncate w-full">{{ c.name }}</span>
               </NuxtLink>

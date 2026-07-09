@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
 
   for (const u of users) {
     const realmRoles = u.realmRoles || []
-    const apps = resolveEntitlements({ role: u.role, source: u.source }, realmRoles, roleMap)
+    const apps = resolveEntitlements({ role: u.role, source: u.source, appAccess: u.appAccess }, realmRoles, roleMap)
     usersSheet.addRow({
       username: u.username,
       displayName: u.displayName,

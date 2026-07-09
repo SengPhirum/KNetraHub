@@ -44,7 +44,8 @@ export default defineEventHandler(async (event) => {
         displayName: local.displayName,
         role: local.role,
         source: 'local' as const,
-        realmRoles: [] as string[]
+        realmRoles: [] as string[],
+        appAccess: local.appAccess
       }
     }
   }

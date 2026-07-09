@@ -54,17 +54,24 @@ function superuserEntitlements(): AppEntitlements {
  * Resolve which apps a user can reach and at what tier.
  *
  * - Local admin is the break-glass superuser → every app at admin tier.
- * - Other local users get no apps (day-to-day access is via Keycloak).
+ * - Other local users: whatever tier was assigned directly to them per app
+ *   (see Users → per-app access), or no access to an app left unassigned.
  * - External (oidc/ldap) users: per app, the highest tier whose configured
  *   realm-role list intersects the user's realm roles.
  */
 export function resolveEntitlements(
-  user: { role: Role; source: UserSource },
+  user: { role: Role; source: UserSource; appAccess?: Record<string, string> },
   realmRoles: string[],
   roleMap: AppRoleMap
 ): AppEntitlements {
   if (user.source === 'local') {
-    return user.role === 'admin' ? superuserEntitlements() : emptyEntitlements()
+    if (user.role === 'admin') return superuserEntitlements()
+    const result = emptyEntitlements()
+    for (const app of APP_KEYS) {
+      const tier = user.appAccess?.[app]
+      if (tier && (TIERS as string[]).includes(tier)) result[app] = tier as AppTier
+    }
+    return result
   }
 
   const roles = new Set(realmRoles.map((r) => normalizeRealmRole(r)))

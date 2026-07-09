@@ -60,13 +60,30 @@ const ROLE_META: Record<Role, { icon: string; color: string; bg: string; descrip
   }
 }
 
+// Per-app tier, assigned directly to local users (SSO/LDAP get theirs from
+// the realm-role map at Admin > App & Access instead - see resolveEntitlements).
+const APPS = getModuleRegistry()
+const APP_TIER_OPTIONS = [
+  { label: 'No access', value: 'none' },
+  { label: 'Viewer', value: 'viewer' },
+  { label: 'Operator', value: 'operator' },
+  { label: 'Manager', value: 'manager' },
+  { label: 'Admin', value: 'admin' }
+]
+function emptyAppAccess(): Record<string, string> {
+  return Object.fromEntries(APPS.map((a) => [a.key, 'none']))
+}
+function toAppAccessPayload(appAccess: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(appAccess).filter(([, tier]) => tier !== 'none'))
+}
+
 const open = ref(false)
-const form = reactive({ username: '', displayName: '', email: '', role: 'viewer' as Role, password: '' })
-function openCreate() { Object.assign(form, { username: '', displayName: '', email: '', role: 'viewer', password: '' }); open.value = true }
+const form = reactive({ username: '', displayName: '', email: '', role: 'viewer' as Role, password: '', appAccess: emptyAppAccess() })
+function openCreate() { Object.assign(form, { username: '', displayName: '', email: '', role: 'viewer', password: '', appAccess: emptyAppAccess() }); open.value = true }
 async function create() {
   if (!form.username || !form.password) { toast.add({ title: 'Username and password required', color: 'warning' }); return }
   try {
-    const newUser = await $fetch<any>('/api/users', { method: 'POST', body: { ...form } })
+    const newUser = await $fetch<any>('/api/users', { method: 'POST', body: { ...form, appAccess: toAppAccessPayload(form.appAccess) } })
     // Optimistic add
     data.value = [...(data.value ?? []), newUser]
     toast.add({ title: `Created ${form.username}`, color: 'primary', icon: 'i-lucide-user-plus' })
@@ -77,15 +94,22 @@ async function create() {
 
 const editOpen = ref(false)
 const editTarget = ref<any>(null)
-const editForm = reactive({ role: 'viewer' as Role, password: '' })
-function openEdit(u: any) { editTarget.value = u; editForm.role = u.role; editForm.password = ''; editOpen.value = true }
+const editForm = reactive({ role: 'viewer' as Role, password: '', appAccess: emptyAppAccess() })
+function openEdit(u: any) {
+  editTarget.value = u
+  editForm.role = u.role
+  editForm.password = ''
+  editForm.appAccess = { ...emptyAppAccess(), ...(u.appAccess || {}) }
+  editOpen.value = true
+}
 async function saveEdit() {
   try {
     const body: any = { role: editForm.role }
     if (editForm.password) body.password = editForm.password
+    if (editTarget.value.source === 'local') body.appAccess = toAppAccessPayload(editForm.appAccess)
     await $fetch(`/api/users/${editTarget.value.id}`, { method: 'PATCH', body })
-    // Optimistic update role in list
-    data.value = (data.value ?? []).map((u) => u.id === editTarget.value.id ? { ...u, role: editForm.role } : u)
+    // Optimistic update in list
+    data.value = (data.value ?? []).map((u) => u.id === editTarget.value.id ? { ...u, role: editForm.role, ...(body.appAccess ? { appAccess: body.appAccess } : {}) } : u)
     toast.add({ title: `Updated ${editTarget.value.username}`, color: 'primary' })
     editOpen.value = false
   } catch (e: any) { toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' }) }
@@ -189,6 +213,16 @@ async function confirmDelete() {
             <template #hint><p class="text-xs text-faint mt-1">{{ ROLE_META[form.role]?.description }}</p></template>
           </UFormField>
           <UFormField label="Password" required><UInput v-model="form.password" type="password" class="w-full" /></UFormField>
+
+          <div class="border-t border-hull-soft pt-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted) mb-2">App access</p>
+            <p v-if="form.role === 'admin'" class="text-xs text-faint">Admin role already grants full access to every app below.</p>
+            <div v-else class="space-y-3">
+              <UFormField v-for="app in APPS" :key="app.key" :label="app.name">
+                <USelect v-model="form.appAccess[app.key]" :items="APP_TIER_OPTIONS" value-key="value" label-key="label" class="w-full" />
+              </UFormField>
+            </div>
+          </div>
         </div>
       </template>
       <template #footer>
@@ -211,6 +245,20 @@ async function confirmDelete() {
             <UInput v-model="editForm.password" type="password" class="w-full" />
           </UFormField>
           <p v-else class="text-xs text-faint">{{ (editTarget?.source || 'external').toUpperCase() }} user — password is managed by your identity provider.</p>
+
+          <div v-if="editTarget?.source === 'local'" class="border-t border-hull-soft pt-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted) mb-2">App access</p>
+            <p v-if="editForm.role === 'admin'" class="text-xs text-faint">Admin role already grants full access to every app below.</p>
+            <div v-else class="space-y-3">
+              <UFormField v-for="app in APPS" :key="app.key" :label="app.name">
+                <USelect v-model="editForm.appAccess[app.key]" :items="APP_TIER_OPTIONS" value-key="value" label-key="label" class="w-full" />
+              </UFormField>
+            </div>
+          </div>
+          <p v-else class="text-xs text-faint">
+            {{ (editTarget?.source || 'external').toUpperCase() }} users get app access from
+            <NuxtLink to="/admin/access" class="text-beacon hover:underline">App &amp; Access</NuxtLink> role mapping instead.
+          </p>
         </div>
       </template>
       <template #footer>

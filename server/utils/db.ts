@@ -835,5 +835,11 @@ async function runMigrations(): Promise<void> {
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).
     ALTER TABLE users ADD COLUMN IF NOT EXISTS realm_roles TEXT;
+
+    -- Per-app tier directly assigned to a LOCAL user (JSON: {"docker":"operator",...}).
+    -- SSO/LDAP users still get their tier resolved from the realm-role map
+    -- (see App & Access) - this column only matters for user.source = 'local',
+    -- since local accounts otherwise have zero app access (see resolveEntitlements).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access TEXT;
   `)
 }

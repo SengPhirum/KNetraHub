@@ -22,6 +22,10 @@ export interface SessionUser {
   source: UserSource
   /** Keycloak realm roles (realm_access.roles), used to resolve per-app access. */
   realmRoles: string[]
+  /** Per-app tier assigned directly to this user (local accounts only - see
+   *  shared/utils/entitlements.ts). Snapshotted into the JWT at login, same
+   *  staleness characteristics as realmRoles until the next login. */
+  appAccess?: Record<string, string>
   /** Browser-session id (JWT `sid` claim). Absent for API-token auth. Lets a
    *  stateless cookie JWT be revoked by deleting its sessions row. */
   sid?: string
@@ -155,6 +159,7 @@ async function resolveSession(event: H3Event): Promise<SessionUser | null> {
       role: payload.role as Role,
       source: payload.source as UserSource,
       realmRoles: Array.isArray(payload.realmRoles) ? (payload.realmRoles as string[]) : [],
+      appAccess: payload.appAccess && typeof payload.appAccess === 'object' ? (payload.appAccess as Record<string, string>) : undefined,
       ...(sid ? { sid } : {})
     }
   } catch {

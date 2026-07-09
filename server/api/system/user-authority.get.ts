@@ -31,7 +31,7 @@ export default defineEventHandler(async (event): Promise<UserAuthorityRow[]> => 
 
   return users.map((u): UserAuthorityRow => {
     const realmRoles = u.realmRoles || []
-    const apps = resolveEntitlements({ role: u.role, source: u.source }, realmRoles, roleMap)
+    const apps = resolveEntitlements({ role: u.role, source: u.source, appAccess: u.appAccess }, realmRoles, roleMap)
     const appPermissions: Record<string, string[]> = {}
     for (const app of APP_KEYS) {
       const tier = apps[app]

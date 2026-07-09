@@ -93,7 +93,7 @@ async function submit() {
 
       <template v-if="providers?.oidcEnabled">
         <div class="flex items-center gap-3 text-xs text-faint">
-          <span class="h-px flex-1 bg-(--ui-border)" /> or <span class="h-px flex-1 bg-(--ui-border)" />
+          <span class="h-px flex-1 bg-border" /> or <span class="h-px flex-1 bg-border" />
         </div>
         <UButton
           block

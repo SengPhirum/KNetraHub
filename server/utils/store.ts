@@ -21,6 +21,10 @@ export interface User {
    *  a persisted snapshot so per-app access can be audited/reported on for
    *  users who aren't currently logged in. See shared/utils/entitlements.ts. */
   realmRoles?: string[]
+  /** Per-app tier assigned directly to a LOCAL user (e.g. {docker: 'operator'}).
+   *  SSO/LDAP users are unaffected - their tier comes from the realm-role map
+   *  instead. See shared/utils/entitlements.ts. */
+  appAccess?: Record<string, string>
 }
 
 export interface NotificationPreferences {
@@ -89,7 +93,8 @@ function rowToUser(row: any): User {
     passwordHash: row.password_hash ?? undefined,
     createdAt: row.created_at,
     lastLogin: row.last_login ?? undefined,
-    realmRoles: row.realm_roles ? safeParseRealmRoles(row.realm_roles) : undefined
+    realmRoles: row.realm_roles ? safeParseRealmRoles(row.realm_roles) : undefined,
+    appAccess: row.app_access ? safeParseAppAccess(row.app_access) : undefined
   }
 }
 
@@ -100,6 +105,30 @@ function safeParseRealmRoles(raw: string): string[] | undefined {
   } catch {
     return undefined
   }
+}
+
+function safeParseAppAccess(raw: string): Record<string, string> | undefined {
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return undefined
+    const out: Record<string, string> = {}
+    for (const [app, tier] of Object.entries(parsed)) {
+      if (typeof tier === 'string' && tier) out[app] = tier
+    }
+    return out
+  } catch {
+    return undefined
+  }
+}
+
+/** Coerce a posted app-access object down to non-empty string values only. */
+function sanitizeAppAccessInput(input: unknown): Record<string, string> | null {
+  if (!input || typeof input !== 'object') return null
+  const out: Record<string, string> = {}
+  for (const [app, tier] of Object.entries(input as Record<string, unknown>)) {
+    if (typeof tier === 'string' && tier) out[app] = tier
+  }
+  return out
 }
 
 async function ensureAdmin() {
@@ -201,14 +230,16 @@ export async function createLocalUser(input: {
   email?: string
   role: Role
   password: string
+  appAccess?: Record<string, string>
 }): Promise<User> {
   const db = getDb()
   const { rows: clashRows } = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [input.username])
   if (clashRows[0]) throw createError({ statusCode: 409, statusMessage: 'A user with that name already exists' })
 
   const id = nanoid()
+  const appAccess = sanitizeAppAccessInput(input.appAccess)
   await db.query(
-    'INSERT INTO users (id, username, display_name, email, role, source, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+    'INSERT INTO users (id, username, display_name, email, role, source, password_hash, created_at, app_access) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
     [
       id,
       input.username,
@@ -217,7 +248,8 @@ export async function createLocalUser(input: {
       input.role,
       'local',
       bcrypt.hashSync(input.password, 10),
-      new Date().toISOString()
+      new Date().toISOString(),
+      appAccess && Object.keys(appAccess).length ? JSON.stringify(appAccess) : null
     ]
   )
 
@@ -229,7 +261,7 @@ export async function createLocalUser(input: {
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<User, 'role' | 'displayName' | 'email'>> & { password?: string }
+  patch: Partial<Pick<User, 'role' | 'displayName' | 'email'>> & { password?: string; appAccess?: Record<string, string> }
 ): Promise<User> {
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id])
@@ -245,6 +277,13 @@ export async function updateUser(
   if (patch.password && row.source === 'local') {
     fields.push(`password_hash = $${fields.length + 1}`)
     vals.push(bcrypt.hashSync(patch.password, 10))
+  }
+  // Only local accounts can hold a direct per-app tier - SSO/LDAP get theirs
+  // from the realm-role map (see resolveEntitlements).
+  if (patch.appAccess !== undefined && row.source === 'local') {
+    const appAccess = sanitizeAppAccessInput(patch.appAccess)
+    fields.push(`app_access = $${fields.length + 1}`)
+    vals.push(appAccess && Object.keys(appAccess).length ? JSON.stringify(appAccess) : null)
   }
 
   if (fields.length) {
@@ -601,12 +640,12 @@ export async function deleteApiToken(id: string, userId: string): Promise<void> 
   if (result.rowCount === 0) throw createError({ statusCode: 404, statusMessage: 'Token not found' })
 }
 
-export async function lookupApiTokenUser(raw: string): Promise<{ id: string; username: string; displayName: string; role: Role; source: UserSource } | null> {
+export async function lookupApiTokenUser(raw: string): Promise<{ id: string; username: string; displayName: string; role: Role; source: UserSource; appAccess?: Record<string, string> } | null> {
   if (!raw.startsWith('dhub_')) return null
   const hash = createHash('sha256').update(raw).digest('hex')
   const db = getDb()
   const { rows } = await db.query(`
-    SELECT t.user_id, u.username, u.display_name, u.role, u.source
+    SELECT t.user_id, u.username, u.display_name, u.role, u.source, u.app_access
     FROM api_tokens t
     JOIN users u ON u.id = t.user_id
     WHERE t.token_hash = $1
@@ -619,6 +658,7 @@ export async function lookupApiTokenUser(raw: string): Promise<{ id: string; use
     username: row.username,
     displayName: row.display_name,
     role: row.role as Role,
-    source: row.source as UserSource
+    source: row.source as UserSource,
+    appAccess: row.app_access ? safeParseAppAccess(row.app_access) : undefined
   }
 }
