@@ -3,6 +3,10 @@ import { listStacks } from '~~/layers/docker/server/utils/stack'
 import { gitlabEnabled, listStackFiles } from '~~/layers/docker/server/utils/gitlab'
 export default defineEventHandler(async (event) => {
   await requireUser(event)
+  return computeStacksList()
+})
+
+export async function computeStacksList() {
   const running = await listStacks()
   const map = new Map(running.map((s) => [s.name, { ...s, inGit: false }]))
   if (await gitlabEnabled()) {
@@ -16,4 +20,4 @@ export default defineEventHandler(async (event) => {
     } catch { /* gitlab unreachable — show running only */ }
   }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-})
+}

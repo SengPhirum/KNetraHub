@@ -7,6 +7,10 @@ import { AUTOREDEPLOY_LABEL } from '~~/layers/docker/server/utils/registryClient
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   const id = getRouterParam(event, 'id')!
+  return computeServiceDetail(id)
+})
+
+export async function computeServiceDetail(id: string) {
   const docker = useDocker()
 
   const [service, tasks, nodes, networks, volumeList] = await Promise.all([
@@ -153,7 +157,7 @@ export default defineEventHandler(async (event) => {
     logDriver: taskTemplate.LogDriver ? { name: taskTemplate.LogDriver.Name, options: taskTemplate.LogDriver.Options || {} } : null,
     autoredeploy: spec.Labels?.[AUTOREDEPLOY_LABEL] === 'true'
   }
-})
+}
 
 async function latestServiceMetrics(serviceId: string, runningTaskIds: string[], nodeCapacityById: Map<string, { cpuNanos: number; memoryBytes: number }>) {
   if (!runningTaskIds.length) return emptyServiceMetrics()

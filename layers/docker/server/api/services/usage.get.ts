@@ -30,6 +30,10 @@ export interface UsageRow {
 // fills, mirroring /api/nodes + /api/nodes/usage's split.
 export default defineEventHandler(async (event) => {
   await requireUser(event)
+  return computeServicesUsage()
+})
+
+export async function computeServicesUsage() {
   const [rowsByService, nodeCapacity] = await Promise.all([latestServiceUsageRows(), nodeCapacityById()])
 
   const services = Array.from(rowsByService.entries()).map(([id, rows]) => {
@@ -58,7 +62,7 @@ export default defineEventHandler(async (event) => {
   })
 
   return { sampledAt: new Date().toISOString(), services }
-})
+}
 
 export async function nodeCapacityById(): Promise<Map<string, { cpuNanos: number; memoryBytes: number }>> {
   try {

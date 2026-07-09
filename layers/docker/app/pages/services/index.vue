@@ -36,17 +36,10 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
   filterOptions: serviceFilterOptions
 })
 
-const { connected } = useDockerEvents((evt) => {
-  if (['service', 'task', 'container'].includes(evt.type)) refresh()
-})
-
-useIntervalFn(() => {
-  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
-}, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
-
-// Live ring fills - separate from the heavier /api/services listing above,
-// polled on its own short interval so rings animate in near-real-time
-// regardless of Docker events (CPU/memory drift continuously on their own).
+// After the first load above, updates arrive as server-pushed data (see
+// server/utils/resourcePush.ts) - applied directly to state, no re-$fetch.
+// useIntervalFn only exists as a fallback for when the push connection itself
+// is down.
 const usageData = ref<{ services: any[] } | null>(null)
 const usageById = computed(() => new Map((usageData.value?.services || []).map((u: any) => [u.id, u])))
 async function refreshUsage() {
@@ -57,8 +50,20 @@ async function refreshUsage() {
   }
 }
 onMounted(refreshUsage)
+
+const { connected } = useDockerEvents((evt) => {
+  if (evt.type === 'resource-list' && evt.resource === 'services') data.value = evt.data
+  else if (evt.type === 'resource-list' && evt.resource === 'services-usage') usageData.value = evt.data
+})
+
+useIntervalFn(() => {
+  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
+}, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
+
+// Usage rings update roughly every agent-report cycle via the push above;
+// this fallback only polls when that push connection is down.
 const pageVisibility = useDocumentVisibility()
-useIntervalFn(() => { if (pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
 
 const { usageRingStyle, fulfillmentRingStyle } = useUsageRing()
 function replicaRingStyle(percent?: number | null) {

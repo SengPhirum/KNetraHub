@@ -1,6 +1,13 @@
 import { getDb, migrate } from '~~/server/utils/db'
 import { migrateMetrics, recordServiceStatusEvent } from '~~/server/utils/metrics'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
+import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
+import { scheduleListPush, scheduleDetailPush } from '~~/layers/docker/server/utils/resourcePush'
+import { computeTasksList } from '~~/layers/docker/server/api/tasks/index.get'
+import { computeServicesList } from '~~/layers/docker/server/api/services/index.get'
+import { computeServiceDetail } from '~~/layers/docker/server/api/services/[id].get'
+import { computeStacksList } from '~~/layers/docker/server/api/stacks/index.get'
+import { computeStackDetail } from '~~/layers/docker/server/api/stacks/[name]/index.get'
 
 const POLL_INTERVAL_MS = 10_000
 
@@ -73,6 +80,8 @@ async function pollTaskStates() {
     const docker = useDocker()
     const [tasks, services] = await Promise.all([docker.listTasks(), docker.listServices()])
     const serviceNames = new Map((services as any[]).map((s) => [s.ID, s.Spec?.Name]))
+    const stackByService = new Map((services as any[]).map((s) => [s.ID, s.Spec?.Labels?.[STACK_LABEL]]))
+    const changedServiceIds = new Set<string>()
 
     for (const task of tasks as any[]) {
       const state = task.Status?.State
@@ -90,9 +99,28 @@ async function pollTaskStates() {
           status: state,
           message: task.Status?.Err || task.Status?.Message
         })
+        if (task.ServiceID) changedServiceIds.add(task.ServiceID)
       }
     }
     firstPoll = false
+
+    // Task transitions aren't visible via the raw Docker events feed for
+    // remote nodes (see comment above), so push list/detail refreshes for
+    // whatever changed directly from this poll instead of the SSE handler.
+    if (changedServiceIds.size) {
+      scheduleListPush('tasks', computeTasksList)
+      scheduleListPush('services', computeServicesList)
+      const stacksToRefresh = new Set<string>()
+      for (const serviceId of changedServiceIds) {
+        scheduleDetailPush('service', serviceId, () => computeServiceDetail(serviceId))
+        const stack = stackByService.get(serviceId)
+        if (stack) stacksToRefresh.add(stack)
+      }
+      if (stacksToRefresh.size) {
+        scheduleListPush('stacks', computeStacksList)
+        for (const stack of stacksToRefresh) scheduleDetailPush('stack', stack, () => computeStackDetail(stack))
+      }
+    }
   } catch {
     // Docker/swarm not reachable yet - try again next tick
   } finally {

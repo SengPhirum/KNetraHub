@@ -6,8 +6,11 @@ import { summarizeServices } from '~~/layers/docker/server/utils/resourceService
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
-
   const name = getRouterParam(event, 'name')!
+  return computeVolumeDetail(name)
+})
+
+export async function computeVolumeDetail(name: string) {
   const docker = useDocker()
   const volume: any = await docker.getVolume(name).inspect().catch((err: any) => {
     throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Volume not found' })
@@ -35,4 +38,4 @@ export default defineEventHandler(async (event) => {
     stack: volume.Labels?.[STACK_LABEL] || null,
     services: summarizeServices(attachedServices, tasks as any[])
   }
-})
+}

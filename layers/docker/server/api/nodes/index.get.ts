@@ -3,6 +3,10 @@ import { useDocker, assertSwarm } from '~~/layers/docker/server/utils/docker'
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
+  return computeNodesList()
+})
+
+export async function computeNodesList() {
   const nodes = await useDocker().listNodes()
   return nodes.map((n) => ({
     id: n.ID,
@@ -19,4 +23,4 @@ export default defineEventHandler(async (event) => {
     memory: n.Description?.Resources?.MemoryBytes || 0,
     labels: n.Spec?.Labels || {}
   }))
-})
+}

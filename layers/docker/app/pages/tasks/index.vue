@@ -6,7 +6,7 @@ const { data, status, error, refreshing, refresh } = useApiCache('tasks', () => 
 onMounted(refresh)
 
 const { connected } = useDockerEvents((evt) => {
-  if (['task', 'service', 'container'].includes(evt.type)) refresh()
+  if (evt.type === 'resource-list' && evt.resource === 'tasks') data.value = evt.data
 })
 useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()

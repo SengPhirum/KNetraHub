@@ -6,8 +6,11 @@ import { summarizeServices } from '~~/layers/docker/server/utils/resourceService
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
-
   const id = getRouterParam(event, 'id')!
+  return computeConfigDetail(id)
+})
+
+export async function computeConfigDetail(id: string) {
   const docker = useDocker()
   const config: any = await docker.getConfig(id).inspect().catch((err: any) => {
     throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Config not found' })
@@ -34,4 +37,4 @@ export default defineEventHandler(async (event) => {
     data: config.Spec?.Data ? Buffer.from(config.Spec.Data, 'base64').toString('utf8') : '',
     services: summarizeServices(attachedServices, tasks as any[])
   }
-})
+}

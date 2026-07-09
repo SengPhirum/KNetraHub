@@ -1,6 +1,8 @@
 import { recordAgentReport } from '~~/layers/docker/server/utils/agentReports'
 import { recordMetrics } from '~~/server/utils/metrics'
 import { scheduleNodeUsagePush, scheduleMetricsPush } from '~~/layers/docker/server/utils/dashboardSnapshot'
+import { scheduleListPush } from '~~/layers/docker/server/utils/resourcePush'
+import { computeServicesUsage } from '~~/layers/docker/server/api/services/usage.get'
 
 /**
  * Ingest endpoint for the knetrahub-agent task running on every swarm node
@@ -30,6 +32,7 @@ export default defineEventHandler(async (event) => {
   })
   scheduleNodeUsagePush()
   scheduleMetricsPush()
+  scheduleListPush('services-usage', computeServicesUsage, 3_000)
 
   // Fire-and-forget: recordMetrics already try/catches internally, and a
   // slow/down Postgres must never add latency to the agent's report cycle

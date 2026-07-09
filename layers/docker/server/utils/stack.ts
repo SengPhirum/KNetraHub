@@ -103,18 +103,132 @@ export interface DeployResult {
   warnings: string[]
 }
 
-export async function deployStack(stackName: string, composeText: string): Promise<DeployResult> {
+/** A non-external secret/config the compose declares that Docker doesn't
+ *  already have under this stack - the deploy UI must collect its content
+ *  from the user (via a popup) and pass it back as secretsContent/
+ *  configsContent before deploy will succeed. */
+export interface NeededResource {
+  key: string
+  fullName: string
+}
+
+export interface ValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  needsSecrets: NeededResource[]
+  needsConfigs: NeededResource[]
+}
+
+/** Pure structural checks - no Docker API calls. Fast enough to run on every
+ *  keystroke for live feedback in the deploy form. */
+export function validateComposeStructure(stackName: string, composeText: string): { compose: any; errors: string[]; warnings: string[] } {
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  if (!stackName || !/^[a-z0-9][a-z0-9_-]*$/i.test(stackName)) {
+    errors.push('Stack name must start with a letter/number and contain only letters, numbers, "_" or "-".')
+  }
+
+  let compose: any = {}
+  try {
+    compose = parseYaml(composeText) || {}
+  } catch (err: any) {
+    errors.push(`Compose file is not valid YAML: ${err?.message || err}`)
+    return { compose: {}, errors, warnings }
+  }
+
+  const services: Record<string, any> = compose.services || {}
+  if (Object.keys(services).length === 0) {
+    errors.push('Compose file has no services.')
+  }
+  for (const [key, def] of Object.entries(services)) {
+    if (!def || typeof def !== 'object') { errors.push(`Service "${key}" has no definition.`); continue }
+    if (!(def as any).image) errors.push(`Service "${key}" is missing an image.`)
+    const deploy = (def as any).deploy || {}
+    if (deploy.replicas != null && (!Number.isFinite(Number(deploy.replicas)) || Number(deploy.replicas) < 0)) {
+      errors.push(`Service "${key}" has an invalid replica count.`)
+    }
+    for (const p of (def as any).ports || []) {
+      const target = typeof p === 'object' ? p.target : String(p).split(':').pop()
+      if (!target || !Number.isFinite(Number(target))) warnings.push(`Service "${key}" has a port entry with no valid target port.`)
+    }
+    for (const netKey of Array.isArray((def as any).networks) ? (def as any).networks : Object.keys((def as any).networks || {})) {
+      if (!compose.networks?.[netKey]) warnings.push(`Service "${key}" references undefined network "${netKey}".`)
+    }
+    for (const c of (def as any).configs || []) {
+      const source = typeof c === 'string' ? c : c.source
+      if (source && !compose.configs?.[source]) errors.push(`Service "${key}" references undefined config "${source}".`)
+    }
+    for (const s of (def as any).secrets || []) {
+      const source = typeof s === 'string' ? s : s.source
+      if (source && !compose.secrets?.[source]) errors.push(`Service "${key}" references undefined secret "${source}".`)
+    }
+  }
+
+  return { compose, errors, warnings }
+}
+
+/** Live Docker-state checks: which external networks/configs/secrets are
+ *  missing, and which non-external configs/secrets still need their content
+ *  collected from the user before they can be auto-created at deploy time. */
+export async function checkComposeAgainstDocker(stackName: string, compose: any): Promise<{ warnings: string[]; needsSecrets: NeededResource[]; needsConfigs: NeededResource[] }> {
   const docker = useDocker()
-  const compose = parseYaml(composeText) || {}
+  const warnings: string[] = []
+  const needsSecrets: NeededResource[] = []
+  const needsConfigs: NeededResource[] = []
+
+  const composeNetworks: Record<string, any> = compose.networks || {}
+  for (const [key, netDef] of Object.entries(composeNetworks)) {
+    const def: any = netDef || {}
+    if (!def.external) continue
+    const found = await docker.listNetworks({ filters: JSON.stringify({ name: [String(def.name || key)] }) }).catch(() => [])
+    if (!found[0]) warnings.push(`External network "${key}" not found.`)
+  }
+
+  const composeSecrets: Record<string, any> = compose.secrets || {}
+  const existingSecrets = await docker.listSecrets().catch(() => [])
+  for (const [key, def] of Object.entries(composeSecrets)) {
+    const d: any = def || {}
+    const fullName = d.external ? String(d.name || key) : `${stackName}_${key}`
+    const found = (existingSecrets as any[]).some((s) => s.Spec?.Name === fullName)
+    if (d.external) { if (!found) warnings.push(`External secret "${key}" not found.`) }
+    else if (!found) needsSecrets.push({ key, fullName })
+  }
+
+  const composeConfigs: Record<string, any> = compose.configs || {}
+  const existingConfigs = await docker.listConfigs().catch(() => [])
+  for (const [key, def] of Object.entries(composeConfigs)) {
+    const d: any = def || {}
+    const fullName = d.external ? String(d.name || key) : `${stackName}_${key}`
+    const found = (existingConfigs as any[]).some((c) => c.Spec?.Name === fullName)
+    if (d.external) { if (!found) warnings.push(`External config "${key}" not found.`) }
+    else if (!found) needsConfigs.push({ key, fullName })
+  }
+
+  return { warnings, needsSecrets, needsConfigs }
+}
+
+export interface DeployOptions {
+  /** Content for non-external secrets the compose declares that don't
+   *  already exist in Docker under `${stackName}_<key>` - collected from the
+   *  user via the deploy popup. Keyed by the compose secret key. */
+  secretsContent?: Record<string, string>
+  configsContent?: Record<string, string>
+}
+
+export async function deployStack(stackName: string, composeText: string, options: DeployOptions = {}): Promise<DeployResult> {
+  const docker = useDocker()
+  const { compose, errors } = validateComposeStructure(stackName, composeText)
+  if (errors.length) throw createError({ statusCode: 400, statusMessage: errors[0] })
+
   const warnings: string[] = []
   const result: DeployResult = { stack: stackName, created: [], updated: [], networks: [], warnings }
 
   const composeServices: Record<string, any> = compose.services || {}
   const composeNetworks: Record<string, any> = compose.networks || {}
-
-  if (Object.keys(composeServices).length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'Compose file has no services' })
-  }
+  const composeSecrets: Record<string, any> = compose.secrets || {}
+  const composeConfigs: Record<string, any> = compose.configs || {}
 
   // 1. Ensure networks
   const existingNetworks = await docker.listNetworks()
@@ -143,6 +257,29 @@ export async function deployStack(stackName: string, composeText: string): Promi
     result.networks.push(fullName)
   }
 
+  // 1b. Ensure secrets/configs - external ones must already exist; non-external
+  // ones are auto-created here from user-supplied content (see DeployOptions),
+  // the same way `docker stack deploy` expects a `file:` on disk, except a
+  // browser has no filesystem to read one from.
+  const secretNameToId = await ensureNamedResources({
+    kind: 'secret',
+    stackName,
+    entries: composeSecrets,
+    content: options.secretsContent || {},
+    list: () => docker.listSecrets(),
+    create: (Name, Data, Labels) => docker.createSecret({ Name, Data, Labels }),
+    warnings
+  })
+  const configNameToId = await ensureNamedResources({
+    kind: 'config',
+    stackName,
+    entries: composeConfigs,
+    content: options.configsContent || {},
+    list: () => docker.listConfigs(),
+    create: (Name, Data, Labels) => docker.createConfig({ Name, Data, Labels }),
+    warnings
+  })
+
   // 2. Existing services in this stack (for update vs create + pruning)
   const current = await docker.listServices({
     filters: JSON.stringify({ label: [`${STACK_LABEL}=${stackName}`] })
@@ -154,7 +291,7 @@ export async function deployStack(stackName: string, composeText: string): Promi
   for (const [svcKey, svcDef] of Object.entries(composeServices)) {
     const serviceName = `${stackName}_${svcKey}`
     desiredNames.add(serviceName)
-    const spec = buildServiceSpec(stackName, svcKey, serviceName, svcDef, netNameToId, warnings)
+    const spec = buildServiceSpec(stackName, svcKey, serviceName, svcDef, netNameToId, configNameToId, secretNameToId, warnings)
 
     const existing = currentByName.get(serviceName)
     if (existing) {
@@ -181,6 +318,44 @@ export async function deployStack(stackName: string, composeText: string): Promi
   return result
 }
 
+async function ensureNamedResources(opts: {
+  kind: 'secret' | 'config'
+  stackName: string
+  entries: Record<string, any>
+  content: Record<string, string>
+  list: () => Promise<any[]>
+  create: (Name: string, Data: string, Labels: Record<string, string>) => Promise<any>
+  warnings: string[]
+}): Promise<Map<string, string>> {
+  const nameToId = new Map<string, string>()
+  if (!Object.keys(opts.entries).length) return nameToId
+  const existing = await opts.list().catch(() => [])
+
+  for (const [key, def] of Object.entries(opts.entries)) {
+    const d: any = def || {}
+    if (d.external) {
+      const fullName = String(d.name || key)
+      const found = (existing as any[]).find((r) => r.Spec?.Name === fullName)
+      if (found) nameToId.set(key, found.ID)
+      else opts.warnings.push(`External ${opts.kind} "${key}" not found`)
+      continue
+    }
+
+    const fullName = `${opts.stackName}_${key}`
+    const found = (existing as any[]).find((r) => r.Spec?.Name === fullName)
+    if (found) { nameToId.set(key, found.ID); continue }
+
+    const content = opts.content[key]
+    if (content == null) {
+      throw createError({ statusCode: 400, statusMessage: `Missing content for ${opts.kind} "${key}" - it must be created before deploy.` })
+    }
+    const created = await opts.create(fullName, Buffer.from(content, 'utf8').toString('base64'), { [STACK_LABEL]: opts.stackName })
+    nameToId.set(key, (created as any).id || (created as any).ID)
+  }
+
+  return nameToId
+}
+
 export async function removeStack(stackName: string) {
   const docker = useDocker()
   const filter = JSON.stringify({ label: [`${STACK_LABEL}=${stackName}`] })
@@ -205,6 +380,8 @@ function buildServiceSpec(
   serviceName: string,
   def: any,
   netNameToId: Map<string, string>,
+  configNameToId: Map<string, string>,
+  secretNameToId: Map<string, string>,
   warnings: string[]
 ) {
   const deploy = def.deploy || {}
@@ -230,6 +407,10 @@ function buildServiceSpec(
 
   // mounts
   const Mounts = normalizeMounts(def.volumes, warnings)
+
+  // configs/secrets
+  const Configs = normalizeAttachments(def.configs, configNameToId, 'config', warnings)
+  const Secrets = normalizeAttachments(def.secrets, secretNameToId, 'secret', warnings)
 
   // resources
   const Resources = normalizeResources(deploy.resources)
@@ -269,7 +450,9 @@ function buildServiceSpec(
         Dir: def.working_dir,
         User: def.user,
         Mounts,
-        Healthcheck
+        Healthcheck,
+        Configs,
+        Secrets
       },
       Resources,
       RestartPolicy,
@@ -345,6 +528,30 @@ function normalizeServiceNetworks(nets: any, netNameToId: Map<string, string>, w
     const id = netNameToId.get(String(k))
     if (id) out.push({ Target: id })
     else warnings.push(`Service references unknown network "${k}"`)
+  }
+  return out.length ? out : undefined
+}
+
+// Compose service `configs:`/`secrets:` entries - short form (a bare name
+// referencing the top-level entry) or long form ({source, target, uid, gid,
+// mode}). `nameToId` maps the top-level key to the actual Docker object id
+// created/resolved during the ensure-step in deployStack.
+function normalizeAttachments(entries: any, nameToId: Map<string, string>, kind: 'config' | 'secret', warnings: string[]) {
+  if (!entries) return undefined
+  const out: any[] = []
+  for (const entry of entries) {
+    const isLong = typeof entry === 'object'
+    const source = isLong ? entry.source : String(entry)
+    const id = nameToId.get(source)
+    if (!id) { warnings.push(`Service references unknown ${kind} "${source}"`); continue }
+    const target = isLong ? entry.target : undefined
+    const file = {
+      Name: target || `/${source}`,
+      UID: isLong && entry.uid != null ? String(entry.uid) : '0',
+      GID: isLong && entry.gid != null ? String(entry.gid) : '0',
+      Mode: isLong && entry.mode != null ? Number(entry.mode) : 0o444
+    }
+    out.push(kind === 'config' ? { ConfigID: id, ConfigName: source, File: file } : { SecretID: id, SecretName: source, File: file })
   }
   return out.length ? out : undefined
 }

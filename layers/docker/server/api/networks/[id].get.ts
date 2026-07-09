@@ -6,8 +6,11 @@ import { summarizeServices } from '~~/layers/docker/server/utils/resourceService
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
-
   const id = getRouterParam(event, 'id')!
+  return computeNetworkDetail(id)
+})
+
+export async function computeNetworkDetail(id: string) {
   const docker = useDocker()
   const network: any = await docker.getNetwork(id).inspect().catch((err: any) => {
     throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Network not found' })
@@ -38,4 +41,4 @@ export default defineEventHandler(async (event) => {
     options: network.Options || {},
     services: summarizeServices(attachedServices, tasks as any[])
   }
-})
+}

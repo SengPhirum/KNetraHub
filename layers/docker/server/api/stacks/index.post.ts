@@ -5,7 +5,14 @@ import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
-  const body = await readBody<{ name: string; compose: string; message?: string; commit?: boolean }>(event)
+  const body = await readBody<{
+    name: string
+    compose: string
+    message?: string
+    commit?: boolean
+    secretsContent?: Record<string, string>
+    configsContent?: Record<string, string>
+  }>(event)
   if (!body.name || !body.compose) {
     throw createError({ statusCode: 400, statusMessage: 'name and compose are required' })
   }
@@ -25,7 +32,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const result = await deployStack(body.name, body.compose).catch(async (err: any) => {
+  const result = await deployStack(body.name, body.compose, {
+    secretsContent: body.secretsContent,
+    configsContent: body.configsContent
+  }).catch(async (err: any) => {
     await fireAlert({ ruleType: 'deploy_failed', target: body.name, severity: 'critical', vars: { target: body.name, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
     throw err
   })

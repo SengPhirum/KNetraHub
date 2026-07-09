@@ -10,10 +10,10 @@ const { data, status, error, refreshing, refresh } = useApiCache(`stack:${name}`
 onMounted(refresh)
 
 const { connected } = useDockerEvents((evt) => {
-  if (['service', 'task', 'network', 'volume', 'secret', 'config'].includes(evt.type)) refresh()
+  if (evt.type === 'resource-detail' && evt.resource === 'stack' && evt.id === name) data.value = evt.data
 })
 useIntervalFn(() => {
-  if (prefs.value.refreshInterval > 0) refresh()
+  if (!connected.value && prefs.value.refreshInterval > 0) refresh()
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
 const tab = ref<'overview' | 'services' | 'compose' | 'history'>('overview')

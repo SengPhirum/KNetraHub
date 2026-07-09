@@ -6,8 +6,11 @@ import { summarizeServices } from '~~/layers/docker/server/utils/resourceService
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
-
   const id = getRouterParam(event, 'id')!
+  return computeSecretDetail(id)
+})
+
+export async function computeSecretDetail(id: string) {
   const docker = useDocker()
   const secret: any = await docker.getSecret(id).inspect().catch((err: any) => {
     throw createError({ statusCode: err?.statusCode || 404, statusMessage: err?.reason || err?.message || 'Secret not found' })
@@ -33,4 +36,4 @@ export default defineEventHandler(async (event) => {
     updated: secret.UpdatedAt || null,
     services: summarizeServices(attachedServices, tasks as any[])
   }
-})
+}

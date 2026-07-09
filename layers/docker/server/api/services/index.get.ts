@@ -4,6 +4,10 @@ import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   await assertSwarm()
+  return computeServicesList()
+})
+
+export async function computeServicesList() {
   const docker = useDocker()
   const [services, tasks] = await Promise.all([docker.listServices(), docker.listTasks()])
   const running = countTasks(tasks, (t: any) => t.Status?.State === 'running')
@@ -36,7 +40,7 @@ export default defineEventHandler(async (event) => {
       resources: serviceResources(s, desired)
     }
   })
-})
+}
 
 function countTasks(tasks: any[], predicate: (task: any) => boolean) {
   const out = new Map<string, number>()

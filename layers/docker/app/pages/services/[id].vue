@@ -27,11 +27,13 @@ const secrets = computed(() => data.value?.secrets || [])
 const resources = computed(() => summary.value.resources || {})
 const currentUsage = computed(() => summary.value.currentUsage || { available: false })
 
+// After the first load above, updates to THIS service arrive as
+// server-pushed data (see server/utils/resourcePush.ts) - applied directly
+// to state, no re-$fetch. The metrics chart's range is user-selectable
+// per-tab, which doesn't fit a single shared broadcast, so it stays on the
+// interval-fallback path (still gated on the push connection being down).
 const { connected } = useDockerEvents((evt) => {
-  if (['service', 'task', 'container', 'network', 'volume'].includes(evt.type)) {
-    refresh()
-    refreshMetrics()
-  }
+  if (evt.type === 'resource-detail' && evt.resource === 'service' && evt.id === id) data.value = evt.data
 })
 useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) {

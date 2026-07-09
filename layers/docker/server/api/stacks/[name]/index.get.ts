@@ -8,6 +8,10 @@ import { getDb } from '~~/server/utils/db'
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   const name = getRouterParam(event, 'name')!
+  return computeStackDetail(name)
+})
+
+export async function computeStackDetail(name: string) {
   const docker = useDocker()
 
   const services = await stackServices(name)
@@ -208,7 +212,7 @@ export default defineEventHandler(async (event) => {
       updatedAt: s.UpdatedAt
     }))
   }
-})
+}
 
 function countBy(items: any[], key: (item: any) => string | undefined) {
   const out = new Map<string, number>()

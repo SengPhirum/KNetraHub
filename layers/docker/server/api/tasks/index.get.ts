@@ -4,6 +4,10 @@ import { getDb } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event); await assertSwarm()
+  return computeTasksList()
+})
+
+export async function computeTasksList() {
   const docker = useDocker()
   const [tasks, services, nodes] = await Promise.all([docker.listTasks(), docker.listServices(), docker.listNodes()])
   const svc = new Map(services.map((s) => [s.ID, s.Spec?.Name]))
@@ -24,7 +28,7 @@ export default defineEventHandler(async (event) => {
     createdAt: t.CreatedAt,
     metrics: metricsByTask.get(t.ID!) || null
   })).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
-})
+}
 
 /** Latest per-task sample across the whole cluster (not scoped to one
  * service), so the tasks list can show live CPU/memory next to every row. */

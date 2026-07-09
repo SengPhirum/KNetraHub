@@ -79,11 +79,12 @@ const { items: filteredNodes, search, sortBy, sortDir, sortOptions, filters, fac
   filterOptions: nodeFilterOptions
 })
 
+// Node list changes push via 'resource-list'/'nodes'; usage reuses the same
+// agent-report-driven 'dashboard-nodeUsage' push the Bridge dashboard uses
+// (same /api/nodes/usage data) - see server/utils/dashboardSnapshot.ts.
 const { connected } = useDockerEvents((evt) => {
-  if (evt.type === 'node') {
-    refresh()
-    refreshUsage()
-  }
+  if (evt.type === 'resource-list' && evt.resource === 'nodes') data.value = evt.data
+  else if (evt.type === 'dashboard-nodeUsage') usageData.value = evt.data
 })
 useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) {
@@ -92,7 +93,7 @@ useIntervalFn(() => {
   }
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 const pageVisibility = useDocumentVisibility()
-useIntervalFn(() => { if (pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
+useIntervalFn(() => { if (!connected.value && pageVisibility.value === 'visible') refreshUsage() }, 5000, { immediate: false })
 
 async function refreshAll() {
   await Promise.all([refresh(), refreshUsage()])

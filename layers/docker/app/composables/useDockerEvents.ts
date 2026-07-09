@@ -3,6 +3,11 @@ export interface DockerEvent {
   action: string
   name: string
   data?: any
+  /** Set on 'resource-list'/'resource-detail' events: which resource kind
+   *  changed (e.g. 'services', 'service', 'stack'). See resourcePush.ts. */
+  resource?: string
+  /** Set on 'resource-detail' events: the specific id/name that changed. */
+  id?: string
 }
 
 // Subscribes to the SSE Docker event stream and calls the handler for each event.
@@ -40,6 +45,23 @@ export function useDockerEvents(handler: (event: DockerEvent) => void) {
         try { handler({ type: t, action: 'snapshot', name: '', data: JSON.parse((e as MessageEvent).data) }) } catch { /* ignore */ }
       })
     }
+
+    // Server-computed list/detail snapshots for every other page (services,
+    // containers, nodes, tasks, stacks, networks, volumes, secrets, configs)
+    // - see resourcePush.ts. `resource`/`id` tell the page what changed;
+    // `data` is the ready-to-use payload, no $fetch needed.
+    es.addEventListener('resource-list', (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data)
+        handler({ type: 'resource-list', action: 'snapshot', name: '', resource: payload.resource, data: payload.data })
+      } catch { /* ignore */ }
+    })
+    es.addEventListener('resource-detail', (e) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data)
+        handler({ type: 'resource-detail', action: 'snapshot', name: '', resource: payload.resource, id: payload.id, data: payload.data })
+      } catch { /* ignore */ }
+    })
 
     es.onerror = () => {
       connected.value = false

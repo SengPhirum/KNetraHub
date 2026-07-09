@@ -1,10 +1,13 @@
 import { createEventStream } from 'h3'
 import { isNoisyDockerEvent, onDashboardPush, scheduleOverviewPush } from '~~/layers/docker/server/utils/dashboardSnapshot'
+import { onResourcePush, dispatchDockerEvent } from '~~/layers/docker/server/utils/resourcePush'
 
-// Broadcasts Docker daemon events to authenticated SSE clients, plus the
-// dashboard's server-computed overview/nodeUsage/metrics snapshots (pushed
-// as their own named events so pages never need to re-$fetch the REST
-// endpoints after their first load - see dashboardSnapshot.ts).
+// Broadcasts Docker daemon events to authenticated SSE clients, plus:
+//  - the dashboard's server-computed overview/nodeUsage/metrics snapshots
+//    (dashboardSnapshot.ts)
+//  - every other page's server-computed list/detail snapshot (resourcePush.ts)
+// both pushed as their own named events so pages never need to re-$fetch
+// their REST endpoint after their first load.
 // Falls back to heartbeat-only when Docker is unreachable.
 export default defineEventHandler(async (event) => {
   await requireUser(event)
@@ -14,6 +17,16 @@ export default defineEventHandler(async (event) => {
 
   const offDashboardPush = onDashboardPush(async (evt) => {
     try { await stream.push({ event: `dashboard-${evt.type}`, data: JSON.stringify(evt.data) }) } catch { /* client gone */ }
+  })
+
+  const offResourcePush = onResourcePush(async (evt) => {
+    try {
+      if (evt.kind === 'list') {
+        await stream.push({ event: 'resource-list', data: JSON.stringify({ resource: evt.resource, data: evt.data }) })
+      } else {
+        await stream.push({ event: 'resource-detail', data: JSON.stringify({ resource: evt.resource, id: evt.id, data: evt.data }) })
+      }
+    } catch { /* client gone */ }
   })
 
   // ── heartbeat ──────────────────────────────────────────────────────────────
@@ -50,6 +63,7 @@ export default defineEventHandler(async (event) => {
                 })
 
                 if (['service', 'task', 'node', 'container'].includes(evt.Type)) scheduleOverviewPush()
+                dispatchDockerEvent(evt)
               } catch { /* ignore parse errors */ }
             })
 
@@ -78,6 +92,7 @@ export default defineEventHandler(async (event) => {
   stream.onClosed(() => {
     clearInterval(heartbeat)
     offDashboardPush()
+    offResourcePush()
     try { dockerStream?.destroy?.() } catch { /* ignore */ }
   })
 

@@ -44,10 +44,40 @@ const buildDateLabel = computed(() => {
   const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   return `${datePart} ${timePart}`
 })
+
+// Decorative "ocean depth" background for the portal home only - deterministic
+// per-index math (not Math.random()) so SSR and client hydration agree on
+// every bubble's position/timing.
+const bubbles = Array.from({ length: 16 }, (_, i) => {
+  const n = i + 1
+  return {
+    left: `${(n * 37) % 100}%`,
+    size: `${6 + ((n * 53) % 20)}px`,
+    duration: `${16 + ((n * 29) % 18)}s`,
+    delay: `${-((n * 17) % 20)}s`
+  }
+})
 </script>
 
 <template>
   <div class="min-h-dvh">
+    <!-- Decorative animated "ocean depth" backdrop - portal home only. Calm,
+         dense ops pages elsewhere stay free of motion. -->
+    <div v-if="isHome" class="home-bg" aria-hidden="true">
+      <div class="home-bg-aurora home-bg-aurora-1" />
+      <div class="home-bg-aurora home-bg-aurora-2" />
+      <div class="home-bg-aurora home-bg-aurora-3" />
+      <div class="home-bg-sonar" />
+      <div class="home-bg-bubbles">
+        <span
+          v-for="(b, i) in bubbles"
+          :key="i"
+          class="home-bg-bubble"
+          :style="{ left: b.left, width: b.size, height: b.size, animationDuration: b.duration, animationDelay: b.delay }"
+        />
+      </div>
+    </div>
+
     <!-- Desktop sidebar (fixed) - hidden on the full-page portal home -->
     <aside v-if="!isHome" class="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col sidebar-shell border-y-0 border-l-0 z-30">
       <SidebarNav />
@@ -61,7 +91,7 @@ const buildDateLabel = computed(() => {
     </USlideover>
 
     <!-- Main column -->
-    <div class="flex min-h-dvh flex-col" :class="{ 'lg:pl-64': !isHome }">
+    <div class="relative z-10 flex min-h-dvh flex-col" :class="{ 'lg:pl-64': !isHome }">
       <!-- top bar -->
       <header class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
         <UButton
@@ -170,3 +200,128 @@ const buildDateLabel = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ─── Portal home decorative backdrop ──────────────────────────────────────
+   Slow-drifting depth-color "aurora" blobs, a periodic sonar sweep, and
+   bubbles rising from the ocean floor - echoes the console's own nautical
+   vocabulary (ink/abyss/hull/foam/beacon/depth, the sonar pulse) instead of
+   being generic chrome. Fixed + clipped so it never affects page scroll size;
+   z-indexed below the main column so all content stays fully readable. */
+.home-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-bg-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  will-change: transform;
+}
+.home-bg-aurora-1 {
+  top: -14%;
+  left: -10%;
+  width: 46rem;
+  height: 46rem;
+  background: radial-gradient(circle, var(--color-beacon), transparent 65%);
+  opacity: 0.5;
+  animation: home-aurora-drift-1 26s ease-in-out infinite;
+}
+.home-bg-aurora-2 {
+  bottom: -20%;
+  right: -12%;
+  width: 40rem;
+  height: 40rem;
+  background: radial-gradient(circle, var(--color-depth), transparent 65%);
+  opacity: 0.4;
+  animation: home-aurora-drift-2 32s ease-in-out infinite;
+}
+.home-bg-aurora-3 {
+  top: 32%;
+  left: 48%;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle, var(--color-running), transparent 70%);
+  opacity: 0.18;
+  animation: home-aurora-drift-3 38s ease-in-out infinite;
+}
+@keyframes home-aurora-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6%, 8%) scale(1.12); }
+}
+@keyframes home-aurora-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-8%, -6%) scale(1.08); }
+}
+@keyframes home-aurora-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.14; }
+  50% { transform: translate(-6%, -10%) scale(1.18); opacity: 0.26; }
+}
+
+/* Periodic sonar sweep from center, echoing the .sonar "live" pulse used
+   elsewhere but scaled up to read as a slow radar scan across the page. */
+.home-bg-sonar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+}
+.home-bg-sonar::before,
+.home-bg-sonar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60px;
+  height: 60px;
+  margin: -30px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-beacon);
+  opacity: 0;
+  animation: home-sonar-ping 8s ease-out infinite;
+}
+.home-bg-sonar::after {
+  animation-delay: 4s;
+}
+@keyframes home-sonar-ping {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(26); opacity: 0; }
+}
+
+/* Bubbles rising from the ocean floor - the "abyss/depth/foam" theme, made literal. */
+.home-bg-bubbles {
+  position: absolute;
+  inset: 0;
+}
+.home-bg-bubble {
+  position: absolute;
+  bottom: -10%;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), var(--color-depth) 45%, transparent 75%);
+  opacity: 0;
+  animation-name: home-bubble-rise;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+@keyframes home-bubble-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  8% { opacity: 0.32; }
+  85% { opacity: 0.18; }
+  100% { transform: translate(14px, -115vh); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-bg-aurora,
+  .home-bg-bubble,
+  .home-bg-sonar::before,
+  .home-bg-sonar::after {
+    animation: none;
+  }
+}
+</style>

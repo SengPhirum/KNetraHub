@@ -9,7 +9,7 @@ onMounted(refresh)
 const { data: gl } = useFetch('/api/gitlab/status', { lazy: true })
 
 const { connected } = useDockerEvents((evt) => {
-  if (['service', 'task'].includes(evt.type)) refresh()
+  if (evt.type === 'resource-list' && evt.resource === 'stacks') data.value = evt.data
 })
 useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()
@@ -42,27 +42,7 @@ function stackStatus(s: any) {
 }
 
 const open = ref(false)
-const form = reactive({ name: '', compose: '', message: '' })
-const deploying = ref(false)
-const SAMPLE = `version: "3.8"
-
-services:
-  web:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
-    deploy:
-      replicas: 2
-      restart_policy:
-        condition: on-failure
-    networks:
-      - frontend
-
-networks:
-  frontend:
-    driver: overlay
-`
-function openDeploy() { form.name = ''; form.compose = SAMPLE; form.message = ''; open.value = true }
+function openDeploy() { open.value = true }
 
 async function deleteFromGitlab(s: any) {
   if (!confirm(`Permanently delete "${s.name}" from GitLab?\n\nThis removes its compose file and commit history from version control. It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will disappear from this list.`)) return
@@ -75,20 +55,8 @@ async function deleteFromGitlab(s: any) {
   }
 }
 
-async function deploy() {
-  if (!form.name || !form.compose) { toast.add({ title: 'Name and compose are required', color: 'warning' }); return }
-  deploying.value = true
-  try {
-    const res: any = await $fetch('/api/stacks', { method: 'POST', body: { name: form.name, compose: form.compose, message: form.message } })
-    const parts = [`${res.created?.length || 0} created`, `${res.updated?.length || 0} updated`]
-    if (res.removed?.length) parts.push(`${res.removed.length} removed`)
-    toast.add({ title: `Deployed ${form.name}`, description: parts.join(', '), color: 'primary', icon: 'i-lucide-rocket' })
-    if (res.warnings?.length) toast.add({ title: 'Deployed with warnings', description: res.warnings.slice(0, 3).join('; '), color: 'warning' })
-    open.value = false
-    refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Deploy failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
-  } finally { deploying.value = false }
+function onDeployed() {
+  refresh()
 }
 </script>
 
@@ -187,26 +155,6 @@ async function deploy() {
       </section>
     </DataState>
 
-    <UModal v-model:open="open" title="Deploy stack" :ui="{ content: 'max-w-2xl' }">
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Stack name" required>
-            <UInput v-model="form.name" placeholder="my-app" icon="i-lucide-layers" class="w-full font-mono" :disabled="deploying" />
-          </UFormField>
-          <UFormField label="Compose file" required :hint="gl?.enabled ? 'Committed to GitLab, then deployed' : 'Deployed directly (GitLab off)'">
-            <UTextarea v-model="form.compose" :rows="14" class="w-full font-mono text-xs" :ui="{ base: 'font-mono' }" spellcheck="false" :disabled="deploying" />
-          </UFormField>
-          <UFormField v-if="gl?.enabled" label="Commit message">
-            <UInput v-model="form.message" placeholder="Deploy my-app via KNetraHub" class="w-full" :disabled="deploying" />
-          </UFormField>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2 w-full">
-          <UButton color="neutral" variant="ghost" label="Cancel" :disabled="deploying" @click="open = false" />
-          <UButton color="primary" label="Deploy" icon="i-lucide-rocket" :loading="deploying" @click="deploy" />
-        </div>
-      </template>
-    </UModal>
+    <StacksDeployStackModal v-model:open="open" @deployed="onDeployed" />
   </div>
 </template>

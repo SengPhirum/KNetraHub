@@ -10,7 +10,7 @@ const { data, status, error, refreshing, refresh } = useApiCache(`network:${id}`
 onMounted(refresh)
 
 const { connected } = useDockerEvents((evt) => {
-  if (['network', 'service', 'task', 'container'].includes(evt.type)) refresh()
+  if (evt.type === 'resource-detail' && evt.resource === 'network' && evt.id === id) data.value = evt.data
 })
 useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()
