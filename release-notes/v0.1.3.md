@@ -1,6 +1,6 @@
 # KNetraHub v0.1.3
 
-Date: 2026-07-09 UTC
+Date: 2026-07-10 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-07-09 UTC
 
 ## Source
 
-- Commit: `6eea719`
+- Commit: `ba4f90c`
 - Previous tag: none
 
 ## Changes
 
+- feat: refactor API endpoints to compute usage, stacks, and tasks with dedicated functions for improved readability and maintainability feat: implement resource push mechanism for real-time updates across various Docker resources, enhancing user experience feat: add validation for stack deployment, including checks for secrets and configs, to ensure proper deployment processes feat: enhance stack deployment logic to handle user-provided secrets and configs, improving flexibility in stack management feat: update Docker event handling to trigger appropriate resource updates, ensuring UI reflects the latest state of the system fix: update version to 0.1.3 and document changes in release notes for better tracking of modifications and enhancements (ba4f90c)
 - feat: implement per-app access management for local users; update user authority handling and database schema (6eea719)
 - feat: enhance build date display in footer of auth and default layouts; add server-computed dashboard snapshots for real-time updates (da136eb)
 - feat: add build date display in footer of auth and default layouts; implement recommended role-naming template in access management (1de1236)

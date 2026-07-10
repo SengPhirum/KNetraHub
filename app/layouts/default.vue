@@ -45,35 +45,105 @@ const buildDateLabel = computed(() => {
   return `${datePart} ${timePart}`
 })
 
-// Decorative "ocean depth" background for the portal home only - deterministic
-// per-index math (not Math.random()) so SSR and client hydration agree on
-// every bubble's position/timing.
-const bubbles = Array.from({ length: 16 }, (_, i) => {
+// Decorative "digital infrastructure & security" background for the portal
+// home only - a circuit-board trace grid with traveling data packets, a
+// couple of "secured node" shield pulses, a periodic security-scan sweep, and
+// ambient rising data bits. All coordinates/timings are deterministic
+// (index-based math, never Math.random()) so SSR and client hydration agree.
+const circuitNodes = [
+  { x: 150, y: 120 }, { x: 420, y: 200 }, { x: 700, y: 130 }, { x: 980, y: 210 },
+  { x: 1250, y: 140 }, { x: 1460, y: 260 }, { x: 150, y: 430 }, { x: 460, y: 470 },
+  { x: 760, y: 400 }, { x: 1040, y: 480 }, { x: 1340, y: 420 },
+  { x: 260, y: 700 }, { x: 600, y: 660 }, { x: 940, y: 720 }, { x: 1280, y: 660 }
+]
+// [fromNodeIndex, toNodeIndex, elbowStyle] - elbowStyle picks whether the
+// single right-angle bend goes horizontal-then-vertical or vice versa, so the
+// grid reads as circuit traces rather than a diagonal constellation.
+const circuitLinks: [number, number, 'h' | 'v'][] = [
+  [0, 1, 'h'], [1, 2, 'v'], [2, 3, 'h'], [3, 4, 'v'], [4, 5, 'h'],
+  [0, 6, 'v'], [3, 9, 'v'], [5, 10, 'v'],
+  [6, 7, 'h'], [7, 8, 'v'], [8, 9, 'h'], [9, 10, 'h'],
+  [7, 11, 'v'], [8, 12, 'v'], [9, 13, 'v'], [10, 14, 'v']
+]
+function elbowPath(a: number, b: number, style: 'h' | 'v') {
+  const from = circuitNodes[a]!
+  const to = circuitNodes[b]!
+  return style === 'h' ? `M${from.x},${from.y} H${to.x} V${to.y}` : `M${from.x},${from.y} V${to.y} H${to.x}`
+}
+const circuitTraces = circuitLinks.map(([a, b, style], i) => ({
+  d: elbowPath(a, b, style),
+  duration: `${6 + (i % 5)}s`,
+  delay: `${((i * 0.35) % 3).toFixed(2)}s`
+}))
+
+// A few nodes double as "secured" checkpoints - a pulsing hexagon/shield
+// outline in the running-green used for healthy status elsewhere in the app.
+function hexPoints(cx: number, cy: number, r: number) {
+  return Array.from({ length: 6 }, (_, i) => {
+    const angle = (Math.PI / 3) * i - Math.PI / 2
+    return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`
+  }).join(' ')
+}
+const shieldNodeIndexes = [4, 8, 13]
+const shieldHexes = shieldNodeIndexes.map((idx, i) => ({
+  points: hexPoints(circuitNodes[idx]!.x, circuitNodes[idx]!.y, 22),
+  delay: `${i * 1.6}s`
+}))
+
+// Ambient data bits drifting up through the stack (the digital-infra take on
+// the old "bubbles").
+const dataMotes = Array.from({ length: 16 }, (_, i) => {
   const n = i + 1
   return {
-    left: `${(n * 37) % 100}%`,
-    size: `${6 + ((n * 53) % 20)}px`,
-    duration: `${16 + ((n * 29) % 18)}s`,
-    delay: `${-((n * 17) % 20)}s`
+    left: `${(n * 41) % 100}%`,
+    size: `${3 + ((n * 47) % 6)}px`,
+    duration: `${14 + ((n * 31) % 20)}s`,
+    delay: `${-((n * 19) % 24)}s`
   }
 })
 </script>
 
 <template>
   <div class="min-h-dvh">
-    <!-- Decorative animated "ocean depth" backdrop - portal home only. Calm,
-         dense ops pages elsewhere stay free of motion. -->
+    <!-- Decorative animated "digital infrastructure & security" backdrop -
+         portal home only. Calm, dense ops pages elsewhere stay free of motion. -->
     <div v-if="isHome" class="home-bg" aria-hidden="true">
-      <div class="home-bg-aurora home-bg-aurora-1" />
-      <div class="home-bg-aurora home-bg-aurora-2" />
-      <div class="home-bg-aurora home-bg-aurora-3" />
-      <div class="home-bg-sonar" />
-      <div class="home-bg-bubbles">
+      <div class="home-bg-glow home-bg-glow-1" />
+      <div class="home-bg-glow home-bg-glow-2" />
+
+      <svg class="home-bg-circuit" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+        <path v-for="(t, i) in circuitTraces" :key="`trace${i}`" class="circuit-trace" :d="t.d" />
+        <circle
+          v-for="(t, i) in circuitTraces"
+          :key="`packet${i}`"
+          class="circuit-packet"
+          r="2.5"
+          :style="{ offsetPath: `path('${t.d}')`, animationDuration: t.duration, animationDelay: t.delay }"
+        />
+        <circle
+          v-for="(n, i) in circuitNodes"
+          :key="`node${i}`"
+          class="circuit-node"
+          :cx="n.x" :cy="n.y" r="4"
+          :style="{ animationDelay: `${(i * 0.4) % 4}s` }"
+        />
+        <polygon
+          v-for="(h, i) in shieldHexes"
+          :key="`shield${i}`"
+          class="circuit-shield"
+          :points="h.points"
+          :style="{ animationDelay: h.delay }"
+        />
+      </svg>
+
+      <div class="home-bg-scanbeam" />
+
+      <div class="home-bg-motes">
         <span
-          v-for="(b, i) in bubbles"
+          v-for="(m, i) in dataMotes"
           :key="i"
-          class="home-bg-bubble"
-          :style="{ left: b.left, width: b.size, height: b.size, animationDuration: b.duration, animationDelay: b.delay }"
+          class="home-bg-mote"
+          :style="{ left: m.left, width: m.size, height: m.size, animationDuration: m.duration, animationDelay: m.delay }"
         />
       </div>
     </div>
@@ -203,11 +273,12 @@ const bubbles = Array.from({ length: 16 }, (_, i) => {
 
 <style scoped>
 /* ─── Portal home decorative backdrop ──────────────────────────────────────
-   Slow-drifting depth-color "aurora" blobs, a periodic sonar sweep, and
-   bubbles rising from the ocean floor - echoes the console's own nautical
-   vocabulary (ink/abyss/hull/foam/beacon/depth, the sonar pulse) instead of
-   being generic chrome. Fixed + clipped so it never affects page scroll size;
-   z-indexed below the main column so all content stays fully readable. */
+   A circuit-board trace grid with traveling "data packet" pulses, a couple
+   of pulsing shield/hexagon "secured node" checkpoints, a periodic security
+   scan sweep, and ambient data bits rising through the stack - reads as IT
+   infrastructure + security rather than generic chrome. Fixed + clipped so
+   it never affects page scroll size; z-indexed below the main column so all
+   content stays fully readable. */
 .home-bg {
   position: fixed;
   inset: 0;
@@ -216,111 +287,152 @@ const bubbles = Array.from({ length: 16 }, (_, i) => {
   pointer-events: none;
 }
 
-.home-bg-aurora {
+.home-bg-glow {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(70px);
+  filter: blur(80px);
   will-change: transform;
 }
-.home-bg-aurora-1 {
-  top: -14%;
+.home-bg-glow-1 {
+  top: -16%;
   left: -10%;
   width: 46rem;
   height: 46rem;
   background: radial-gradient(circle, var(--color-beacon), transparent 65%);
-  opacity: 0.5;
-  animation: home-aurora-drift-1 26s ease-in-out infinite;
+  opacity: 0.35;
+  animation: home-glow-drift-1 28s ease-in-out infinite;
 }
-.home-bg-aurora-2 {
+.home-bg-glow-2 {
   bottom: -20%;
   right: -12%;
   width: 40rem;
   height: 40rem;
   background: radial-gradient(circle, var(--color-depth), transparent 65%);
-  opacity: 0.4;
-  animation: home-aurora-drift-2 32s ease-in-out infinite;
+  opacity: 0.3;
+  animation: home-glow-drift-2 34s ease-in-out infinite;
 }
-.home-bg-aurora-3 {
-  top: 32%;
-  left: 48%;
-  width: 30rem;
-  height: 30rem;
-  background: radial-gradient(circle, var(--color-running), transparent 70%);
-  opacity: 0.18;
-  animation: home-aurora-drift-3 38s ease-in-out infinite;
-}
-@keyframes home-aurora-drift-1 {
+@keyframes home-glow-drift-1 {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(6%, 8%) scale(1.12); }
 }
-@keyframes home-aurora-drift-2 {
+@keyframes home-glow-drift-2 {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(-8%, -6%) scale(1.08); }
 }
-@keyframes home-aurora-drift-3 {
-  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.14; }
-  50% { transform: translate(-6%, -10%) scale(1.18); opacity: 0.26; }
-}
 
-/* Periodic sonar sweep from center, echoing the .sonar "live" pulse used
-   elsewhere but scaled up to read as a slow radar scan across the page. */
-.home-bg-sonar {
+/* Circuit-board wireframe: static right-angle traces + chip-like nodes, with
+   a bright "packet" traveling each trace and a few nodes marked as secured
+   checkpoints via a pulsing hexagon/shield outline. */
+.home-bg-circuit {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.home-bg-sonar::before,
-.home-bg-sonar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 60px;
-  height: 60px;
-  margin: -30px;
-  border-radius: 9999px;
-  border: 1px solid var(--color-beacon);
+.circuit-trace {
+  fill: none;
+  stroke: var(--color-beacon);
+  stroke-width: 1;
+  opacity: 0.14;
+}
+.circuit-node {
+  fill: var(--color-beacon);
+  opacity: 0.3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: home-node-blink 4.5s ease-in-out infinite;
+}
+.circuit-packet {
+  fill: var(--color-depth);
+  filter: drop-shadow(0 0 3px var(--color-beacon)) drop-shadow(0 0 6px var(--color-beacon));
+  offset-rotate: 0deg;
+  animation-name: home-packet-travel;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.circuit-shield {
+  fill: none;
+  stroke: var(--color-running);
+  stroke-width: 1.5;
   opacity: 0;
-  animation: home-sonar-ping 8s ease-out infinite;
+  filter: drop-shadow(0 0 4px var(--color-running));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: home-shield-pulse 5s ease-in-out infinite;
 }
-.home-bg-sonar::after {
-  animation-delay: 4s;
+@keyframes home-node-blink {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
 }
-@keyframes home-sonar-ping {
-  0% { transform: scale(1); opacity: 0.3; }
-  100% { transform: scale(26); opacity: 0; }
+@keyframes home-packet-travel {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes home-shield-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
 }
 
-/* Bubbles rising from the ocean floor - the "abyss/depth/foam" theme, made literal. */
-.home-bg-bubbles {
+/* Periodic security-scan sweep crossing the page, like a vulnerability/host
+   scan pass, then a pause before the next cycle. */
+.home-bg-scanbeam {
+  position: absolute;
+  top: -10%;
+  left: 0;
+  width: 34%;
+  height: 130%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 35%,
+    color-mix(in srgb, var(--color-beacon) 16%, transparent) 48%,
+    color-mix(in srgb, var(--color-depth) 26%, transparent) 50%,
+    color-mix(in srgb, var(--color-beacon) 16%, transparent) 52%,
+    transparent 65%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-14deg);
+  animation: home-scan-sweep 10s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+}
+@keyframes home-scan-sweep {
+  0% { transform: translateX(-120%) skewX(-14deg); }
+  45% { transform: translateX(340%) skewX(-14deg); }
+  100% { transform: translateX(340%) skewX(-14deg); }
+}
+
+/* Ambient data bits drifting up through the stack. */
+.home-bg-motes {
   position: absolute;
   inset: 0;
 }
-.home-bg-bubble {
+.home-bg-mote {
   position: absolute;
-  bottom: -10%;
-  border-radius: 9999px;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), var(--color-depth) 45%, transparent 75%);
+  bottom: -5%;
+  border-radius: 2px;
+  background: var(--color-depth);
+  box-shadow: 0 0 6px var(--color-depth);
   opacity: 0;
-  animation-name: home-bubble-rise;
-  animation-timing-function: ease-in;
+  animation-name: home-mote-rise;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
   will-change: transform, opacity;
 }
-@keyframes home-bubble-rise {
-  0% { transform: translate(0, 0); opacity: 0; }
-  8% { opacity: 0.32; }
-  85% { opacity: 0.18; }
-  100% { transform: translate(14px, -115vh); opacity: 0; }
+@keyframes home-mote-rise {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  6% { opacity: 0.45; }
+  92% { opacity: 0.22; }
+  100% { transform: translate(14px, -112vh) rotate(90deg); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-bg-aurora,
-  .home-bg-bubble,
-  .home-bg-sonar::before,
-  .home-bg-sonar::after {
+  .home-bg-glow,
+  .circuit-node,
+  .circuit-packet,
+  .circuit-shield,
+  .home-bg-scanbeam,
+  .home-bg-mote {
     animation: none;
   }
 }
