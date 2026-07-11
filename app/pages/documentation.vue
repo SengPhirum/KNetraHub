@@ -1266,7 +1266,14 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
     id: 'home',
     label: 'Overview',
     icon: 'i-lucide-layout-dashboard',
-    subs: []
+    subs: [
+      { heading: true, label: 'On this page' },
+      { id: 'home-capabilities', label: 'Core capabilities', icon: 'i-lucide-sparkles' },
+      { id: 'home-modules',      label: 'Modules',           icon: 'i-lucide-layout-grid' },
+      { id: 'home-architecture', label: 'Stack & roles',     icon: 'i-lucide-cpu' },
+      { id: 'home-quickstart',   label: 'Quick start',       icon: 'i-lucide-rocket' },
+      { id: 'home-explore',      label: 'Explore the docs',  icon: 'i-lucide-compass' }
+    ]
   },
   {
     id: 'manual',
@@ -1353,11 +1360,90 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
   }
 ]
 
+// ── Docs search index (navbar smart search) ───────────────────────────────────
+// Flattens every guide, configuration topic, API group/endpoint, and Overview
+// block into searchable entries scored by the DocsSearch palette. Env vars and
+// option names ride along as keywords so "NUXT_OIDC_ISSUER" or "bot token"
+// finds the right topic. Section-level entries (no anchor) double as quick
+// links when the palette query is empty.
+type DocSearchEntry = { section: string; anchor?: string; title: string; description: string; group: string; icon: string; keywords?: string }
+
+const searchIndex: DocSearchEntry[] = [
+  { section: 'home', title: 'Overview', description: 'What KNetraHub is: core capabilities, modules, technology stack, roles, and quick start.', group: 'Section', icon: 'i-lucide-layout-dashboard', keywords: 'home introduction getting started welcome' },
+  { section: 'manual', title: 'User Manual', description: 'Feature usage, daily operational workflows, and guidance for every KNetraHub page.', group: 'Section', icon: 'i-lucide-book-open', keywords: 'guides how to features' },
+  { section: 'configuration', title: 'Configuration', description: 'System options, integrations, authentication providers, and setup guides.', group: 'Section', icon: 'i-lucide-sliders-horizontal', keywords: 'setup env vars settings install' },
+  { section: 'api', title: 'API Reference', description: 'REST endpoints grouped by module, with the interactive Swagger explorer.', group: 'Section', icon: 'i-lucide-braces', keywords: 'rest swagger openapi endpoints' },
+  { section: 'home', anchor: 'home-capabilities', title: 'Core capabilities', description: 'Stack management, service control, live monitoring, alerts, access control, infrastructure, and the REST API.', group: 'Overview', icon: 'i-lucide-sparkles' },
+  { section: 'home', anchor: 'home-modules', title: 'Modules in this portal', description: 'Docker, Network, Server, and IP Management apps behind one portal.', group: 'Overview', icon: 'i-lucide-layout-grid' },
+  { section: 'home', anchor: 'home-architecture', title: 'Technology stack & roles', description: 'Runtime, database, live events, and auth architecture, plus the viewer / operator / admin access model.', group: 'Overview', icon: 'i-lucide-cpu', keywords: techStack.map(([k, v]) => `${k} ${v}`).join(' ') },
+  { section: 'home', anchor: 'home-quickstart', title: 'Quick start', description: 'Copy the env file, set required vars, mount the Docker socket, and start the app.', group: 'Overview', icon: 'i-lucide-rocket', keywords: 'docker compose install setup .env getting started' },
+  ...appFeatures.map((f) => ({ section: 'home', anchor: 'home-capabilities', title: f.title, description: f.desc, group: 'Overview', icon: f.icon })),
+  ...modules.map((m) => ({ section: 'home', anchor: 'home-modules', title: `${m.name} module`, description: m.desc, group: 'Overview', icon: m.icon, keywords: `${m.tagline} ${m.points.join(' ')}` })),
+  ...manualGroups.flatMap((group) => group.guides.map((g) => ({ section: 'manual', anchor: g.id, title: g.title, description: g.summary, group: group.eyebrow, icon: g.icon }))),
+  ...workflows.map((wf) => ({ section: 'manual', anchor: 'workflows', title: wf.title, description: wf.steps.join(' '), group: 'Common workflows', icon: wf.icon })),
+  ...configModuleGroups.flatMap((cg) => configGuidesFor(cg.id).map((g) => ({ section: 'configuration', anchor: g.id, title: g.title, description: g.summary, group: cg.eyebrow, icon: g.icon, keywords: [...g.env, ...g.options.map((o) => o[0])].join(' ') }))),
+  { section: 'configuration', anchor: 'provider-guides', title: 'Keycloak & Authentik provider guides', description: 'Step-by-step OIDC setup on the provider side and in KNetraHub, plus authentication troubleshooting.', group: 'General · Authentication', icon: 'i-lucide-anchor', keywords: 'sso oidc redirect_uri discovery groups claim troubleshooting invalid client' },
+  ...apiGroups.flatMap((g) => [
+    { section: 'api', anchor: g.id, title: g.label, description: g.desc, group: 'API Reference', icon: g.icon, keywords: g.endpoints.map((ep) => `${ep[0]} ${ep[1]} ${ep[2]}`).join(' ') },
+    ...g.endpoints.map((ep) => ({ section: 'api', anchor: g.id, title: `${ep[0]} ${ep[1]}`, description: ep[2], group: g.label, icon: 'i-lucide-braces' }))
+  ])
+]
+
 // ── Page state ────────────────────────────────────────────────────────────────
 const activeSection = ref('home')
 const mainRef = ref<HTMLElement | null>(null)
 const mobileOpen = ref(false)
 const docsSearch = ref('')
+
+// ── Overview animations ───────────────────────────────────────────────────────
+const homeRef = ref<HTMLElement | null>(null)
+const revealReady = ref(false)
+let revealObserver: IntersectionObserver | null = null
+
+const heroStats = [
+  { label: 'App modules', target: modules.length, suffix: '' },
+  { label: 'How-to guides', target: manualGroups.reduce((n, g) => n + g.guides.length, 0) + workflows.length, suffix: '' },
+  { label: 'Config topics', target: configModuleGroups.reduce((n, g) => n + configGuidesFor(g.id).length, 0), suffix: '' },
+  { label: 'API endpoints', target: apiGroups.reduce((n, g) => n + g.endpoints.length, 0), suffix: '+' }
+]
+const statValues = ref(heroStats.map(() => 0))
+
+let statsAnimated = false
+function runStatsCountUp() {
+  if (statsAnimated) return
+  statsAnimated = true
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  heroStats.forEach((stat, i) => {
+    if (reduceMotion) {
+      statValues.value[i] = stat.target
+      return
+    }
+    const start = performance.now()
+    const duration = 900 + i * 180
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      statValues.value[i] = Math.round(stat.target * eased)
+      if (progress < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+}
+
+// Deterministic particle placement so SSR and client render identically.
+function particleStyle(n: number) {
+  const size = 2 + (n % 3)
+  const duration = 7 + (n % 5) * 1.8
+  return {
+    left: `${((n * 137.5) % 100).toFixed(1)}%`,
+    top: `${(8 + ((n * 53) % 82)).toFixed(1)}%`,
+    width: `${size}px`,
+    height: `${size}px`,
+    opacity: String(0.2 + (n % 4) * 0.12),
+    animationDuration: `${duration.toFixed(1)}s`,
+    animationDelay: `-${((n * 1.7) % duration).toFixed(2)}s`
+  }
+}
 
 function goTo(section: string, anchor?: string) {
   activeSection.value = section
@@ -1376,11 +1462,38 @@ onMounted(() => {
   if (['home', 'manual', 'configuration', 'api'].includes(hash)) {
     activeSection.value = hash
   }
+
+  // Overview animations: reveal-on-scroll + stat count-up. Gated behind
+  // revealReady so the content stays fully visible when JS never runs.
+  revealReady.value = true
+  if (activeSection.value === 'home') runStatsCountUp()
+  nextTick(() => {
+    const targets = homeRef.value?.querySelectorAll('.reveal')
+    if (!targets?.length) return
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach((el) => el.classList.add('reveal-in'))
+      return
+    }
+    revealObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-in')
+          revealObserver?.unobserve(entry.target)
+        }
+      }
+    }, { root: mainRef.value, threshold: 0.1 })
+    targets.forEach((el) => revealObserver!.observe(el))
+  })
+})
+
+onBeforeUnmount(() => {
+  revealObserver?.disconnect()
 })
 
 watch(activeSection, (val) => {
   const base = window.location.pathname + window.location.search
   history.replaceState(null, '', val === 'home' ? base : `${base}#${val}`)
+  if (val === 'home') runStatsCountUp()
 })
 </script>
 
@@ -1405,6 +1518,7 @@ watch(activeSection, (val) => {
           <span class="text-sm font-medium text-muted truncate">Documentation</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <DocsSearch :entries="searchIndex" @navigate="goTo" />
           <ThemeModeControl compact />
           <NuxtLink
             to="/"
@@ -1450,27 +1564,35 @@ watch(activeSection, (val) => {
       <!-- Main scrollable content -->
       <main ref="mainRef" class="docs-main">
         <!-- ── HOME ──────────────────────────────────────────────────────── -->
-        <div v-show="activeSection === 'home'" class="section-wrap section-wrap--home">
+        <div v-show="activeSection === 'home'" ref="homeRef" class="section-wrap section-wrap--home" :class="{ 'reveal-ready': revealReady }">
           <!-- Hero -->
           <div class="home-hero">
+            <div class="home-hero-grid" aria-hidden="true" />
+            <div class="home-hero-aurora" aria-hidden="true" />
             <div class="home-hero-glow" />
+            <div class="home-hero-particles" aria-hidden="true">
+              <span v-for="n in 14" :key="n" :style="particleStyle(n)" />
+            </div>
             <div class="relative z-10">
               <div class="flex items-start gap-4 mb-5">
-                <div class="flex items-center justify-center size-14 rounded-2xl bg-beacon/15 ring-2 ring-beacon/30 shrink-0">
+                <div class="hero-logo flex items-center justify-center size-14 rounded-2xl bg-beacon/15 ring-2 ring-beacon/30 shrink-0">
                   <KNetraHubLogo variant="icon" class="size-9" />
                 </div>
                 <div>
-                  <div class="flex items-center gap-2 mb-1">
+                  <div class="hero-in hero-in-1 flex items-center gap-2 mb-1">
                     <span class="text-xs font-bold uppercase tracking-widest text-beacon">KNetraHub</span>
-                    <span class="rounded-full bg-beacon/10 px-2 py-0.5 text-[10px] font-semibold text-beacon ring-1 ring-beacon/25">v1.0</span>
+                    <span class="flex items-center gap-1.5 rounded-full bg-beacon/10 px-2 py-0.5 text-[10px] font-semibold text-beacon ring-1 ring-beacon/25">
+                      <span class="hero-live-dot" aria-hidden="true" />
+                      v1.0
+                    </span>
                   </div>
-                  <h1 class="font-display text-2xl font-bold text-foam leading-tight">Documentation</h1>
-                  <p class="mt-2 text-sm text-muted max-w-xl leading-relaxed">
+                  <h1 class="hero-in hero-in-2 hero-title font-display text-2xl font-bold leading-tight">Documentation</h1>
+                  <p class="hero-in hero-in-3 mt-2 text-sm text-muted max-w-xl leading-relaxed">
                     The self-hosted Docker Swarm management console. Deploy stacks, monitor services, manage infrastructure, and control access — all from a single web interface.
                   </p>
                 </div>
               </div>
-              <div class="flex flex-wrap gap-2.5 mt-4">
+              <div class="hero-in hero-in-4 flex flex-wrap gap-2.5 mt-4">
                 <component
                   :is="card.external ? 'a' : 'button'"
                   v-for="card in homeNavCards"
@@ -1492,12 +1614,25 @@ watch(activeSection, (val) => {
             </div>
           </div>
 
+          <!-- At-a-glance stats -->
+          <div class="home-stats reveal">
+            <div
+              v-for="(stat, i) in heroStats"
+              :key="stat.label"
+              class="home-stat stagger-item"
+              :style="{ '--stagger-i': i }"
+            >
+              <span class="home-stat-value">{{ statValues[i] }}<span v-if="stat.suffix" class="text-beacon">{{ stat.suffix }}</span></span>
+              <span class="home-stat-label">{{ stat.label }}</span>
+            </div>
+          </div>
+
           <!-- Features -->
-          <div class="mt-10">
+          <div id="home-capabilities" class="mt-10 scroll-mt-20 reveal">
             <p class="section-eyebrow">Core capabilities</p>
             <h2 class="section-title">What KNetraHub does</h2>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-4">
-              <div v-for="f in appFeatures" :key="f.title" class="feature-card">
+              <div v-for="(f, fi) in appFeatures" :key="f.title" class="feature-card stagger-item" :style="{ '--stagger-i': fi }">
                 <span class="flex size-8 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-hull mb-3">
                   <UIcon :name="f.icon" class="size-4 text-beacon" />
                 </span>
@@ -1508,14 +1643,14 @@ watch(activeSection, (val) => {
           </div>
 
           <!-- Modules -->
-          <div class="mt-10">
+          <div id="home-modules" class="mt-10 scroll-mt-20 reveal">
             <p class="section-eyebrow">Apps</p>
             <h2 class="section-title">Modules in this portal</h2>
             <p class="mt-2 text-sm text-muted max-w-2xl">
               KNetraHub bundles several apps behind one portal. Each app has its own User Manual, Configuration, and API session below; portal-wide topics (authentication, users, appearance, alert delivery) live in the <strong class="text-foam font-medium">General</strong> sessions.
             </p>
             <div class="grid gap-4 sm:grid-cols-2 mt-4">
-              <div v-for="m in modules" :key="m.id" class="rounded-xl border border-hull bg-surface p-5 transition hover:border-beacon/30">
+              <div v-for="(m, mi) in modules" :key="m.id" class="module-card stagger-item rounded-xl border border-hull bg-surface p-5 hover:border-beacon/30" :style="{ '--stagger-i': mi }">
                 <div class="flex items-start gap-3">
                   <span class="flex size-10 items-center justify-center rounded-lg bg-beacon/10 ring-1 ring-beacon/25 shrink-0">
                     <UIcon :name="m.icon" class="size-5 text-beacon" />
@@ -1536,7 +1671,7 @@ watch(activeSection, (val) => {
           </div>
 
           <!-- Tech stack + roles -->
-          <div class="mt-10 grid gap-6 lg:grid-cols-2">
+          <div id="home-architecture" class="mt-10 scroll-mt-20 grid gap-6 lg:grid-cols-2 reveal">
             <div>
               <p class="section-eyebrow">Architecture</p>
               <h2 class="section-title">Technology stack</h2>
@@ -1575,35 +1710,36 @@ watch(activeSection, (val) => {
           </div>
 
           <!-- Quick start -->
-          <div class="mt-10">
+          <div id="home-quickstart" class="mt-10 scroll-mt-20 reveal">
             <p class="section-eyebrow">Getting started</p>
             <h2 class="section-title">Quick start</h2>
             <div class="grid gap-3 sm:grid-cols-2 mt-4">
-              <div v-for="step in quickStart" :key="step.n" class="rounded-lg border border-hull bg-surface overflow-hidden">
+              <div v-for="(step, qi) in quickStart" :key="step.n" class="stagger-item rounded-lg border border-hull bg-surface overflow-hidden" :style="{ '--stagger-i': qi }">
                 <div class="flex items-center gap-2.5 px-4 py-2.5 border-b border-hull-soft bg-surface-2">
                   <span class="flex size-5 items-center justify-center rounded-full bg-beacon/15 text-[10px] font-bold text-beacon ring-1 ring-beacon/25">
                     {{ step.n }}
                   </span>
                   <span class="text-xs font-semibold text-foam">{{ step.title }}</span>
                 </div>
-                <pre class="px-4 py-3 text-xs font-mono text-muted whitespace-pre-wrap leading-relaxed">{{ step.code }}</pre>
+                <pre class="quick-code px-4 py-3 text-xs font-mono text-muted whitespace-pre-wrap leading-relaxed">{{ step.code }}</pre>
               </div>
             </div>
           </div>
 
           <!-- Nav cards -->
-          <div class="mt-10">
+          <div id="home-explore" class="mt-10 scroll-mt-20 reveal">
             <p class="section-eyebrow">Documentation sections</p>
             <h2 class="section-title">Explore the docs</h2>
             <div class="grid gap-4 sm:grid-cols-3 mt-4">
               <component
                 :is="card.external ? 'a' : 'button'"
-                v-for="card in homeNavCards"
+                v-for="(card, ci) in homeNavCards"
                 :key="card.id"
                 :href="card.external"
                 :target="card.external ? '_blank' : undefined"
                 :rel="card.external ? 'noopener noreferrer' : undefined"
-                class="doc-nav-card group"
+                class="doc-nav-card stagger-item group"
+                :style="{ '--stagger-i': ci }"
                 @click="card.external ? undefined : goTo(card.id)"
               >
                 <span class="flex size-10 items-center justify-center rounded-lg bg-abyss ring-1 ring-hull mb-3">
@@ -2162,17 +2298,35 @@ watch(activeSection, (val) => {
 
 /* ── Feature cards ────────────────────────────────────────────────────────── */
 .feature-card {
+  position: relative;
+  overflow: hidden;
   padding: 1.125rem;
   border-radius: 0.75rem;
   border: 1px solid var(--color-hull);
   background: var(--color-surface);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.2s, box-shadow 0.2s;
 }
 
 .feature-card:hover {
   border-color: color-mix(in srgb, var(--color-beacon) 30%, transparent);
   background: var(--color-surface-2);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -14px color-mix(in srgb, var(--color-beacon) 35%, transparent);
 }
+
+/* Scanning light sweep across the card's top edge on hover */
+.feature-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -70%;
+  height: 1.5px;
+  width: 60%;
+  background: linear-gradient(90deg, transparent, var(--color-beacon), transparent);
+  transition: left 0.45s ease;
+}
+
+.feature-card:hover::after { left: 110%; }
 
 /* ── Doc nav cards ────────────────────────────────────────────────────────── */
 .doc-nav-card {
@@ -2325,6 +2479,244 @@ watch(activeSection, (val) => {
 .api-method--put    { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #fbbf24; }
 .api-method--delete { background: color-mix(in srgb, #ef4444 16%, transparent); color: #f87171; }
 .api-method--patch  { background: color-mix(in srgb, #06b6d4 16%, transparent); color: #38bdf8; }
+
+/* ── Overview: animated hero layers ───────────────────────────────────────── */
+.home-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-beacon) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-beacon) 7%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse 85% 95% at 28% 18%, black 25%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 95% at 28% 18%, black 25%, transparent 78%);
+  animation: grid-pan 26s linear infinite;
+}
+
+@keyframes grid-pan {
+  to { background-position: 26px 26px; }
+}
+
+.home-hero-aurora {
+  position: absolute;
+  inset: -60% -30%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 30% 40% at 70% 30%, color-mix(in srgb, var(--color-beacon) 14%, transparent), transparent 70%),
+    radial-gradient(ellipse 25% 35% at 30% 70%, color-mix(in srgb, var(--color-running) 9%, transparent), transparent 70%);
+  filter: blur(46px);
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from { transform: translate3d(-4%, -2%, 0) rotate(-2deg) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) rotate(2deg) scale(1.08); }
+}
+
+.home-hero-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-hero-particles span {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--color-beacon);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--color-beacon) 55%, transparent);
+  animation: particle-float ease-in-out infinite;
+}
+
+@keyframes particle-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25%      { transform: translate3d(6px, -14px, 0); }
+  50%      { transform: translate3d(-4px, -26px, 0); }
+  75%      { transform: translate3d(-10px, -10px, 0); }
+}
+
+/* ── Overview: hero content entrance + accents ────────────────────────────── */
+.hero-in { animation: hero-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.hero-in-1 { animation-delay: 0.05s; }
+.hero-in-2 { animation-delay: 0.12s; }
+.hero-in-3 { animation-delay: 0.2s; }
+.hero-in-4 { animation-delay: 0.3s; }
+
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-logo {
+  box-shadow: 0 0 24px -6px color-mix(in srgb, var(--color-beacon) 45%, transparent);
+  animation: logo-float 6s ease-in-out infinite;
+}
+
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+.hero-title { color: var(--color-foam); }
+
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .hero-title {
+    background: linear-gradient(100deg, var(--color-foam) 0%, var(--color-foam) 35%, var(--color-beacon) 50%, var(--color-foam) 65%, var(--color-foam) 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: hero-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both, hero-shimmer 6s ease-in-out 1s infinite;
+  }
+}
+
+@keyframes hero-shimmer {
+  0%, 100% { background-position: 0% 0; }
+  50%      { background-position: 100% 0; }
+}
+
+.hero-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-running);
+  animation: live-pulse 2.2s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-running) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ── Overview: at-a-glance stats ──────────────────────────────────────────── */
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .home-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.home-stat {
+  position: relative;
+  overflow: hidden;
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-hull);
+  background: var(--color-surface);
+}
+
+.home-stat::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-beacon), transparent 60%);
+  opacity: 0.5;
+}
+
+.home-stat-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-foam);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-stat-label {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-faint);
+}
+
+/* ── Overview: module card hover lift ─────────────────────────────────────── */
+.module-card {
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.module-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -16px color-mix(in srgb, var(--color-beacon) 40%, transparent);
+}
+
+/* ── Overview: quick-start terminal caret ─────────────────────────────────── */
+.quick-code::after {
+  content: '▊';
+  margin-left: 2px;
+  color: var(--color-beacon);
+  animation: caret-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  50% { opacity: 0; }
+}
+
+/* ── Overview: reveal-on-scroll ───────────────────────────────────────────── */
+/* Hidden states only apply once JS has set reveal-ready, so content stays
+   visible when scripts never run (static export, reader mode, etc.). */
+.reveal-ready .reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal-ready .reveal.reveal-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-ready .stagger-item {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition-delay: calc(60ms * var(--stagger-i, 0));
+}
+
+.reveal-ready .reveal-in .stagger-item,
+.reveal-ready .reveal-in.stagger-item {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Overview: reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-grid,
+  .home-hero-aurora,
+  .home-hero-particles span,
+  .hero-logo,
+  .hero-live-dot,
+  .hero-in,
+  .hero-title,
+  .quick-code::after {
+    animation: none !important;
+  }
+
+  .reveal-ready .reveal,
+  .reveal-ready .stagger-item {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .feature-card,
+  .feature-card:hover,
+  .module-card:hover {
+    transform: none;
+  }
+
+  .feature-card::after { display: none; }
+}
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 </style>
