@@ -1357,6 +1357,7 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
 const activeSection = ref('home')
 const mainRef = ref<HTMLElement | null>(null)
 const mobileOpen = ref(false)
+const docsSearch = ref('')
 
 function goTo(section: string, anchor?: string) {
   activeSection.value = section
@@ -1428,6 +1429,8 @@ watch(activeSection, (val) => {
           <DocsSidebar
             :nav-config="navConfig"
             :active-section="activeSection"
+            :search="docsSearch"
+            @update:search="docsSearch = $event"
             @navigate="goTo"
           />
         </template>
@@ -1438,6 +1441,8 @@ watch(activeSection, (val) => {
         <DocsSidebar
           :nav-config="navConfig"
           :active-section="activeSection"
+          :search="docsSearch"
+          @update:search="docsSearch = $event"
           @navigate="goTo"
         />
       </aside>
