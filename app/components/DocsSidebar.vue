@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   navConfig: Array<{
     id: string
     label: string
@@ -8,18 +8,67 @@ const props = defineProps<{
     subs: Array<{ id?: string; label: string; icon?: string; heading?: boolean }>
   }>
   activeSection: string
-}>()
+  search?: string
+}>(), {
+  search: ''
+})
 
 const emit = defineEmits<{
   navigate: [section: string, anchor?: string]
+  'update:search': [value: string]
 }>()
+
+const searchModel = computed({
+  get: () => props.search,
+  set: (value: string) => emit('update:search', value || '')
+})
+
+const filteredNavConfig = computed(() => {
+  const query = props.search.trim().toLowerCase()
+  if (!query) return props.navConfig
+
+  const matches = (label?: string) => (label || '').toLowerCase().includes(query)
+  const filterSubs = (subs: Array<{ id?: string; label: string; icon?: string; heading?: boolean }>) => {
+    const result: typeof subs = []
+    let pendingHeading: typeof subs[number] | null = null
+    for (const sub of subs) {
+      if (sub.heading) {
+        pendingHeading = sub
+        continue
+      }
+      if (!matches(sub.label)) continue
+      if (pendingHeading) {
+        result.push(pendingHeading)
+        pendingHeading = null
+      }
+      result.push(sub)
+    }
+    return result
+  }
+
+  return props.navConfig
+    .map((item) => {
+      if (matches(item.label)) return item
+      const subs = filterSubs(item.subs)
+      if (!subs.length) return null
+      return { ...item, subs }
+    })
+    .filter((item): item is (typeof props.navConfig)[number] => !!item)
+})
 </script>
 
 <template>
   <div class="flex flex-col h-full py-3 px-2">
+    <UInput
+      v-model="searchModel"
+      icon="i-lucide-search"
+      placeholder="Search docs..."
+      class="w-full"
+    />
+
     <!-- Navigation -->
     <nav class="flex-1 space-y-px mt-2 overflow-y-auto">
-      <template v-for="item in navConfig" :key="item.id">
+      <template v-for="item in filteredNavConfig" :key="item.id">
         <!-- External items (e.g. Swagger UI) open in a new tab; internal items
              switch the active section in place. -->
         <component
