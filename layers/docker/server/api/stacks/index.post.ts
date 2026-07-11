@@ -1,8 +1,15 @@
 import { requireRole } from '~~/server/utils/auth'
 import { deployStack } from '~~/layers/docker/server/utils/stack'
 import { gitlabEnabled, commitStackFile } from '~~/layers/docker/server/utils/gitlab'
+import { recordStackVersion } from '~~/layers/docker/server/utils/stackHistory'
 import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
+
+/** Where this deploy's compose gets versioned. Local DB history is the
+ *  default; GitLab layers on top when configured. 'both' keeps the two
+ *  trails linked (the local row carries the commit sha). */
+export type StackTrackOption = 'local' | 'gitlab' | 'both' | 'none'
+
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
   const body = await readBody<{
@@ -10,6 +17,7 @@ export default defineEventHandler(async (event) => {
     compose: string
     message?: string
     commit?: boolean
+    track?: StackTrackOption
     secretsContent?: Record<string, string>
     configsContent?: Record<string, string>
   }>(event)
@@ -20,16 +28,38 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid stack name' })
   }
 
-  // Commit to GitLab first so the desired state is recorded even if deploy fails.
+  const glOn = await gitlabEnabled()
+  // Default: both trails when GitLab is configured, local otherwise. The
+  // legacy `commit: false` flag maps to "skip GitLab" for older callers.
+  let track: StackTrackOption = body.track || (glOn ? 'both' : 'local')
+  if (body.commit === false && !body.track) track = 'local'
+  const wantGitlab = glOn && (track === 'both' || track === 'gitlab')
+  // A GitLab-only choice without GitLab configured still records locally -
+  // silently versioning nowhere would be worse than either option.
+  const wantLocal = track === 'both' || track === 'local' || (track === 'gitlab' && !glOn)
+
+  const message = body.message || `Deploy ${body.name} via KNetraHub`
+
+  // Version first (GitLab commit, then the local row carrying its sha) so
+  // the desired state is recorded even if the deploy itself fails.
   let commit: any = null
-  if (body.commit !== false && (await gitlabEnabled())) {
+  if (wantGitlab) {
     commit = await commitStackFile({
       stackName: body.name,
       content: body.compose,
-      message: body.message || `Deploy ${body.name} via KNetraHub`,
+      message,
       authorName: user.displayName,
       authorEmail: `${user.username}@knetrahub`
     })
+  }
+  if (wantLocal) {
+    await recordStackVersion({
+      stackName: body.name,
+      compose: body.compose,
+      message,
+      author: user.displayName || user.username,
+      gitlabSha: commit?.id || null
+    }).catch((err: any) => console.error('[stacks] failed to record local history', err))
   }
 
   const result = await deployStack(body.name, body.compose, {
@@ -40,5 +70,18 @@ export default defineEventHandler(async (event) => {
     throw err
   })
   await audit({ actor: user.username, action: 'stack.deploy', target: body.name, detail: `${result.created.length} created, ${result.updated.length} updated` })
+  await fireAlert({
+    ruleType: 'stack_deployed',
+    target: body.name,
+    severity: 'info',
+    vars: {
+      target: body.name,
+      action: result.created.length && !result.updated.length ? 'deployed' : 'updated',
+      actor: user.username,
+      created: String(result.created.length),
+      updated: String(result.updated.length),
+      time: new Date().toISOString()
+    }
+  })
   return { ...result, commit }
 })

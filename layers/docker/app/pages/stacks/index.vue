@@ -28,7 +28,8 @@ const stackSortOptions = [
   { label: 'Git tracked', value: 'inGit' }
 ]
 const stackFilterOptions = [
-  { key: 'inGit', label: 'Git tracked', getValue: (s: any) => s.inGit ? 'Yes' : 'No' }
+  { key: 'inGit', label: 'Git tracked', getValue: (s: any) => s.inGit ? 'Yes' : 'No' },
+  { key: 'tracked', label: 'History tracked', getValue: (s: any) => (s.inGit || s.inLocal) ? 'Yes' : 'No' }
 ]
 const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets } = useListControls('stacks', data, {
   sortOptions: stackSortOptions,
@@ -44,11 +45,18 @@ function stackStatus(s: any) {
 const open = ref(false)
 function openDeploy() { open.value = true }
 
-async function deleteFromGitlab(s: any) {
-  if (!confirm(`Permanently delete "${s.name}" from GitLab?\n\nThis removes its compose file and commit history from version control. It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will disappear from this list.`)) return
+const historyOpen = ref(false)
+const historyName = ref<string | null>(null)
+function openHistory(s: any) {
+  historyName.value = s.name
+  historyOpen.value = true
+}
+
+async function deleteFromTracking(s: any) {
+  if (!confirm(`Permanently delete "${s.name}" from version control?\n\nThis removes its compose file and deploy history (local database${s.inGit ? ' and GitLab' : ''}). It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will disappear from this list.`)) return
   try {
     await $fetch(`/api/stacks/${s.name}?git=true`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${s.name} from GitLab`, color: 'primary' })
+    toast.add({ title: `Deleted ${s.name} from version control`, color: 'primary' })
     refresh()
   } catch (e: any) {
     toast.add({ title: 'Delete failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
@@ -62,7 +70,7 @@ function onDeployed() {
 
 <template>
   <div>
-    <PageHeader title="Stacks" subtitle="Compose-defined application stacks, versioned in GitLab" icon="i-lucide-layers">
+    <PageHeader title="Stacks" subtitle="Compose-defined application stacks with tracked deploy history" icon="i-lucide-layers">
       <template #actions>
         <ListControls
           inline
@@ -85,7 +93,7 @@ function onDeployed() {
 
     <div v-if="gl && !gl.enabled" class="notice-warning panel p-3 mb-4 flex items-center gap-2 text-sm">
       <UIcon name="i-lucide-info" class="size-4 shrink-0" />
-      GitLab is not configured — stacks deploy fine, but compose files won't be versioned. Set <span class="font-mono text-xs">NUXT_GITLAB_*</span> to enable history.
+      Deploy history is tracked in the local database. Connect GitLab (Dock &rarr; Settings &rarr; Integrations) to also version compose files in Git — histories sync both ways once connected.
     </div>
 
     <DataState :status="status" :error="error" :empty="filtered.length === 0" :refreshing="refreshing" empty-label="No stacks deployed yet." empty-icon="i-lucide-layers">
@@ -126,9 +134,12 @@ function onDeployed() {
                     <span v-if="s.inGit" class="inline-flex shrink-0 items-center gap-1 rounded bg-beacon/10 px-1.5 py-0.5 text-[10px] font-medium text-beacon ring-1 ring-beacon/20" title="Tracked in GitLab">
                       <UIcon name="i-lucide-git-branch" class="size-3" /> git
                     </span>
+                    <span v-if="s.inLocal" class="inline-flex shrink-0 items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-faint ring-1 ring-hull" title="Deploy history tracked in the local database">
+                      <UIcon name="i-lucide-history" class="size-3" /> history
+                    </span>
                   </div>
                   <p v-if="s.services" class="mt-0.5 truncate font-mono text-xs text-faint">{{ s.runningTasks ?? 0 }}/{{ s.desiredTasks ?? 0 }} tasks running</p>
-                  <p v-else-if="s.inGit" class="mt-0.5 truncate text-xs text-faint">Defined in GitLab, not currently deployed</p>
+                  <p v-else-if="s.inGit || s.inLocal" class="mt-0.5 truncate text-xs text-faint">Defined in {{ s.inGit ? 'GitLab' : 'local history' }}, not currently deployed</p>
                 </td>
                 <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.services }}</td>
                 <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.networks }}</td>
@@ -138,15 +149,26 @@ function onDeployed() {
                 <td class="px-4 py-3 text-xs text-faint">{{ s.updatedAt ? relative(s.updatedAt) : '—' }}</td>
                 <td class="px-4 py-3"><StatusBadge :state="stackStatus(s)" /></td>
                 <td class="px-4 py-3 text-right">
-                  <UButton
-                    v-if="can('operator') && stackStatus(s) === 'defined' && s.inGit"
-                    icon="i-lucide-trash-2"
-                    color="error"
-                    variant="ghost"
-                    size="sm"
-                    title="Delete from GitLab"
-                    @click.stop="deleteFromGitlab(s)"
-                  />
+                  <div class="flex items-center justify-end gap-0.5">
+                    <UButton
+                      v-if="s.inGit || s.inLocal"
+                      icon="i-lucide-history"
+                      color="neutral"
+                      variant="ghost"
+                      size="sm"
+                      title="View deploy history"
+                      @click.stop="openHistory(s)"
+                    />
+                    <UButton
+                      v-if="can('operator') && stackStatus(s) === 'defined' && (s.inGit || s.inLocal)"
+                      icon="i-lucide-trash-2"
+                      color="error"
+                      variant="ghost"
+                      size="sm"
+                      title="Delete from version control"
+                      @click.stop="deleteFromTracking(s)"
+                    />
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -156,5 +178,6 @@ function onDeployed() {
     </DataState>
 
     <StacksDeployStackModal v-model:open="open" @deployed="onDeployed" />
+    <StacksStackHistoryModal v-model:open="historyOpen" :name="historyName" @changed="refresh()" />
   </div>
 </template>

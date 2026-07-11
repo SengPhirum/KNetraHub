@@ -4,13 +4,27 @@ import { getAppSetting, setAppSetting } from './store'
  * Alert rule configuration - what fires, with what thresholds, and the
  * message template used. Defaults live in code (DEFAULT_RULES); admins can
  * override per-type from the UI. Unlike authSettings.ts (one app_settings
- * row per provider), all 5 rule types share ONE row ('alerts.rules') since
+ * row per provider), all rule types share ONE row ('alerts.rules') since
  * there's a small, fixed set of them - reset of a single type is therefore
  * a read-modify-write (delete just that type's key) rather than a
  * deleteAppSetting call, since that would wipe the other rules' overrides.
  */
 
-export type AlertRuleType = 'deploy_failed' | 'usage_threshold' | 'node_down' | 'replicas_degraded' | 'disk_usage_threshold'
+export type AlertRuleType =
+  | 'deploy_failed'
+  | 'usage_threshold'
+  | 'node_down'
+  | 'replicas_degraded'
+  | 'disk_usage_threshold'
+  | 'stack_deployed'
+  | 'stack_removed'
+  | 'service_down'
+  | 'service_recovered'
+  | 'service_redeployed'
+  | 'service_scaled'
+  | 'service_image_updated'
+  | 'task_failed'
+  | 'task_shutdown'
 
 export interface AlertRuleDef {
   type: AlertRuleType
@@ -57,6 +71,71 @@ export const DEFAULT_RULES: Record<AlertRuleType, AlertRuleDef> = {
     config: { percent: 85 },
     template: 'Node {{target}} disk usage at {{percent}}% (threshold {{threshold}}%)',
     placeholders: ['target', 'percent', 'threshold', 'time']
+  },
+  stack_deployed: {
+    type: 'stack_deployed',
+    enabled: true,
+    config: {},
+    template: 'Stack {{target}} {{action}} by {{actor}}: {{created}} created, {{updated}} updated',
+    placeholders: ['target', 'action', 'actor', 'created', 'updated', 'time']
+  },
+  stack_removed: {
+    type: 'stack_removed',
+    enabled: true,
+    config: {},
+    template: 'Stack {{target}} removed by {{actor}} ({{services}} services stopped)',
+    placeholders: ['target', 'actor', 'services', 'time']
+  },
+  service_down: {
+    type: 'service_down',
+    enabled: true,
+    config: { gracePeriodMinutes: 2 },
+    template: 'Service {{target}} is DOWN: 0/{{desired}} replicas running for over {{gracePeriodMinutes}} minutes',
+    placeholders: ['target', 'desired', 'gracePeriodMinutes', 'time']
+  },
+  service_recovered: {
+    type: 'service_recovered',
+    enabled: true,
+    config: {},
+    template: 'Service {{target}} recovered: {{running}}/{{desired}} replicas running',
+    placeholders: ['target', 'running', 'desired', 'time']
+  },
+  service_redeployed: {
+    type: 'service_redeployed',
+    enabled: true,
+    config: {},
+    template: 'Service {{target}} redeployed ({{trigger}}) by {{actor}}',
+    placeholders: ['target', 'trigger', 'actor', 'time']
+  },
+  service_scaled: {
+    type: 'service_scaled',
+    enabled: true,
+    config: {},
+    template: 'Service {{target}} scaled from {{from}} to {{to}} replicas by {{actor}}',
+    placeholders: ['target', 'from', 'to', 'actor', 'time']
+  },
+  service_image_updated: {
+    type: 'service_image_updated',
+    enabled: true,
+    config: {},
+    template: 'Service {{target}} image updated to {{image}} by {{actor}} (was {{previousImage}})',
+    placeholders: ['target', 'image', 'previousImage', 'actor', 'time']
+  },
+  task_failed: {
+    type: 'task_failed',
+    enabled: true,
+    config: {},
+    template: 'Task of service {{target}} {{state}} on node {{node}}: {{error}}',
+    placeholders: ['target', 'taskId', 'state', 'node', 'error', 'time']
+  },
+  // Every redeploy/scale-down legitimately shuts tasks down, so this one is
+  // noisy by design - off by default, opt-in from Dock -> Settings -> Alerts.
+  task_shutdown: {
+    type: 'task_shutdown',
+    enabled: false,
+    config: {},
+    template: 'Task of service {{target}} shut down on node {{node}}{{message}}',
+    placeholders: ['target', 'taskId', 'node', 'message', 'time']
   }
 }
 
@@ -106,7 +185,7 @@ export async function saveAlertRule(type: AlertRuleType, patch: RuleOverride, ac
   return { ...DEFAULT_RULES[type], ...nextOverride }
 }
 
-/** Reverts one rule type to its default - leaves the other 4 rules' overrides untouched. */
+/** Reverts one rule type to its default - leaves the other rules' overrides untouched. */
 export async function resetAlertRule(type: AlertRuleType, actor: string): Promise<AlertRuleDef> {
   const overrides = await readRuleOverrides()
   delete overrides[type]

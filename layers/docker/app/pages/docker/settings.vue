@@ -234,12 +234,21 @@ async function deleteChannel(ch: AlertChannel) {
 }
 
 // ─── Alerts: rules ─────────────────────────────────────────────────────────────
-const RULE_LABELS: Record<string, { label: string; icon: string }> = {
+const RULE_LABELS: Record<string, { label: string; icon: string; hint?: string }> = {
   deploy_failed: { label: 'Deploy failed', icon: 'i-lucide-circle-x' },
   usage_threshold: { label: 'Usage threshold', icon: 'i-lucide-gauge' },
   node_down: { label: 'Node down', icon: 'i-lucide-server-off' },
   replicas_degraded: { label: 'Replicas degraded', icon: 'i-lucide-trending-down' },
-  disk_usage_threshold: { label: 'Disk usage threshold', icon: 'i-lucide-hard-drive' }
+  disk_usage_threshold: { label: 'Disk usage threshold', icon: 'i-lucide-hard-drive' },
+  stack_deployed: { label: 'Stack deployed / updated', icon: 'i-lucide-rocket', hint: 'Fires on every successful stack deploy, update or rollback.' },
+  stack_removed: { label: 'Stack removed', icon: 'i-lucide-layers', hint: 'Fires when a stack and its services are removed.' },
+  service_down: { label: 'Service down', icon: 'i-lucide-power-off', hint: '0 running replicas while some are desired.' },
+  service_recovered: { label: 'Service recovered', icon: 'i-lucide-heart-pulse', hint: 'Fires when a previously-down service is running again.' },
+  service_redeployed: { label: 'Service redeployed', icon: 'i-lucide-refresh-cw', hint: 'Manual redeploys and automatic image-digest redeploys.' },
+  service_scaled: { label: 'Service scaled', icon: 'i-lucide-scaling', hint: 'Fires when a service replica count is changed.' },
+  service_image_updated: { label: 'Service image updated', icon: 'i-lucide-container', hint: 'Fires when a service is switched to a different image.' },
+  task_failed: { label: 'Task failed', icon: 'i-lucide-octagon-alert', hint: 'A task entered the failed or rejected state.' },
+  task_shutdown: { label: 'Task shutdown', icon: 'i-lucide-square-power', hint: 'A task was shut down. Noisy: every redeploy/scale-down shuts tasks down.' }
 }
 
 const ruleEdits = reactive<Record<string, { enabled: boolean; config: Record<string, any>; template: string; templateOpen: boolean }>>({})
@@ -395,6 +404,7 @@ async function resetRule(type: string) {
                 </div>
 
                 <template v-if="ruleEdits[rule.type]">
+                  <p v-if="RULE_LABELS[rule.type]?.hint" class="mb-3 -mt-1 text-xs text-(--color-muted)">{{ RULE_LABELS[rule.type]!.hint }}</p>
                   <div v-if="rule.type === 'usage_threshold'" class="mb-3 grid grid-cols-2 gap-3">
                     <UFormField label="CPU threshold (%)">
                       <UInput v-model.number="ruleEdits[rule.type]!.config.cpuPercent" type="number" min="1" max="100" class="w-full" />
@@ -403,7 +413,7 @@ async function resetRule(type: string) {
                       <UInput v-model.number="ruleEdits[rule.type]!.config.memoryPercent" type="number" min="1" max="100" class="w-full" />
                     </UFormField>
                   </div>
-                  <div v-else-if="rule.type === 'replicas_degraded'" class="mb-3">
+                  <div v-else-if="rule.type === 'replicas_degraded' || rule.type === 'service_down'" class="mb-3">
                     <UFormField label="Grace period (minutes)">
                       <UInput v-model.number="ruleEdits[rule.type]!.config.gracePeriodMinutes" type="number" min="0" class="w-40" />
                     </UFormField>

@@ -2,7 +2,8 @@ import { stringify as stringifyYaml } from 'yaml'
 import { requireUser } from '~~/server/utils/auth'
 import { stackServices, STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
-import { gitlabEnabled, getStackFile, stackHistory } from '~~/layers/docker/server/utils/gitlab'
+import { gitlabEnabled, getStackFile } from '~~/layers/docker/server/utils/gitlab'
+import { combinedStackHistory, getLatestStackVersion } from '~~/layers/docker/server/utils/stackHistory'
 import { getDb } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -90,13 +91,21 @@ export async function computeStackDetail(name: string) {
   const configById = new Map(configs.map((c: any) => [c.ID, c]))
   const secretById = new Map(secrets.map((s: any) => [s.ID, s]))
 
+  // Desired-state source order: GitLab (when configured) -> newest local
+  // history version -> reconstruction from the live engine state.
   let compose: string | null = null
-  let composeSource: 'gitlab' | 'engine' | null = null
-  let history: any[] = []
+  let composeSource: 'gitlab' | 'local' | 'engine' | null = null
+  const history = await combinedStackHistory(name).catch(() => [])
   if (await gitlabEnabled()) {
     compose = await getStackFile(name).catch(() => null)
-    history = await stackHistory(name).catch(() => [])
     if (compose) composeSource = 'gitlab'
+  }
+  if (!compose) {
+    const latest = await getLatestStackVersion(name).catch(() => null)
+    if (latest) {
+      compose = latest.compose
+      composeSource = 'local'
+    }
   }
   if (!compose && services.length) {
     compose = composeFromEngineState(name, services, networkById, volumeByName, configById, secretById)

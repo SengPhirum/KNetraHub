@@ -1,5 +1,7 @@
 import { getDb, migrate } from '~~/server/utils/db'
 import { migrateMetrics, recordServiceStatusEvent } from '~~/server/utils/metrics'
+import { fireAlert } from '~~/server/utils/alertNotify'
+import { getAlertRule } from '~~/server/utils/alertRules'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { scheduleListPush, scheduleDetailPush } from '~~/layers/docker/server/utils/resourcePush'
@@ -83,6 +85,18 @@ async function pollTaskStates() {
     const stackByService = new Map((services as any[]).map((s) => [s.ID, s.Spec?.Labels?.[STACK_LABEL]]))
     const changedServiceIds = new Set<string>()
 
+    // Node hostnames are only needed when a task-lifecycle alert actually
+    // fires - resolved lazily, at most once per poll tick.
+    let nodeNamesPromise: Promise<Map<string, string>> | null = null
+    const nodeNames = () => {
+      if (!nodeNamesPromise) {
+        nodeNamesPromise = docker.listNodes()
+          .then((nodes: any[]) => new Map(nodes.map((n) => [n.ID, n.Description?.Hostname || n.ID])))
+          .catch(() => new Map<string, string>())
+      }
+      return nodeNamesPromise
+    }
+
     for (const task of tasks as any[]) {
       const state = task.Status?.State
       if (!state) continue
@@ -100,6 +114,7 @@ async function pollTaskStates() {
           message: task.Status?.Err || task.Status?.Message
         })
         if (task.ServiceID) changedServiceIds.add(task.ServiceID)
+        await maybeFireTaskAlert(task, state, serviceNames, nodeNames)
       }
     }
     firstPoll = false
@@ -125,5 +140,43 @@ async function pollTaskStates() {
     // Docker/swarm not reachable yet - try again next tick
   } finally {
     setTimeout(pollTaskStates, POLL_INTERVAL_MS)
+  }
+}
+
+// task_failed / task_shutdown alert rules ride on the same task-state diff
+// this poller already computes. fireAlert itself no-ops when the rule is
+// disabled and never throws, so a notification problem can't stall the poll.
+async function maybeFireTaskAlert(
+  task: any,
+  state: string,
+  serviceNames: Map<string, string | undefined>,
+  nodeNames: () => Promise<Map<string, string>>
+) {
+  const failed = state === 'failed' || state === 'rejected'
+  const shutdown = state === 'shutdown'
+  if (!failed && !shutdown) return
+  // Skip the node-name lookup entirely when the matching rule is off.
+  const rule = await getAlertRule(failed ? 'task_failed' : 'task_shutdown').catch(() => null)
+  if (!rule?.enabled) return
+
+  const target = serviceNames.get(task.ServiceID) || task.ServiceID || 'unknown'
+  const node = (await nodeNames()).get(task.NodeID) || task.NodeID || 'unknown'
+  const message = task.Status?.Err || task.Status?.Message || ''
+  const time = new Date().toISOString()
+
+  if (failed) {
+    await fireAlert({
+      ruleType: 'task_failed',
+      target,
+      severity: 'warning',
+      vars: { target, taskId: task.ID || '', state, node, error: message || 'no error message', time }
+    })
+  } else {
+    await fireAlert({
+      ruleType: 'task_shutdown',
+      target,
+      severity: 'info',
+      vars: { target, taskId: task.ID || '', node, message: message ? `: ${message}` : '', time }
+    })
   }
 }

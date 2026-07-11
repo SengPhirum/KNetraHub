@@ -16,6 +16,22 @@ const yamlText = ref('')
 const deploying = ref(false)
 const validating = ref(false)
 
+// ── Version tracking: local DB history is the always-available default;
+// GitLab becomes selectable once the integration is configured. ────────────
+type TrackOption = 'local' | 'gitlab' | 'both' | 'none'
+const track = ref<TrackOption>('local')
+const trackItems = computed(() => [
+  ...(gl.value?.enabled
+    ? [
+        { label: 'Local + GitLab (recommended)', value: 'both' },
+        { label: 'Local history only', value: 'local' },
+        { label: 'GitLab only', value: 'gitlab' }
+      ]
+    : [{ label: 'Local history (default)', value: 'local' }]),
+  { label: 'No versioning', value: 'none' }
+])
+const messageLabel = computed(() => track.value === 'gitlab' || track.value === 'both' ? 'Commit message' : 'Version message')
+
 interface ValidationResult { valid: boolean; errors: string[]; warnings: string[]; needsSecrets: { key: string; fullName: string }[]; needsConfigs: { key: string; fullName: string }[] }
 const lastValidation = ref<ValidationResult | null>(null)
 
@@ -43,6 +59,7 @@ watch(open, (isOpen) => {
   mode.value = 'form'
   stackName.value = ''
   commitMessage.value = ''
+  track.value = gl.value?.enabled ? 'both' : 'local'
   model.value = emptyModel()
   syncing = true
   yamlText.value = modelToYaml(model.value)
@@ -184,6 +201,7 @@ async function doDeploy() {
         name: stackName.value,
         compose: yamlText.value,
         message: commitMessage.value,
+        track: track.value,
         secretsContent: { ...secretsForm },
         configsContent: { ...configsForm }
       }
@@ -211,11 +229,14 @@ async function doDeploy() {
   >
     <template #body>
       <div class="flex h-full min-h-0 flex-col gap-4">
-        <div class="grid shrink-0 gap-3 sm:grid-cols-2">
+        <div class="grid shrink-0 gap-3 sm:grid-cols-3">
           <UFormField label="Stack name" required>
             <UInput v-model="stackName" placeholder="my-app" icon="i-lucide-layers" class="w-full font-mono" :disabled="deploying" />
           </UFormField>
-          <UFormField v-if="gl?.enabled" label="Commit message">
+          <UFormField label="History tracking" :hint="gl?.enabled ? undefined : 'Configure GitLab in Dock settings to also version in Git'">
+            <USelect v-model="track" :items="trackItems" value-key="value" label-key="label" icon="i-lucide-history" class="w-full" :disabled="deploying" />
+          </UFormField>
+          <UFormField v-if="track !== 'none'" :label="messageLabel">
             <UInput v-model="commitMessage" placeholder="Deploy my-app via KNetraHub" class="w-full" :disabled="deploying" />
           </UFormField>
         </div>
@@ -270,7 +291,10 @@ async function doDeploy() {
                       <UInput v-model="activeService.key" class="w-full font-mono" :disabled="deploying" />
                     </UFormField>
                     <UFormField label="Image" required>
-                      <UInput v-model="activeService.image" placeholder="nginx:alpine" class="w-full font-mono" :disabled="deploying" />
+                      <div class="flex w-full items-center gap-1.5">
+                        <UInput v-model="activeService.image" placeholder="nginx:alpine" class="w-full font-mono" :disabled="deploying" />
+                        <StacksImageSearchPopover :disabled="deploying" @select="activeService.image = $event" />
+                      </div>
                     </UFormField>
                     <UFormField label="Command"><UInput v-model="activeService.command" class="w-full font-mono" :disabled="deploying" /></UFormField>
                     <UFormField label="Args"><UInput v-model="activeService.args" class="w-full font-mono" :disabled="deploying" /></UFormField>

@@ -5,12 +5,15 @@ import { fireAlert } from '~~/server/utils/alertNotify'
 import { getAlertRule } from '~~/server/utils/alertRules'
 import { latestServiceUsageRows, nodeCapacityById, type UsageRow } from '~~/layers/docker/server/api/services/usage.get'
 
-// Polls for the 4 threshold/health-style alert conditions (deploy_failed is
-// fired inline from mutation endpoints instead - see fireAlert call sites in
-// stacks/services API routes). Mirrors autoredeploy.ts's self-rescheduling
-// setTimeout pattern, and serviceEvents.ts's transition-tracking + first-poll
-// -skip pattern so a continuously-true condition only fires once per rising
-// edge, not every tick.
+// Polls for the threshold/health-style alert conditions (usage, node down,
+// replicas degraded, service down/recovered, disk usage). The event-style
+// rules (deploy_failed, stack_deployed/removed, service_redeployed/scaled/
+// image_updated) are fired inline from their mutation endpoints, and the
+// task-lifecycle rules (task_failed/task_shutdown) from serviceEvents.ts's
+// task poller. Mirrors autoredeploy.ts's self-rescheduling setTimeout
+// pattern, and serviceEvents.ts's transition-tracking + first-poll-skip
+// pattern so a continuously-true condition only fires once per rising edge,
+// not every tick.
 export default defineNitroPlugin(() => {
   if (useRuntimeConfig().public.staticDocs) return
   const cfg = useRuntimeConfig().alerts
@@ -26,6 +29,8 @@ const activeAlerts = new Map<string, boolean>()
 // Side state for replicas_degraded's grace period - "when did this service
 // first become under-replicated" - paired with activeAlerts by the same key.
 const degradedSince = new Map<string, number>()
+// Same idea for service_down's grace period, keyed `service_down:${id}`.
+const downSince = new Map<string, number>()
 let firstPoll = true
 
 async function pollAlerts() {
@@ -36,6 +41,7 @@ async function pollAlerts() {
       checkUsageThreshold(seenKeys),
       checkNodeDown(seenKeys),
       checkReplicasDegraded(seenKeys),
+      checkServiceDown(seenKeys),
       checkDiskUsageThreshold(seenKeys)
     ])
     // Evict keys for services/nodes that no longer exist so the maps don't
@@ -45,6 +51,9 @@ async function pollAlerts() {
     }
     for (const key of degradedSince.keys()) {
       if (!seenKeys.has(key)) degradedSince.delete(key)
+    }
+    for (const key of downSince.keys()) {
+      if (!seenKeys.has(key)) downSince.delete(key)
     }
     firstPoll = false
   } catch {
@@ -193,6 +202,65 @@ async function checkReplicasDegraded(seenKeys: Set<string>) {
         target,
         severity: 'warning',
         vars: { target, running: String(running), desired: String(desired), gracePeriodMinutes: String(rule.config.gracePeriodMinutes), time: new Date().toISOString() }
+      })
+    }
+  }
+}
+
+// Full outage (0 running while >0 desired) - stricter sibling of
+// replicas_degraded, with its own grace period so stop-first update orders
+// and brief restarts don't page anyone. Also fires service_recovered on the
+// falling edge, but only for services that actually alerted as down.
+async function checkServiceDown(seenKeys: Set<string>) {
+  const [rule, recoveredRule] = await Promise.all([getAlertRule('service_down'), getAlertRule('service_recovered')])
+  if (!rule.enabled && !recoveredRule.enabled) return
+
+  const docker = useDocker()
+  const [services, tasks] = await Promise.all([docker.listServices().catch(() => []), docker.listTasks().catch(() => [])])
+  const runningByService = new Map<string, number>()
+  const desiredGlobalByService = new Map<string, number>()
+  for (const t of tasks as any[]) {
+    if (!t.ServiceID) continue
+    if (t.Status?.State === 'running') runningByService.set(t.ServiceID, (runningByService.get(t.ServiceID) || 0) + 1)
+    if (t.DesiredState === 'running') desiredGlobalByService.set(t.ServiceID, (desiredGlobalByService.get(t.ServiceID) || 0) + 1)
+  }
+
+  for (const svc of services as any[]) {
+    // Global services have no Replicas in the spec - "desired" is however
+    // many tasks the orchestrator currently wants running.
+    const desired = svc.Spec?.Mode?.Global
+      ? desiredGlobalByService.get(svc.ID) || 0
+      : svc.Spec?.Mode?.Replicated?.Replicas
+    if (!desired) continue
+    const running = runningByService.get(svc.ID) || 0
+    const key = `service_down:${svc.ID}`
+    const isDown = running === 0
+    const target = svc.Spec?.Name || svc.ID
+    const wasAlerted = activeAlerts.get(key) || false
+
+    if (!isDown) {
+      downSince.delete(key)
+      transitioned(key, false, seenKeys) // clears state + marks seen, never fires
+      if (wasAlerted && !firstPoll && recoveredRule.enabled) {
+        await fireAlert({
+          ruleType: 'service_recovered',
+          target,
+          severity: 'info',
+          vars: { target, running: String(running), desired: String(desired), time: new Date().toISOString() }
+        })
+      }
+      continue
+    }
+
+    const since = downSince.get(key) ?? Date.now()
+    downSince.set(key, since)
+    const pastGrace = Date.now() - since >= rule.config.gracePeriodMinutes * 60_000
+    if (transitioned(key, pastGrace, seenKeys) && rule.enabled) {
+      await fireAlert({
+        ruleType: 'service_down',
+        target,
+        severity: 'critical',
+        vars: { target, desired: String(desired), gracePeriodMinutes: String(rule.config.gracePeriodMinutes), time: new Date().toISOString() }
       })
     }
   }

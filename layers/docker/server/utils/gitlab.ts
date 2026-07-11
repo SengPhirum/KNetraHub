@@ -79,14 +79,25 @@ export async function getStackFile(stackName: string): Promise<string> {
   return res.encoding === 'base64' ? Buffer.from(res.content, 'base64').toString('utf8') : res.content
 }
 
-/** Commit (create or update) a stack compose file. Returns the commit. */
+export interface GitlabCommit {
+  id: string
+  short_id: string
+  title: string
+  author_name: string
+  committed_date: string
+}
+
+/** Commit (create or update) a stack compose file. Uses the commits API
+ *  rather than the files API because only the former returns the resulting
+ *  commit (id/sha) - which the local stack_history store records to keep the
+ *  two version trails linked (see stackHistory.ts). */
 export async function commitStackFile(opts: {
   stackName: string
   content: string
   message: string
   authorName?: string
   authorEmail?: string
-}) {
+}): Promise<GitlabCommit> {
   const c = await cfg()
   const path = await filePath(opts.stackName)
 
@@ -99,14 +110,14 @@ export async function commitStackFile(opts: {
     else throw err
   }
 
-  return await api(`/repository/files/${encodeURIComponent(path)}`, {
-    method: exists ? 'PUT' : 'POST',
+  return await api<GitlabCommit>(`/repository/commits`, {
+    method: 'POST',
     body: {
       branch: c.branch,
-      content: opts.content,
       commit_message: opts.message,
       author_name: opts.authorName,
-      author_email: opts.authorEmail || 'knetrahub@local'
+      author_email: opts.authorEmail || 'knetrahub@local',
+      actions: [{ action: exists ? 'update' : 'create', file_path: path, content: opts.content }]
     }
   })
 }

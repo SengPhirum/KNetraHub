@@ -44,10 +44,10 @@ const {
   defaultSortBy: 'name'
 })
 const historySortOptions = [
-  { label: 'Date', value: 'created_at' },
-  { label: 'Author', value: 'author_name' },
-  { label: 'Title', value: 'title' },
-  { label: 'Commit', value: 'id' }
+  { label: 'Date', value: 'date' },
+  { label: 'Author', value: 'author' },
+  { label: 'Message', value: 'message' },
+  { label: 'Version', value: 'id' }
 ]
 const {
   items: filteredHistory,
@@ -57,9 +57,30 @@ const {
   sortOptions: historySortOptionsState
 } = useListControls(`stack:${name}:history`, historyRows, {
   sortOptions: historySortOptions,
-  defaultSortBy: 'created_at',
+  defaultSortBy: 'date',
   defaultSortDir: 'desc'
 })
+
+const { data: gl } = useFetch<{ enabled: boolean }>('/api/gitlab/status', { lazy: true })
+const syncing = ref(false)
+async function syncHistory() {
+  syncing.value = true
+  try {
+    const res: any = await $fetch(`/api/stacks/${name}/history/sync`, { method: 'POST' })
+    toast.add({ title: 'History synced with GitLab', description: `${res.pulled} pulled, ${res.pushed} pushed`, color: 'primary', icon: 'i-lucide-refresh-cw' })
+    await refresh()
+  } catch (e: any) {
+    toast.add({ title: 'Sync failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
+  } finally {
+    syncing.value = false
+  }
+}
+
+function historySourceBadge(source: string) {
+  if (source === 'synced') return { label: 'local + git', color: 'primary' as const, icon: 'i-lucide-refresh-cw' }
+  if (source === 'gitlab') return { label: 'git only', color: 'warning' as const, icon: 'i-lucide-git-branch' }
+  return { label: 'local', color: 'neutral' as const, icon: 'i-lucide-database' }
+}
 
 const draft = ref('')
 const editMessage = ref('')
@@ -71,10 +92,11 @@ watch(data, (d) => {
 
 const composeSourceLabel = computed(() => {
   if (data.value?.composeSource === 'gitlab') return 'GitLab desired state'
+  if (data.value?.composeSource === 'local') return 'Local history desired state'
   if (data.value?.composeSource === 'engine') return 'Current engine state'
   return 'No compose source'
 })
-const composeSourceTone = computed(() => data.value?.composeSource === 'gitlab' ? 'primary' : data.value?.composeSource === 'engine' ? 'warning' : 'neutral')
+const composeSourceTone = computed(() => data.value?.composeSource === 'gitlab' || data.value?.composeSource === 'local' ? 'primary' : data.value?.composeSource === 'engine' ? 'warning' : 'neutral')
 // Prefer the hard limit as the usage ring's ceiling - reservation is only a
 // scheduling guarantee (what Swarm sets aside), not a cap the container is
 // held to, so comparing live usage against it made containers show as "at
@@ -194,13 +216,13 @@ const diffOpen = ref(false)
 const diffSha = ref('')
 const diffContent = ref('')
 const diffLoading = ref(false)
-async function viewCommit(sha: string) {
-  diffSha.value = sha
+async function viewCommit(id: string) {
+  diffSha.value = id
   diffOpen.value = true
   diffLoading.value = true
   diffContent.value = ''
   try {
-    const res: any = await $fetch(`/api/gitlab/${name}/commit`, { query: { sha } })
+    const res: any = await $fetch(`/api/stacks/${name}/history/${id}`)
     diffContent.value = res.compose || res.content || ''
   } catch (e: any) {
     diffContent.value = `# Failed to load: ${e?.data?.statusMessage || e?.message}`
@@ -208,11 +230,11 @@ async function viewCommit(sha: string) {
     diffLoading.value = false
   }
 }
-async function rollback(sha: string) {
-  if (!confirm(`Roll back "${name}" to commit ${sha.slice(0, 8)}? This commits and redeploys the older version.`)) return
+async function rollback(id: string) {
+  if (!confirm(`Roll back "${name}" to version ${id.slice(0, 8)}? This records and redeploys the older version.`)) return
   try {
-    await $fetch(`/api/stacks/${name}/rollback`, { method: 'POST', body: { sha } })
-    toast.add({ title: `Rolled back ${name}`, description: `to ${sha.slice(0, 8)}`, color: 'primary', icon: 'i-lucide-history' })
+    await $fetch(`/api/stacks/${name}/rollback`, { method: 'POST', body: { version: id } })
+    toast.add({ title: `Rolled back ${name}`, description: `to ${id.slice(0, 8)}`, color: 'primary', icon: 'i-lucide-history' })
     diffOpen.value = false
     refresh()
   } catch (e: any) {
@@ -229,11 +251,11 @@ async function remove() {
     toast.add({ title: 'Remove failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
   }
 }
-async function deleteFromGitlab() {
-  if (!confirm(`Permanently delete "${name}" from GitLab?\n\nThis removes its compose file and commit history from version control. It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will no longer appear in KNetraHub.`)) return
+async function deleteFromTracking() {
+  if (!confirm(`Permanently delete "${name}" from version control?\n\nThis removes its compose file and deploy history (local database and GitLab). It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will no longer appear in KNetraHub.`)) return
   try {
     await $fetch(`/api/stacks/${name}?git=true`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${name} from GitLab`, color: 'primary' })
+    toast.add({ title: `Deleted ${name} from version control`, color: 'primary' })
     navigateTo('/stacks')
   } catch (e: any) {
     toast.add({ title: 'Delete failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
@@ -252,7 +274,7 @@ async function deleteFromGitlab() {
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/stacks" label="Back" />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
         <UButton v-if="can('operator')" icon="i-lucide-pencil" color="primary" label="Edit" :disabled="!data?.compose" @click="openEdit" />
-        <UButton v-if="can('operator') && summary.status === 'defined'" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete from GitLab" @click="deleteFromGitlab" />
+        <UButton v-if="can('operator') && summary.status === 'defined'" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete from version control" @click="deleteFromTracking" />
         <UButton v-else-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Remove" @click="remove" />
       </template>
     </PageHeader>
@@ -521,13 +543,21 @@ async function deleteFromGitlab() {
       </div>
 
       <div v-else-if="tab === 'history'" class="space-y-0">
-        <ListControls
-          v-model:search="historySearch"
-          v-model:sort-by="historySortBy"
-          v-model:sort-dir="historySortDir"
-          :sort-options="historySortOptionsState"
-          placeholder="Search history"
-        />
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <ListControls
+            v-model:search="historySearch"
+            v-model:sort-by="historySortBy"
+            v-model:sort-dir="historySortDir"
+            :sort-options="historySortOptionsState"
+            placeholder="Search history"
+          />
+          <UButton
+            v-if="gl?.enabled && can('operator')"
+            size="xs" color="neutral" variant="soft" icon="i-lucide-refresh-cw" label="Sync with GitLab"
+            :loading="syncing" class="mb-2"
+            @click="syncHistory"
+          />
+        </div>
         <div v-for="(c, i) in filteredHistory" :key="c.id" class="relative flex gap-3 pl-1">
           <div class="flex flex-col items-center">
             <span class="mt-1.5 size-2.5 rounded-full bg-beacon ring-4 ring-beacon/10" />
@@ -536,11 +566,11 @@ async function deleteFromGitlab() {
           <div class="panel-flush flex-1 mb-3 p-3.5">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-foam">{{ c.title || c.message || '-' }}</p>
-                <p class="mt-0.5 text-xs text-faint">
-                  {{ c.author_name || '-' }} - {{ relative(c.created_at || c.committed_date) }} -
-                  <span class="font-mono">{{ short(c.id, 8) }}</span>
-                  <span v-if="i === 0" class="status-current ml-1 rounded px-1.5 py-0.5 text-[10px]">current</span>
+                <p class="truncate text-sm font-medium text-foam">{{ c.message || '-' }}</p>
+                <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-faint">
+                  <span>{{ c.author || '-' }} - {{ relative(c.date) }} - <span class="font-mono">{{ short(c.id, 8) }}</span></span>
+                  <UBadge :color="historySourceBadge(c.source).color" variant="subtle" size="sm" :icon="historySourceBadge(c.source).icon" :label="historySourceBadge(c.source).label" />
+                  <span v-if="i === 0" class="status-current rounded px-1.5 py-0.5 text-[10px]">current</span>
                 </p>
               </div>
               <div class="flex gap-1.5 shrink-0">

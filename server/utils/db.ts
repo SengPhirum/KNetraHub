@@ -174,6 +174,26 @@ async function runMigrations(): Promise<void> {
       updated_at TEXT NOT NULL
     );
 
+    -- Stack deploy history: every deploy/update/rollback records the compose
+    -- content here (the local, always-on equivalent of the GitLab commit
+    -- trail). gitlab_sha links a version to its GitLab commit once synced -
+    -- rows without one exist only locally. created_at keeps ISO8601 TEXT like
+    -- every other app-data table.
+    CREATE TABLE IF NOT EXISTS stack_history (
+      id TEXT PRIMARY KEY,
+      stack_name TEXT NOT NULL,
+      compose TEXT NOT NULL,
+      message TEXT NOT NULL,
+      author TEXT,
+      source TEXT NOT NULL DEFAULT 'local',
+      gitlab_sha TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_stack_history_stack ON stack_history (stack_name, created_at DESC);
+    -- One local row per GitLab commit, so a re-sync can never duplicate pulls.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_stack_history_sha ON stack_history (stack_name, gitlab_sha) WHERE gitlab_sha IS NOT NULL;
+
     CREATE TABLE IF NOT EXISTS alert_events (
       id TEXT PRIMARY KEY,
       rule_type TEXT NOT NULL,

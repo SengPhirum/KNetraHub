@@ -21,5 +21,11 @@ export default defineEventHandler(async (event) => {
   })
   const { info } = result
   await audit({ actor: user.username, action: 'service.redeploy', target: info.Spec.Name })
+  await fireAlert({
+    ruleType: 'service_redeployed',
+    target: info.Spec.Name,
+    severity: 'info',
+    vars: { target: info.Spec.Name, trigger: 'manual', actor: user.username, time: new Date().toISOString() }
+  })
   return { ok: true }
 })
