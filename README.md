@@ -46,6 +46,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 - [🚀 Quick Start (Development)](#-quick-start-development)
   - [Local Swarm Development](#local-swarm-development)
 - [🚢 Production Build & Deploy](#-production-build--deploy)
+- [🧪 Smart QA & Screenshot Refresh](#-smart-qa--screenshot-refresh)
 - [⚙️ Configuration](#️-configuration)
   - [Appearance](#appearance)
   - [LDAP & OIDC](#ldap--oidc-sso)
@@ -87,12 +88,50 @@ search palette (<kbd>Ctrl</kbd> <kbd>K</kbd>) over every guide, env var, API end
 | ![Stacks](public/screenshots/stacks.png) | ![Services](public/screenshots/services.png) |
 | **Service detail** — replicas, tasks, logs & usage history | **Nodes** — fleet availability and resources |
 | ![Service detail](public/screenshots/service-detail.png) | ![Nodes](public/screenshots/nodes.png) |
+| **Monitoring** — unified network and server health | **IP Management** — subnets, addresses, VLANs and VRFs |
+| ![Monitoring](public/screenshots/monitoring-dashboard.png) | ![IP Management](public/screenshots/ipmgt-dashboard.png) |
 | **Documentation** — animated overview, guides, config & API reference | **Smart Q&A** — curated answers, deep-linked to the right guide |
 | ![Documentation](public/screenshots/docs-overview.png) | ![Smart Q&A](public/screenshots/docs-qa.png) |
 
 **Smart search** — press <kbd>Ctrl</kbd> <kbd>K</kbd> anywhere in the docs, ask a question, and jump straight to the answer:
 
 ![Smart docs search — natural-language question answered from the Q&A index](public/screenshots/docs-search.png)
+
+---
+
+## 🧪 Smart QA & Screenshot Refresh
+
+Run the read-only core QA workflow against any running KNetraHub instance. It checks the
+database health probe, setup/auth APIs, public documentation, browser console, and—when
+credentials are supplied—the authenticated launcher and Docker resource pages. Successful
+captures replace the canonical files in `public/screenshots/`, so this README and the in-app
+Product tour update together.
+
+```bash
+# Public core checks and documentation screenshots
+./service.sh qa --base-url http://localhost:3000
+
+# Include authenticated core pages (prefer env vars for secrets)
+QA_USERNAME=admin QA_PASSWORD='secret' ./service.sh qa --scope core
+
+# Initialize small fixtures and a temporary qa-admin, test every module, then clean up
+./service.sh qa --init-data --scope full
+
+# First run, or after clearing Playwright's browser cache
+./service.sh qa --install-browser
+```
+
+Useful parameters include `--scope smoke|core|full`, `--browser chromium|firefox|webkit`,
+`--screenshots-dir`, `--report-dir`, `--headed`, and `--no-screenshots`. The machine-readable
+result is written to `.qa-results/smart-qa-report.json`. QA never performs mutations such as
+deploy, scale, delete, or configuration updates.
+
+`--init-data` is the explicit exception to the read-only rule: it transactionally creates only
+deterministic `qa-*` fixtures covering portal audit data, Docker stack history, Monitoring
+(network and server), and IP Management. Fixtures are removed after QA by default. Add
+`--keep-data` for manual inspection, then remove them with `./service.sh qa --clean-data`.
+The temporary account is `qa-admin` with local-only password `qa-local-only`; override that
+password with `QA_FIXTURE_PASSWORD` when needed.
 
 ---
 

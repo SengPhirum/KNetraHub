@@ -1525,9 +1525,13 @@ const tourShots = [
   { file: 'stacks.png', title: 'Stacks', desc: 'GitLab-versioned compose deployments with commit history and one-click rollback.' },
   { file: 'service-detail.png', title: 'Service detail', desc: 'Replicas, tasks, logs, and live usage for a single service.' },
   { file: 'nodes.png', title: 'Nodes', desc: 'Manager and worker fleet with availability, resources, and maintenance state.' },
+  { file: 'monitoring-dashboard.png', title: 'Monitoring', desc: 'Unified network and server health, active problems, sensors, and availability.' },
+  { file: 'ipmgt-dashboard.png', title: 'IP Management', desc: 'Sections, subnets, addresses, VLANs, and VRFs in one searchable inventory.' },
   { file: 'portal-home.png', title: 'App launcher', desc: 'The portal home lists only the apps each signed-in user may reach.' },
   { file: 'login.png', title: 'Sign-in', desc: 'Local accounts, LDAP / Active Directory, and OIDC single sign-on.' }
 ]
+
+const qaCaptureCommand = './service.sh qa --init-data --scope full'
 
 // ── Docs search index (navbar smart search) ───────────────────────────────────
 // Flattens every guide, configuration topic, API group/endpoint, and Overview
@@ -1836,6 +1840,16 @@ watch(activeSection, (val) => {
                   <span>{{ s.desc }}</span>
                 </figcaption>
               </figure>
+            </div>
+            <div class="mt-4 rounded-xl border border-hull bg-surface-2 p-4">
+              <p class="flex items-center gap-2 text-sm font-medium text-foam">
+                <UIcon name="i-lucide-flask-conical" class="size-4 text-beacon" />
+                Refresh this tour with Smart QA
+              </p>
+              <p class="mt-1 text-xs text-muted leading-relaxed">
+                The read-only QA command validates core APIs and pages, then replaces these canonical screenshots so this tour and README stay synchronized.
+              </p>
+              <code class="mt-3 block overflow-x-auto rounded-lg bg-surface px-3 py-2 text-xs text-beacon">{{ qaCaptureCommand }}</code>
             </div>
           </div>
 

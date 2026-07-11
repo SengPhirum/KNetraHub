@@ -1,4 +1,5 @@
 node_modules
+.qa-results
 .nuxt
 .output
 .data

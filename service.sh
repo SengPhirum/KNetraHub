@@ -66,6 +66,7 @@ Commands:
   release [options]   Bump version, generate release notes, build + push Docker images
   dev [options]       Run the local disposable Docker Swarm dev environment
   deploy              Build the app image locally and deploy the swarm stack
+  qa [options]        Run smart read-only core QA and refresh documentation screenshots
   help                Show this help
 
 Run './service.sh <command> --help' for command-specific options.
@@ -75,6 +76,7 @@ Examples:
   ./service.sh dev --full
   ./service.sh dev --reset
   ./service.sh deploy
+  ./service.sh qa --base-url http://localhost:3000
 EOF
 }
 
@@ -502,6 +504,162 @@ cmd_deploy() {
   "${DOCKER_BIN}" stack deploy -c docker/docker-compose.yml knetrahub
 }
 
+# ── smart QA: API/browser checks + documentation screenshots ────────────────────
+
+usage_qa() {
+  cat <<'EOF'
+Usage: ./service.sh qa [options]
+
+Runs non-destructive API and browser QA against a running KNetraHub instance.
+Public health, login, and documentation checks always run. Supplying credentials
+also verifies the authenticated app launcher, Docker dashboard, stacks, services,
+and nodes. Screenshots use the canonical public/screenshots filenames consumed by
+both README.md and the in-app Product tour.
+
+Options:
+  --base-url URL          Instance to test (default: http://localhost:3000)
+  --scope LEVEL           smoke, core, or full (default: core)
+  --username USER         Login user; may also use QA_USERNAME
+  --password PASSWORD     Login password; prefer QA_PASSWORD to avoid shell history
+  --browser NAME          chromium, firefox, or webkit (default: chromium)
+  --screenshots-dir DIR   Screenshot destination (default: public/screenshots)
+  --report-dir DIR        JSON report destination (default: .qa-results)
+  --headed                Show the browser while QA runs
+  --no-screenshots        Run checks without replacing documentation screenshots
+  --install-browser       Install the selected Playwright browser before QA
+  --init-data             Initialize isolated qa-* fixtures for every module
+  --keep-data             Keep initialized fixtures after QA (default: clean up)
+  --clean-data            Remove QA fixtures and exit without running checks
+  --db-host HOST          Fixture database host (default: localhost)
+  --db-port PORT          Fixture database port (default: 5432)
+  --db-name NAME          Fixture database name (default: knetrahub)
+  --db-user USER          Fixture database user (default: knetrahub)
+  --db-password PASS      Fixture DB password; prefer QA_DB_PASSWORD
+  -h, --help              Show this help
+
+Environment overrides:
+  QA_BASE_URL, QA_SCOPE, QA_USERNAME, QA_PASSWORD, QA_BROWSER,
+  QA_SCREENSHOTS_DIR, QA_REPORT_DIR, QA_DB_HOST, QA_DB_PORT, QA_DB_NAME,
+  QA_DB_USER, QA_DB_PASSWORD, QA_DB_SSL
+  QA_FIXTURE_PASSWORD (default for temporary qa-admin: qa-local-only)
+
+Examples:
+  ./service.sh qa
+  QA_USERNAME=admin QA_PASSWORD=secret ./service.sh qa --scope core
+  ./service.sh qa --init-data --scope full
+  ./service.sh qa --clean-data
+  ./service.sh qa --base-url https://hub.example.com --scope full --headed
+  ./service.sh qa --install-browser --no-screenshots
+EOF
+}
+
+cmd_qa() {
+  local BASE_URL="${QA_BASE_URL:-http://localhost:3000}"
+  local SCOPE="${QA_SCOPE:-core}"
+  local USERNAME="${QA_USERNAME:-}"
+  local PASSWORD="${QA_PASSWORD:-}"
+  local BROWSER="${QA_BROWSER:-chromium}"
+  local SCREENSHOTS_DIR="${QA_SCREENSHOTS_DIR:-public/screenshots}"
+  local REPORT_DIR="${QA_REPORT_DIR:-.qa-results}"
+  local HEADED="false"
+  local SCREENSHOTS="true"
+  local INSTALL_BROWSER="false"
+  local INIT_DATA="false"
+  local KEEP_DATA="false"
+  local CLEAN_DATA="false"
+  local DB_HOST="${QA_DB_HOST:-localhost}"
+  local DB_PORT="${QA_DB_PORT:-5432}"
+  local DB_NAME="${QA_DB_NAME:-knetrahub}"
+  local DB_USER="${QA_DB_USER:-knetrahub}"
+  local DB_PASSWORD="${QA_DB_PASSWORD:-knetrahub}"
+  local DB_SSL="${QA_DB_SSL:-false}"
+  local FIXTURE_PASSWORD="${QA_FIXTURE_PASSWORD:-qa-local-only}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --base-url) [[ $# -ge 2 ]] || fail "--base-url requires a value"; BASE_URL="$2"; shift ;;
+      --scope) [[ $# -ge 2 ]] || fail "--scope requires smoke, core, or full"; SCOPE="$2"; shift ;;
+      --username) [[ $# -ge 2 ]] || fail "--username requires a value"; USERNAME="$2"; shift ;;
+      --password) [[ $# -ge 2 ]] || fail "--password requires a value"; PASSWORD="$2"; shift ;;
+      --browser) [[ $# -ge 2 ]] || fail "--browser requires a value"; BROWSER="$2"; shift ;;
+      --screenshots-dir) [[ $# -ge 2 ]] || fail "--screenshots-dir requires a value"; SCREENSHOTS_DIR="$2"; shift ;;
+      --report-dir) [[ $# -ge 2 ]] || fail "--report-dir requires a value"; REPORT_DIR="$2"; shift ;;
+      --headed) HEADED="true" ;;
+      --no-screenshots) SCREENSHOTS="false" ;;
+      --install-browser) INSTALL_BROWSER="true" ;;
+      --init-data) INIT_DATA="true" ;;
+      --keep-data) KEEP_DATA="true" ;;
+      --clean-data) CLEAN_DATA="true" ;;
+      --db-host) [[ $# -ge 2 ]] || fail "--db-host requires a value"; DB_HOST="$2"; shift ;;
+      --db-port) [[ $# -ge 2 ]] || fail "--db-port requires a value"; DB_PORT="$2"; shift ;;
+      --db-name) [[ $# -ge 2 ]] || fail "--db-name requires a value"; DB_NAME="$2"; shift ;;
+      --db-user) [[ $# -ge 2 ]] || fail "--db-user requires a value"; DB_USER="$2"; shift ;;
+      --db-password) [[ $# -ge 2 ]] || fail "--db-password requires a value"; DB_PASSWORD="$2"; shift ;;
+      -h|--help) usage_qa; return 0 ;;
+      *) fail "Unknown QA option: $1" ;;
+    esac
+    shift
+  done
+
+  case "${SCOPE}" in smoke|core|full) ;; *) fail "--scope must be smoke, core, or full" ;; esac
+  case "${BROWSER}" in chromium|firefox|webkit) ;; *) fail "--browser must be chromium, firefox, or webkit" ;; esac
+  [[ -z "${PASSWORD}" || -n "${USERNAME}" ]] || fail "A username is required when a password is supplied"
+  [[ "${DB_PORT}" =~ ^[0-9]+$ ]] || fail "--db-port must be numeric"
+  [[ "${CLEAN_DATA}" != "true" || "${INIT_DATA}" != "true" ]] || fail "Use either --init-data or --clean-data, not both"
+
+  local NODE_BIN
+  NODE_BIN="$(resolve_command node)" || fail "Missing required command: node"
+
+  run_qa_fixtures() {
+    QA_DB_HOST="${DB_HOST}" QA_DB_PORT="${DB_PORT}" QA_DB_NAME="${DB_NAME}" \
+      QA_DB_USER="${DB_USER}" QA_DB_PASSWORD="${DB_PASSWORD}" QA_DB_SSL="${DB_SSL}" \
+      QA_FIXTURE_PASSWORD="${FIXTURE_PASSWORD}" \
+      "${NODE_BIN}" scripts/qa-fixtures.mjs "$1"
+  }
+
+  if [[ "${INSTALL_BROWSER}" == "true" ]]; then
+    log "Installing Playwright ${BROWSER} browser"
+    "${NODE_BIN}" node_modules/playwright/cli.js install "${BROWSER}"
+  fi
+
+  if [[ "${CLEAN_DATA}" == "true" ]]; then
+    run_qa_fixtures clean
+    return 0
+  fi
+  if [[ "${INIT_DATA}" == "true" ]]; then
+    log "Initializing isolated QA fixtures for every module"
+    run_qa_fixtures init
+    if [[ -z "${USERNAME}" && -z "${PASSWORD}" ]]; then
+      USERNAME="qa-admin"
+      PASSWORD="${FIXTURE_PASSWORD}"
+      log "Using the temporary qa-admin account for authenticated module checks"
+    fi
+  fi
+
+  local args=(
+    --base-url "${BASE_URL}" --scope "${SCOPE}" --browser "${BROWSER}"
+    --screenshots-dir "${SCREENSHOTS_DIR}" --report-dir "${REPORT_DIR}"
+  )
+  [[ "${HEADED}" == "true" ]] && args+=(--headed)
+  [[ "${SCREENSHOTS}" == "false" ]] && args+=(--no-screenshots)
+  [[ -n "${USERNAME}" ]] && args+=(--username "${USERNAME}")
+  [[ -n "${PASSWORD}" ]] && args+=(--password-stdin)
+
+  # Keep credentials out of the child process command line. Environment values
+  # are read only by the QA runner and are never written to its JSON report.
+  local qa_status=0
+  set +e
+  printf '%s' "${PASSWORD}" | "${NODE_BIN}" scripts/smart-qa.mjs "${args[@]}"
+  qa_status=$?
+  set -e
+
+  if [[ "${INIT_DATA}" == "true" && "${KEEP_DATA}" != "true" ]]; then
+    log "Removing isolated QA fixtures"
+    run_qa_fixtures clean || qa_status=$?
+  fi
+  return "${qa_status}"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 command="${1:-help}"
@@ -516,6 +674,9 @@ case "${command}" in
     ;;
   deploy)
     cmd_deploy "$@"
+    ;;
+  qa)
+    cmd_qa "$@"
     ;;
   -h|--help|help)
     usage
