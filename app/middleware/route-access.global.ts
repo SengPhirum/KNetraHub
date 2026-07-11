@@ -3,6 +3,10 @@
 // the server-side appAccess middleware (Dock) and each subsystem API are the
 // real boundaries.
 export default defineNuxtRouteMiddleware(async (to) => {
+  // Static docs build: no server, no session - auth.global already funnels
+  // everything to /documentation, so never hydrate a session here.
+  if (useRuntimeConfig().public.staticDocs) return
+
   // Public / unauthenticated routes are handled by auth.global.ts.
   if (to.path === '/login' || to.path === '/documentation') return
 

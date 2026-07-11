@@ -269,6 +269,9 @@ export default defineNuxtConfig({
   },
 
   pwa: {
+    // Docs build: pure static site on GitHub Pages - no service worker, no
+    // dynamic manifest route, nothing to install or cache-manage.
+    disable: isDocsBuild,
     registerType: 'autoUpdate',
     workbox: {
       // KNetraHub is server-rendered and auth-gated - every route's HTML comes

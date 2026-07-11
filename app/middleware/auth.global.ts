@@ -1,4 +1,11 @@
 export default defineNuxtRouteMiddleware(async (to) => {
+  // Static docs build (GitHub Pages): there is no server, no auth, and no
+  // setup wizard - the documentation page is the only destination. Never
+  // call any /api/* endpoint in this mode (nothing answers them).
+  if (useRuntimeConfig().public.staticDocs) {
+    return to.path === '/documentation' ? undefined : navigateTo('/documentation')
+  }
+
   const isPublicDocs = to.path === '/documentation'
   if (isPublicDocs) return
 

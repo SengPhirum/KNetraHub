@@ -1,6 +1,6 @@
 # KNetraHub v0.1.3
 
-Date: 2026-07-10 UTC
+Date: 2026-07-11 UTC
 
 ## Docker Images
 
@@ -11,11 +11,15 @@ Date: 2026-07-10 UTC
 
 ## Source
 
-- Commit: `ba4f90c`
+- Commit: `203db0f`
 - Previous tag: none
 
 ## Changes
 
+- feat: add registry image search in deploy stack form, expand alert rules, and local DB stack deploy history with GitLab sync (203db0f)
+- Fix docs redirect base path for GitHub Pages (#4) (b23f796)
+- fix: derive docs base URL from repository name (#3) (18c3499)
+- feat: update portal home background to a digital infrastructure theme; enhance animations and visual elements for improved user experience (2a376ef)
 - feat: refactor API endpoints to compute usage, stacks, and tasks with dedicated functions for improved readability and maintainability feat: implement resource push mechanism for real-time updates across various Docker resources, enhancing user experience feat: add validation for stack deployment, including checks for secrets and configs, to ensure proper deployment processes feat: enhance stack deployment logic to handle user-provided secrets and configs, improving flexibility in stack management feat: update Docker event handling to trigger appropriate resource updates, ensuring UI reflects the latest state of the system fix: update version to 0.1.3 and document changes in release notes for better tracking of modifications and enhancements (ba4f90c)
 - feat: implement per-app access management for local users; update user authority handling and database schema (6eea719)
 - feat: enhance build date display in footer of auth and default layouts; add server-computed dashboard snapshots for real-time updates (da136eb)

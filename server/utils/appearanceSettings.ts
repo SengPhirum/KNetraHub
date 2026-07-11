@@ -27,7 +27,9 @@ const KEY = 'appearance'
 
 export const DEFAULT_PRIMARY_COLOR = '#2496ED'
 
-function envDefaults(): AppearanceSettings {
+/** Config/built-in defaults only - no DB read. Exported so the static docs
+ *  build can serve appearance without ever touching Postgres. */
+export function defaultAppearanceSettings(): AppearanceSettings {
   return {
     appName: useRuntimeConfig().public.appName || 'KNetraHub',
     primaryColor: DEFAULT_PRIMARY_COLOR,
@@ -49,7 +51,7 @@ async function readOverrides(): Promise<Partial<AppearanceSettings> | null> {
 }
 
 export async function getAppearanceSettings(): Promise<AppearanceSettings> {
-  return { ...envDefaults(), ...(await readOverrides()) }
+  return { ...defaultAppearanceSettings(), ...(await readOverrides()) }
 }
 
 export async function hasAppearanceOverride(): Promise<boolean> {
