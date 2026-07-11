@@ -11,11 +11,13 @@ Date: 2026-07-11 UTC
 
 ## Source
 
-- Commit: `dbb3232`
+- Commit: `b306f57`
 - Previous tag: none
 
 ## Changes
 
+- Update (b306f57)
+- Update (278c9d6)
 - Update documentation (dbb3232)
 - Add docs sidebar text search input (#6) (20583dd)
 - docs: expand AI insights documentation for search and recommendations (#5) (6a25896)
