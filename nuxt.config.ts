@@ -8,6 +8,8 @@ const isDocsBuild = process.env.NUXT_STATIC_DOCS === 'true'
 // Set NUXT_DOCS_BASE_URL to your GitHub Pages subdirectory, e.g. /knetrahub/
 // Leave empty (/) for a custom domain or user/org site.
 const docsBaseURL = process.env.NUXT_DOCS_BASE_URL || '/'
+const docsBasePath = docsBaseURL.endsWith('/') ? docsBaseURL.slice(0, -1) : docsBaseURL
+const docsEntryPath = `${docsBasePath || ''}/documentation`
 const ssrEnabled = process.env.NUXT_SSR !== 'false'
 const appVersion = require('./package.json').version
 // Evaluated when nuxt.config.ts loads, i.e. at `nuxt build` time - baked into
@@ -22,7 +24,7 @@ export default defineNuxtConfig({
   // Docs-only static build: redirect root → /documentation, prerender that single route
   ...(isDocsBuild ? {
     routeRules: {
-      '/': { redirect: { to: '/documentation', statusCode: 301 } }
+      '/': { redirect: { to: docsEntryPath, statusCode: 301 } }
     }
   } : {}),
 
