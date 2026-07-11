@@ -1393,7 +1393,6 @@ const searchIndex: DocSearchEntry[] = [
 const activeSection = ref('home')
 const mainRef = ref<HTMLElement | null>(null)
 const mobileOpen = ref(false)
-const docsSearch = ref('')
 
 // ── Overview animations ───────────────────────────────────────────────────────
 const homeRef = ref<HTMLElement | null>(null)
@@ -1447,7 +1446,11 @@ function particleStyle(n: number) {
 
 function goTo(section: string, anchor?: string) {
   activeSection.value = section
-  mobileOpen.value = false
+  // On mobile, a main-menu tap keeps the drawer open so the section's
+  // sub-menu becomes visible; tapping a sub-item (or a section without
+  // sub-items) closes the drawer.
+  const hasSubs = navConfig.find((item) => item.id === section)?.subs.length
+  if (anchor || !hasSubs) mobileOpen.value = false
   nextTick(() => {
     if (anchor) {
       document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1543,8 +1546,6 @@ watch(activeSection, (val) => {
           <DocsSidebar
             :nav-config="navConfig"
             :active-section="activeSection"
-            :search="docsSearch"
-            @update:search="docsSearch = $event"
             @navigate="goTo"
           />
         </template>
@@ -1555,8 +1556,6 @@ watch(activeSection, (val) => {
         <DocsSidebar
           :nav-config="navConfig"
           :active-section="activeSection"
-          :search="docsSearch"
-          @update:search="docsSearch = $event"
           @navigate="goTo"
         />
       </aside>

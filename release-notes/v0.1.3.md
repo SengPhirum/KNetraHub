@@ -11,11 +11,15 @@ Date: 2026-07-11 UTC
 
 ## Source
 
-- Commit: `203db0f`
+- Commit: `dbb3232`
 - Previous tag: none
 
 ## Changes
 
+- Update documentation (dbb3232)
+- Add docs sidebar text search input (#6) (20583dd)
+- docs: expand AI insights documentation for search and recommendations (#5) (6a25896)
+- Fix dosc build (8dd9e04)
 - feat: add registry image search in deploy stack form, expand alert rules, and local DB stack deploy history with GitLab sync (203db0f)
 - Fix docs redirect base path for GitHub Pages (#4) (b23f796)
 - fix: derive docs base URL from repository name (#3) (18c3499)
