@@ -501,17 +501,18 @@ const netGuides = [
     id: 'net-ai',
     title: 'AI Insights',
     icon: 'i-lucide-sparkles',
-    summary: 'Heuristic anomaly detection, similar-sensor correlation, and smart recommendations to reduce noise and gaps.',
+    summary: 'Use text search to find anomalies, similar-sensor matches, and smart recommendations so triage stays focused on purpose.',
     steps: [
       'Review Anomaly Detection for out-of-range sensors and down devices.',
-      'Use Similar Sensors to spot duplicate/redundant monitoring.',
-      'Apply Smart Recommendations (add sensors, enable SNMP, group devices).',
+      'Use text search to quickly find entries by device, metric, or intent.',
+      'Review Similar Sensors list items to compare pairs and their % match score.',
+      'Apply Smart Recommendations list items (add sensors, enable SNMP, group devices).',
       'Re-check after acting — counts update as the data changes.'
     ],
     shot: {
       label: 'AI insights', status: 'Analysing',
       metrics: [['Anomalies', '3'], ['Similar pairs', '2'], ['Recommendations', '6'], ['Model', 'Heuristic']] as [string, string][],
-      rows: [['Firewall-FW1', 'Unreachable', 'Critical'], ['Disk 1 Temp', 'Near limit', 'Warning'], ['HP-Printer', 'Enable SNMP', 'Tip']] as [string, string, string][]
+      rows: [['Core-Switch-01', 'CPU vs Memory · 94% match', 'Similar'], ['Firewall-FW1', 'Unreachable', 'Critical'], ['HP-Printer', 'Enable SNMP', 'Recommendation']] as [string, string, string][]
     }
   }
 ]
