@@ -1,8 +1,28 @@
+<div align="center">
+
+<img src="public/logo/dockhub-symbol-transparent-256.png" alt="KNetraHub logo" width="88" />
+
 # KNetraHub (Khmer Netra Hub)
 
-**A portal for everything in your infrastructure, one hub at a time.** 
+**A portal for everything in your infrastructure, one hub at a time.**
 
-KNetraHub (formerly **KNetraHub**) is the portal shell—handling login, dashboard, sidebar, permissions, and settings—for a growing set of independent operations subsystems. These subsystems are loaded into the shell via **Module Federation**.
+Self-hosted infrastructure operations: Docker Swarm orchestration, network & server monitoring,
+and IP address management — behind one login, one theme, and one audit trail.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Nuxt 4](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](https://nuxt.com)
+[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![PostgreSQL + TimescaleDB](https://img.shields.io/badge/PostgreSQL-TimescaleDB-336791?logo=postgresql&logoColor=white)](https://www.timescale.com)
+[![Docker Swarm](https://img.shields.io/badge/Docker-Swarm-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/engine/swarm/)
+
+[Documentation](https://sengphirum.github.io/KNetraHub/documentation) · [Product Tour](#-product-tour) · [Quick Start](#-quick-start-development) · [Configuration](#️-configuration)
+
+<img src="public/screenshots/dock-dashboard.png" alt="KNetraHub — live Docker Swarm dashboard with per-service usage charts" width="100%" />
+
+</div>
+
+KNetraHub (formerly **DockHub**) is the portal shell—handling login, dashboard, sidebar, permissions, and settings—for a growing set of independent operations subsystems. These subsystems are loaded into the shell via **Module Federation**.
 
 The first and only fully-built subsystem today is **KNetraHub-Docker**: a complete Docker Swarm management console featuring:
 - Live nodes, services, stacks, tasks, networks, volumes, secrets, and configs
@@ -17,6 +37,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 ## 📑 Table of Contents
 
 - [✨ Highlights](#-highlights)
+- [📸 Product Tour](#-product-tour)
 - [🏗️ Architecture](#️-architecture)
   - [Per-app Access](#per-app-access-keycloak-realm-roles)
   - [Module Federation](#why-module-federation-not-iframes)
@@ -50,6 +71,28 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 - **Auth & RBAC:** Local accounts, LDAP, and OIDC SSO. Includes a global role (`viewer`/`operator`/`admin`) for portal administration.
 - **Encrypted Credentials:** LDAP bind password, OIDC client secret, registry auth, GitLab token, and alert channel configs are all encrypted at rest (AES-256-GCM, derived from `NUXT_JWT_SECRET`).
 - **Audit Log:** Every state-changing action is recorded with actor, target, and detail.
+
+---
+
+## 📸 Product Tour
+
+Captured from a live instance (dark theme). The in-app documentation ships the same tour, plus a smart
+search palette (<kbd>Ctrl</kbd> <kbd>K</kbd>) over every guide, env var, API endpoint, and Q&A entry.
+
+| | |
+| :---: | :---: |
+| **Sign-in** — local accounts, LDAP / AD, OIDC SSO | **App launcher** — users see only the apps they may reach |
+| ![Sign-in](public/screenshots/login.png) | ![App launcher](public/screenshots/portal-home.png) |
+| **Stacks** — versioned deploys with tracked history | **Services** — scale, redeploy, rolling image updates |
+| ![Stacks](public/screenshots/stacks.png) | ![Services](public/screenshots/services.png) |
+| **Service detail** — replicas, tasks, logs & usage history | **Nodes** — fleet availability and resources |
+| ![Service detail](public/screenshots/service-detail.png) | ![Nodes](public/screenshots/nodes.png) |
+| **Documentation** — animated overview, guides, config & API reference | **Smart Q&A** — curated answers, deep-linked to the right guide |
+| ![Documentation](public/screenshots/docs-overview.png) | ![Smart Q&A](public/screenshots/docs-qa.png) |
+
+**Smart search** — press <kbd>Ctrl</kbd> <kbd>K</kbd> anywhere in the docs, ask a question, and jump straight to the answer:
+
+![Smart docs search — natural-language question answered from the Q&A index](public/screenshots/docs-search.png)
 
 ---
 

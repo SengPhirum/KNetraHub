@@ -1268,6 +1268,7 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
     icon: 'i-lucide-layout-dashboard',
     subs: [
       { heading: true, label: 'On this page' },
+      { id: 'home-tour',         label: 'Product tour',      icon: 'i-lucide-images' },
       { id: 'home-capabilities', label: 'Core capabilities', icon: 'i-lucide-sparkles' },
       { id: 'home-modules',      label: 'Modules',           icon: 'i-lucide-layout-grid' },
       { id: 'home-architecture', label: 'Stack & roles',     icon: 'i-lucide-cpu' },
@@ -1357,7 +1358,175 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
       { id: 'api-server',  label: 'Server module',         icon: 'i-lucide-server-cog' },
       { id: 'api-ipmgt',   label: 'IP Management module',  icon: 'i-lucide-id-card' }
     ]
+  },
+  {
+    id: 'faq',
+    label: 'Q & A',
+    icon: 'i-lucide-message-circle-question',
+    subs: [
+      { heading: true, label: 'By topic' },
+      { id: 'qa-getting-started', label: 'Getting started',      icon: 'i-lucide-rocket' },
+      { id: 'qa-stacks',          label: 'Stacks & deployments', icon: 'i-lucide-layers' },
+      { id: 'qa-access',          label: 'Access & security',    icon: 'i-lucide-shield-check' },
+      { id: 'qa-monitoring',      label: 'Monitoring & alerts',  icon: 'i-lucide-radar' },
+      { id: 'qa-custom',          label: 'Customization & data', icon: 'i-lucide-paintbrush' }
+    ]
   }
+]
+
+// ── Smart Q&A ─────────────────────────────────────────────────────────────────
+// Curated questions & answers distilled from the manual, configuration, and
+// README content. Every question is indexed by the navbar smart search, so
+// typing a natural question in the palette surfaces the answer directly.
+type QaItem = { id: string; q: string; a: string; link?: { section: string; anchor?: string; label: string } }
+const qaGroups: Array<{ id: string; label: string; icon: string; items: QaItem[] }> = [
+  {
+    id: 'qa-getting-started',
+    label: 'Getting started',
+    icon: 'i-lucide-rocket',
+    items: [
+      {
+        id: 'qa-requirements',
+        q: 'What do I need to run KNetraHub?',
+        a: 'A Docker Swarm manager (local socket or remote TCP/TLS), a PostgreSQL + TimescaleDB instance, and a strong NUXT_JWT_SECRET. Copy .env.example, set the required variables, and start the app — the Quick start on the Overview page walks through it.',
+        link: { section: 'configuration', anchor: 'runtime-config', label: 'Runtime configuration' }
+      },
+      {
+        id: 'qa-default-admin',
+        q: 'What are the default admin credentials?',
+        a: 'On first run — only when no users exist yet — a local admin is seeded from NUXT_ADMIN_USERNAME / NUXT_ADMIN_PASSWORD (admin / admin by default). Change it immediately in production and keep one tested local admin as break-glass access.',
+        link: { section: 'configuration', anchor: 'local-auth', label: 'Local accounts' }
+      },
+      {
+        id: 'qa-swarm-error',
+        q: 'Why do I see “This Docker engine is not part of an active swarm”?',
+        a: 'KNetraHub must connect to a swarm manager node. Run `docker swarm init` on the engine, or point NUXT_DOCKER_HOST / NUXT_DOCKER_PORT at an existing manager. Worker nodes are rejected because swarm writes require manager access.',
+        link: { section: 'configuration', anchor: 'docker-config', label: 'Docker engine setup' }
+      }
+    ]
+  },
+  {
+    id: 'qa-stacks',
+    label: 'Stacks & deployments',
+    icon: 'i-lucide-layers',
+    items: [
+      {
+        id: 'qa-stack-defined',
+        q: 'What does the stack status “Defined” mean?',
+        a: 'The compose file exists in GitLab but none of its services are currently deployed. Deploy it to start the services, or use “Delete from GitLab” to permanently remove the definition and its history.',
+        link: { section: 'manual', anchor: 'stacks', label: 'Stacks guide' }
+      },
+      {
+        id: 'qa-remove-vs-delete',
+        q: 'What is the difference between Remove and Delete from GitLab?',
+        a: 'Remove stops a stack’s running services but keeps its GitLab definition and commit history, so you can redeploy later. Delete from GitLab — available once the stack shows “Defined” — permanently removes the compose file too. It is irreversible and prompts for confirmation.',
+        link: { section: 'manual', anchor: 'stacks', label: 'Stacks guide' }
+      },
+      {
+        id: 'qa-rollback',
+        q: 'How do I roll back a bad deployment?',
+        a: 'With GitLab versioning configured, open the stack’s history, pick any previous compose commit, and roll back in one click. Every commit is attributed to the KNetraHub user who made the change.',
+        link: { section: 'configuration', anchor: 'gitlab-config', label: 'GitLab versioning' }
+      },
+      {
+        id: 'qa-compose-support',
+        q: 'Which compose directives are supported?',
+        a: 'KNetraHub parses your compose YAML, ensures declared overlay networks exist, and creates or updates services with the stack namespace label — covering services, images, ports, networks, volumes, secrets, and configs. Unsupported directives produce a warning instead of failing the deploy.',
+        link: { section: 'manual', anchor: 'stacks', label: 'Stacks guide' }
+      }
+    ]
+  },
+  {
+    id: 'qa-access',
+    label: 'Access & security',
+    icon: 'i-lucide-shield-check',
+    items: [
+      {
+        id: 'qa-roles',
+        q: 'What can viewer, operator, and admin roles do?',
+        a: 'Viewer is read-only across dashboards and inventories. Operator adds workload control: deploy and update stacks, scale and redeploy services, manage secrets and configs. Admin adds user management, authentication providers, registry credentials, and the full audit log. Tiers apply per app.',
+        link: { section: 'home', anchor: 'home-architecture', label: 'Role-based access' }
+      },
+      {
+        id: 'qa-sso',
+        q: 'Can users sign in with our company SSO?',
+        a: 'Yes — LDAP / Active Directory and OIDC (Keycloak, Authentik, and other standards-based providers) are supported, with provider groups mapped to KNetraHub roles. Keep one tested local admin outside the SSO provider for recovery.',
+        link: { section: 'configuration', anchor: 'oidc-config', label: 'OIDC SSO setup' }
+      },
+      {
+        id: 'qa-secrets-security',
+        q: 'How are stored credentials protected?',
+        a: 'LDAP bind passwords, OIDC client secrets, registry credentials, GitLab tokens, and alert channel configs are encrypted at rest with AES-256-GCM, using a key derived from NUXT_JWT_SECRET. Values are shown masked in the UI.',
+        link: { section: 'configuration', anchor: 'runtime-config', label: 'Runtime configuration' }
+      },
+      {
+        id: 'qa-redirect-uri',
+        q: 'OIDC login fails with “invalid redirect_uri” — what now?',
+        a: 'The redirect URI registered at the provider must exactly match KNetraHub’s effective callback URL — scheme, host, path, and port. Behind a reverse proxy, set the redirect URI explicitly to the external HTTPS callback URL.',
+        link: { section: 'configuration', anchor: 'provider-guides', label: 'Provider guides & troubleshooting' }
+      }
+    ]
+  },
+  {
+    id: 'qa-monitoring',
+    label: 'Monitoring & alerts',
+    icon: 'i-lucide-radar',
+    items: [
+      {
+        id: 'qa-monitor-down',
+        q: 'Why does every monitored device show “down”?',
+        a: 'Usually ICMP is blocked from the server running KNetraHub, or the ping binary is missing on bare-metal installs. Devices need ICMP echo allowed and UDP/161 open for SNMP polling.',
+        link: { section: 'configuration', anchor: 'net-monitoring-config', label: 'Polling & SNMP' }
+      },
+      {
+        id: 'qa-bitrates',
+        q: 'Why don’t interface bit-rates appear immediately?',
+        a: 'Bit-rates are computed from SNMP counter deltas, so the first poll only seeds the counters. Rates appear from the second poll interval onward.',
+        link: { section: 'configuration', anchor: 'net-monitoring-config', label: 'Polling & SNMP' }
+      },
+      {
+        id: 'qa-alerts',
+        q: 'How do I get notified when something breaks?',
+        a: 'Add a channel in Settings → Alerts — Telegram, Microsoft Teams, or any generic webhook — then enable the rules you care about: deploy failures, service usage thresholds, node down, degraded replicas, and disk pressure. Use each channel’s Test action before relying on it.',
+        link: { section: 'configuration', anchor: 'alerts-config', label: 'Alerts & notifications' }
+      }
+    ]
+  },
+  {
+    id: 'qa-custom',
+    label: 'Customization & data',
+    icon: 'i-lucide-paintbrush',
+    items: [
+      {
+        id: 'qa-branding',
+        q: 'Can I rebrand the portal for my organization?',
+        a: 'Yes — Settings → Appearance changes the app name, primary color, logos, favicon, and PWA icon at runtime, stored as a database override. No rebuild or restart required, and Reset returns to the built-in branding.',
+        link: { section: 'configuration', anchor: 'appearance-config', label: 'Appearance & branding' }
+      },
+      {
+        id: 'qa-metrics-retention',
+        q: 'How long is metrics history kept?',
+        a: 'Node, container, disk, and network samples are stored in TimescaleDB and kept for NUXT_METRICS_RETENTION_DAYS (30 by default) before being dropped.',
+        link: { section: 'configuration', anchor: 'runtime-config', label: 'Runtime configuration' }
+      }
+    ]
+  }
+]
+
+// ── Product tour (screenshots) ────────────────────────────────────────────────
+// Captured from a live instance; files live in public/screenshots/. Sources are
+// prefixed with the runtime baseURL so they resolve in the app and in the
+// GitHub Pages static docs build alike.
+const appBaseURL = useRuntimeConfig().app.baseURL || '/'
+const shotSrc = (file: string) => `${appBaseURL.endsWith('/') ? appBaseURL : appBaseURL + '/'}screenshots/${file}`
+
+const tourShots = [
+  { file: 'dock-dashboard.png', title: 'Dock dashboard', desc: 'Live swarm overview — cluster capacity, task distribution, and per-service usage charts.' },
+  { file: 'stacks.png', title: 'Stacks', desc: 'GitLab-versioned compose deployments with commit history and one-click rollback.' },
+  { file: 'service-detail.png', title: 'Service detail', desc: 'Replicas, tasks, logs, and live usage for a single service.' },
+  { file: 'nodes.png', title: 'Nodes', desc: 'Manager and worker fleet with availability, resources, and maintenance state.' },
+  { file: 'portal-home.png', title: 'App launcher', desc: 'The portal home lists only the apps each signed-in user may reach.' },
+  { file: 'login.png', title: 'Sign-in', desc: 'Local accounts, LDAP / Active Directory, and OIDC single sign-on.' }
 ]
 
 // ── Docs search index (navbar smart search) ───────────────────────────────────
@@ -1386,7 +1555,10 @@ const searchIndex: DocSearchEntry[] = [
   ...apiGroups.flatMap((g) => [
     { section: 'api', anchor: g.id, title: g.label, description: g.desc, group: 'API Reference', icon: g.icon, keywords: g.endpoints.map((ep) => `${ep[0]} ${ep[1]} ${ep[2]}`).join(' ') },
     ...g.endpoints.map((ep) => ({ section: 'api', anchor: g.id, title: `${ep[0]} ${ep[1]}`, description: ep[2], group: g.label, icon: 'i-lucide-braces' }))
-  ])
+  ]),
+  { section: 'faq', title: 'Q & A', description: 'Curated questions and answers: getting started, stacks, access & security, monitoring, and customization.', group: 'Section', icon: 'i-lucide-message-circle-question', keywords: 'faq questions answers help how why troubleshoot' },
+  { section: 'home', anchor: 'home-tour', title: 'Product tour', description: 'Screenshots of the dashboard, stacks, services, nodes, launcher, and sign-in.', group: 'Overview', icon: 'i-lucide-images', keywords: 'screenshots tour preview ui gallery' },
+  ...qaGroups.flatMap((cat) => cat.items.map((item) => ({ section: 'faq', anchor: item.id, title: item.q, description: item.a, group: `Q&A · ${cat.label}`, icon: cat.icon })))
 ]
 
 // ── Page state ────────────────────────────────────────────────────────────────
@@ -1444,8 +1616,23 @@ function particleStyle(n: number) {
   }
 }
 
+// Smart Q&A accordion state; deep links (sidebar or search palette) auto-open
+// their target question.
+const openQa = ref(new Set<string>())
+const QA_ITEM_IDS = new Set(qaGroups.flatMap((g) => g.items.map((i) => i.id)))
+
+function toggleQa(id: string) {
+  const next = new Set(openQa.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  openQa.value = next
+}
+
 function goTo(section: string, anchor?: string) {
   activeSection.value = section
+  if (anchor && QA_ITEM_IDS.has(anchor)) {
+    openQa.value = new Set([...openQa.value, anchor])
+  }
   // On mobile, a main-menu tap keeps the drawer open so the section's
   // sub-menu becomes visible; tapping a sub-item (or a section without
   // sub-items) closes the drawer.
@@ -1462,7 +1649,7 @@ function goTo(section: string, anchor?: string) {
 
 onMounted(() => {
   const hash = window.location.hash.replace('#', '')
-  if (['home', 'manual', 'configuration', 'api'].includes(hash)) {
+  if (['home', 'manual', 'configuration', 'api', 'faq'].includes(hash)) {
     activeSection.value = hash
   }
 
@@ -1623,6 +1810,32 @@ watch(activeSection, (val) => {
             >
               <span class="home-stat-value">{{ statValues[i] }}<span v-if="stat.suffix" class="text-beacon">{{ stat.suffix }}</span></span>
               <span class="home-stat-label">{{ stat.label }}</span>
+            </div>
+          </div>
+
+          <!-- Product tour -->
+          <div id="home-tour" class="mt-10 scroll-mt-20 reveal">
+            <p class="section-eyebrow">Product tour</p>
+            <h2 class="section-title">See it in action</h2>
+            <div class="grid gap-4 sm:grid-cols-2 mt-4">
+              <figure
+                v-for="(s, si) in tourShots"
+                :key="s.file"
+                class="tour-shot stagger-item"
+                :style="{ '--stagger-i': si }"
+              >
+                <div class="shot-toolbar">
+                  <span /><span /><span />
+                  <p>{{ s.title }}</p>
+                </div>
+                <a :href="shotSrc(s.file)" target="_blank" rel="noopener noreferrer" class="tour-shot-link">
+                  <img :src="shotSrc(s.file)" :alt="`KNetraHub — ${s.title}`" loading="lazy" width="1600" height="900">
+                </a>
+                <figcaption class="tour-caption">
+                  <strong>{{ s.title }}</strong>
+                  <span>{{ s.desc }}</span>
+                </figcaption>
+              </figure>
             </div>
           </div>
 
@@ -2109,6 +2322,58 @@ watch(activeSection, (val) => {
                   <code class="font-mono text-xs text-foam shrink-0">{{ ep[1] }}</code>
                   <span class="ml-auto text-right text-xs text-muted">{{ ep[2] }}</span>
                 </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ── Q & A ────────────────────────────────────────────────────────── -->
+        <div v-show="activeSection === 'faq'" class="section-wrap">
+          <div class="mb-8">
+            <p class="section-eyebrow">Smart Q&amp;A</p>
+            <h1 class="section-h1">Questions &amp; Answers</h1>
+            <p class="mt-2 text-sm text-muted max-w-2xl">
+              Quick answers to the questions teams ask most — from first run to SSO, rollbacks, monitoring, and branding. Every question here is also searchable from the navbar search.
+            </p>
+          </div>
+
+          <div class="space-y-10">
+            <section
+              v-for="cat in qaGroups"
+              :id="cat.id"
+              :key="cat.id"
+              class="space-y-4 scroll-mt-20"
+            >
+              <div class="flex items-center gap-2.5">
+                <span class="flex size-9 items-center justify-center rounded-lg bg-beacon/10 ring-1 ring-beacon/25 shrink-0">
+                  <UIcon :name="cat.icon" class="size-4 text-beacon" />
+                </span>
+                <h2 class="section-title">{{ cat.label }}</h2>
+              </div>
+
+              <div class="space-y-2">
+                <article
+                  v-for="item in cat.items"
+                  :id="item.id"
+                  :key="item.id"
+                  class="qa-item scroll-mt-20"
+                  :class="{ 'qa-item--open': openQa.has(item.id) }"
+                >
+                  <button class="qa-question" :aria-expanded="openQa.has(item.id)" @click="toggleQa(item.id)">
+                    <span class="qa-marker">Q</span>
+                    <span class="flex-1">{{ item.q }}</span>
+                    <UIcon name="i-lucide-chevron-down" class="qa-chevron size-4 shrink-0" />
+                  </button>
+                  <div class="qa-answer">
+                    <div class="qa-answer-inner">
+                      <p>{{ item.a }}</p>
+                      <button v-if="item.link" class="qa-link" @click="goTo(item.link.section, item.link.anchor)">
+                        {{ item.link.label }}
+                        <UIcon name="i-lucide-arrow-right" class="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
               </div>
             </section>
           </div>
@@ -2688,6 +2953,132 @@ watch(activeSection, (val) => {
   transform: translateY(0);
 }
 
+/* ── Overview: product tour ───────────────────────────────────────────────── */
+.tour-shot {
+  overflow: hidden;
+  border: 1px solid var(--color-hull);
+  border-radius: 0.75rem;
+  background: var(--color-abyss);
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.tour-shot:hover {
+  border-color: color-mix(in srgb, var(--color-beacon) 40%, transparent);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -16px color-mix(in srgb, var(--color-beacon) 40%, transparent);
+}
+
+.tour-shot-link { display: block; }
+
+.tour-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid var(--color-hull-soft);
+}
+
+.tour-caption {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.tour-caption strong {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  color: var(--color-foam);
+}
+
+.tour-caption span {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+/* ── Q & A accordions ─────────────────────────────────────────────────────── */
+.qa-item {
+  overflow: hidden;
+  border: 1px solid var(--color-hull);
+  border-radius: 0.65rem;
+  background: var(--color-surface);
+  transition: border-color 0.2s;
+}
+
+.qa-item--open {
+  border-color: color-mix(in srgb, var(--color-beacon) 35%, transparent);
+}
+
+.qa-question {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-foam);
+  transition: background 0.15s;
+}
+
+.qa-question:hover { background: var(--color-surface-2); }
+
+.qa-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--color-beacon) 12%, transparent);
+  color: var(--color-beacon);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.qa-chevron {
+  color: var(--color-faint);
+  transition: transform 0.2s;
+}
+
+.qa-item--open .qa-chevron { transform: rotate(180deg); }
+
+.qa-answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.qa-item--open .qa-answer { grid-template-rows: 1fr; }
+
+.qa-answer-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.qa-answer-inner p {
+  padding: 0 1rem 0.35rem 3.25rem;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.qa-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.9rem 3.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-beacon);
+  cursor: pointer;
+}
+
+.qa-link:hover { text-decoration: underline; }
+
 /* ── Overview: reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .home-hero-grid,
@@ -2710,11 +3101,14 @@ watch(activeSection, (val) => {
 
   .feature-card,
   .feature-card:hover,
-  .module-card:hover {
+  .module-card:hover,
+  .tour-shot:hover {
     transform: none;
   }
 
   .feature-card::after { display: none; }
+
+  .qa-answer { transition: none; }
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
