@@ -73,7 +73,8 @@ jobs:
           # ── CHANGE THIS ───────────────────────────────────────────────────
           # Set to /  if you use a custom domain or username.github.io site
           # Set to /<repo-name>/  for a project site (github.io/<repo-name>)
-          NUXT_DOCS_BASE_URL: '/KNetraHub/'
+          # Use repository.name so case-sensitive GitHub Pages paths always match.
+          NUXT_DOCS_BASE_URL: '/${{ github.event.repository.name }}/'
           # ─────────────────────────────────────────────────────────────────
           # Dummy values so Nuxt runtime-config validation passes at build time
           NUXT_JWT_SECRET: 'docs-build-placeholder'
