@@ -1,5 +1,6 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Generates an on-demand report by snapshotting current monitoring data into a
 // JSON summary (availability / traffic / sensor-health / inventory), the way
@@ -15,6 +16,7 @@ const TYPE_LABEL: Record<ReportType, string> = {
 }
 
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'operator')
   const body = await readBody(event).catch(() => ({}))
   const requested = String(body?.type || '')
   const type: ReportType = (TYPES as readonly string[]).includes(requested) ? (requested as ReportType) : 'availability'

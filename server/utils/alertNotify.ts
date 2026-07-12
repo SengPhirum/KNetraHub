@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { getDb } from './db'
 import { getAlertRule, renderTemplate, type AlertRuleType } from './alertRules'
 import { listAlertChannelsWithConfig, type AlertChannelWithConfig } from './alertChannels'
+import { logSystem } from './moduleLogs'
 
 export interface TelegramConfig { botToken: string; chatId: string }
 export interface TeamsConfig { webhookUrl: string }
@@ -62,15 +63,26 @@ export async function fireAlert(input: FireAlertInput): Promise<void> {
     await getDb().query(
       'INSERT INTO alert_events (id, rule_type, target, severity, message, fired_at) VALUES ($1, $2, $3, $4, $5, $6)',
       [nanoid(), input.ruleType, input.target ?? null, input.severity, message, new Date().toISOString()]
-    ).catch((err: any) => console.error('[alerts] failed to record alert_events row', err))
+    ).catch((err: any) => logSystem('portal', 'error', 'alert.record.failed',
+      `Could not record alert_events row for ${input.ruleType}: ${err?.message || err}`))
 
     const channels = await listAlertChannelsWithConfig().catch(() => [] as AlertChannelWithConfig[])
     const enabled = channels.filter((c) => c.enabled)
     const results = await Promise.allSettled(enabled.map((c) => notifyChannel(c, message)))
-    results.forEach((r, i) => {
-      if (r.status === 'rejected') console.error(`[alerts] channel "${enabled[i]!.name}" notify failed`, r.reason)
-    })
-  } catch (err) {
-    console.error('[alerts] fireAlert failed', err)
+    let delivered = 0
+    for (const [i, r] of results.entries()) {
+      if (r.status === 'rejected') {
+        // A silently-dead notification channel is worse than a noisy one.
+        await logSystem('portal', 'error', 'alert.notify.failed',
+          `Channel "${enabled[i]!.name}" (${enabled[i]!.type}) failed for ${input.ruleType}: ${(r.reason as any)?.message || r.reason}`)
+      } else {
+        delivered++
+      }
+    }
+    await logSystem('portal', 'info', 'alert.fired',
+      `${input.severity.toUpperCase()} ${input.ruleType}${input.target ? ` "${input.target}"` : ''} - notified ${delivered}/${enabled.length} channel(s)`)
+  } catch (err: any) {
+    // logSystem never throws - it falls back to console on DB failure.
+    await logSystem('portal', 'error', 'alert.fire.failed', `fireAlert(${input.ruleType}) failed: ${err?.message || err}`)
   }
 }

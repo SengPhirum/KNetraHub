@@ -2,6 +2,7 @@ import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
 import { parseCsv } from '~~/layers/monitoring/server/utils/importExport'
 import { provisionHostFromTemplates } from '~~/layers/monitoring/server/utils/serverProvision'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 interface ImportBody { format?: 'json' | 'csv'; content?: string }
 
@@ -13,6 +14,7 @@ interface ImportBody { format?: 'json' | 'csv'; content?: string }
 // definitions that wouldn't come from a host row). Linked templates are then
 // provisioned onto the host exactly like the normal Create Host flow.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<ImportBody>(event)
   let rows: Record<string, any>[] = []
   try {

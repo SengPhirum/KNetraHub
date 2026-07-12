@@ -92,10 +92,12 @@ async function openEdit(h: any) {
   Object.assign(form, {
     name: full.name, ip: full.ip, os: full.os || '', description: full.description || '',
     poll_method: full.poll_method || 'icmp',
-    snmp_version: full.snmp_version || 'v2c', snmp_community: full.snmp_community || 'public',
+    // Stored credentials are never returned by the API - blank means "keep
+    // the current value" on save (the server COALESCEs blanks away).
+    snmp_version: full.snmp_version || 'v2c', snmp_community: '',
     snmp_sec_level: full.snmp_sec_level || 'authPriv', snmp_auth_user: full.snmp_auth_user || '',
-    snmp_auth_protocol: full.snmp_auth_protocol || 'sha', snmp_auth_password: full.snmp_auth_password || '',
-    snmp_priv_protocol: full.snmp_priv_protocol || 'aes', snmp_priv_password: full.snmp_priv_password || '',
+    snmp_auth_protocol: full.snmp_auth_protocol || 'sha', snmp_auth_password: '',
+    snmp_priv_protocol: full.snmp_priv_protocol || 'aes', snmp_priv_password: '',
     group_ids: (full.groups || []).map((g: any) => g.id),
     template_ids: (full.templates || []).map((t: any) => t.id)
   })
@@ -242,7 +244,7 @@ function availLabel(h: any) {
 
           <template v-if="form.poll_method === 'snmp'">
             <div class="sm:col-span-2 border-t border-hull pt-3 text-xs font-semibold uppercase text-faint">SNMP</div>
-            <NetSnmpFields :form="form" />
+            <NetSnmpFields :form="form" :keep-blank="!!editing" />
           </template>
         </div>
       </template>

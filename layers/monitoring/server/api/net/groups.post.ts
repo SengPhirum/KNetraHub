@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a device group (logical organization, like a PRTG group/folder).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<{ name?: string; description?: string }>(event)
   const name = (body.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Group name is required' })

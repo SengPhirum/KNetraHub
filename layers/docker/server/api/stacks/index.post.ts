@@ -4,6 +4,8 @@ import { gitlabEnabled, commitStackFile } from '~~/layers/docker/server/utils/gi
 import { recordStackVersion } from '~~/layers/docker/server/utils/stackHistory'
 import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
+import { logSystem } from '~~/server/utils/moduleLogs'
+import { throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 
 /** Where this deploy's compose gets versioned. New deploys automatically
  * prefer GitLab when configured and otherwise use the local DB. `both`
@@ -68,10 +70,14 @@ export default defineEventHandler(async (event) => {
     secretsContent: body.secretsContent,
     configsContent: body.configsContent
   }).catch(async (err: any) => {
-    await fireAlert({ ruleType: 'deploy_failed', target: body.name, severity: 'critical', vars: { target: body.name, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
-    throw err
+    const reason = err?.statusMessage || dockerErrorMessage(err, 'Unknown error')
+    await logSystem('docker', 'error', 'stack.deploy.failed', `${user.username} failed to deploy stack "${body.name}": ${reason}`)
+    await fireAlert({ ruleType: 'deploy_failed', target: body.name, severity: 'critical', vars: { target: body.name, error: reason, actor: user.username, time: new Date().toISOString() } })
+    throwDockerError(err, `Failed to deploy stack "${body.name}"`)
   })
   await audit({ actor: user.username, action: 'stack.deploy', target: body.name, detail: `${result.created.length} created, ${result.updated.length} updated` })
+  await logSystem('docker', 'info', 'stack.deployed',
+    `${user.username} deployed stack "${body.name}" (${result.created.length} created, ${result.updated.length} updated${result.warnings.length ? `, ${result.warnings.length} warning(s)` : ''})`)
   await fireAlert({
     ruleType: 'stack_deployed',
     target: body.name,

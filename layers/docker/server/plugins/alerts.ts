@@ -1,5 +1,6 @@
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { getDb } from '~~/server/utils/db'
+import { logSystem } from '~~/server/utils/moduleLogs'
 import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
 import { fireAlert } from '~~/server/utils/alertNotify'
 import { getAlertRule } from '~~/server/utils/alertRules'
@@ -56,8 +57,9 @@ async function pollAlerts() {
       if (!seenKeys.has(key)) downSince.delete(key)
     }
     firstPoll = false
-  } catch {
+  } catch (err: any) {
     // one fully-failed tick (e.g. docker/db unreachable) - try again next tick
+    await logSystem('docker', 'debug', 'alerts.poll.failed', String(err?.message || err))
   } finally {
     setTimeout(pollAlerts, cfg.intervalMinutes * 60_000)
   }

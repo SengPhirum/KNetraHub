@@ -2,6 +2,7 @@ import { Client } from 'ldapts'
 import type { Role } from './store'
 import { getLdapSettings } from './authSettings'
 import type { LdapSettings } from './authSettings'
+import { logSystem } from './moduleLogs'
 
 export interface LdapResult {
   username: string
@@ -64,6 +65,15 @@ export async function ldapAuthenticate(username: string, password: string): Prom
     const email = str(entry.mail) || undefined
 
     return { username, displayName, email, role }
+  } catch (err: any) {
+    // Credential failures are thrown as H3 401s above; anything without a
+    // statusCode is LDAP infrastructure trouble - worth surfacing, because
+    // the login flow then silently falls back to local users.
+    if (!err?.statusCode) {
+      await logSystem('portal', 'warning', 'ldap.unavailable',
+        `LDAP ${cfg.url} bind/search failed: ${err?.message || err}`)
+    }
+    throw err
   } finally {
     await client.unbind().catch(() => {})
   }

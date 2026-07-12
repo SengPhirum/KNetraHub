@@ -1,4 +1,4 @@
-import { useDocker } from '~~/layers/docker/server/utils/docker'
+import { useDocker, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { withServiceSpec } from '~~/layers/docker/server/utils/serviceMutation'
 import { AUTOREDEPLOY_LABEL, parseImageRef, fetchRemoteDigest, extractPinnedDigest } from '~~/layers/docker/server/utils/registryClient'
 import { audit } from '~~/server/utils/store'
@@ -27,10 +27,13 @@ async function pollAutoredeploy() {
     })
     for (const svc of services as any[]) {
       // One service's registry/auth failure must never block the rest.
-      await checkAndRedeployOne(svc, cfg.timeoutMs).catch(() => {})
+      await checkAndRedeployOne(svc, cfg.timeoutMs).catch((err: any) =>
+        logSystem('docker', 'debug', 'autoredeploy.check.failed',
+          `${svc.Spec?.Name || svc.ID}: ${err?.message || err}`))
     }
-  } catch {
+  } catch (err: any) {
     // Docker/swarm not reachable this tick - try again next tick
+    await logSystem('docker', 'debug', 'autoredeploy.poll.failed', String(err?.message || err))
   } finally {
     setTimeout(pollAutoredeploy, cfg.intervalMinutes * 60_000)
   }
@@ -47,9 +50,16 @@ async function checkAndRedeployOne(svc: any, timeoutMs: number) {
   const remoteDigest = await fetchRemoteDigest(parseImageRef(bareImage), { timeoutMs })
   if (!remoteDigest || remoteDigest === pinnedDigest) return
 
-  const { info } = await withServiceSpec(svc.ID, (spec) => {
-    spec.TaskTemplate.ContainerSpec.Image = bareImage // let Swarm re-resolve + re-pin the new digest
-  })
+  let info: any
+  try {
+    ({ info } = await withServiceSpec(svc.ID, (spec) => {
+      spec.TaskTemplate.ContainerSpec.Image = bareImage // let Swarm re-resolve + re-pin the new digest
+    }))
+  } catch (err: any) {
+    await logSystem('docker', 'error', 'service.autoredeploy.failed',
+      `${svc.Spec?.Name || svc.ID}: new digest found for ${bareImage} but the service update failed: ${dockerErrorMessage(err)}`)
+    return
+  }
   await audit({
     actor: 'system:autoredeploy',
     action: 'service.autoredeploy',

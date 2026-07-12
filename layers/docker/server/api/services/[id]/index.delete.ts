@@ -1,14 +1,25 @@
 import { requireRole } from '~~/server/utils/auth'
 import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
-import { useDocker } from '~~/layers/docker/server/utils/docker'
+import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { audit } from '~~/server/utils/store'
+import { logSystem } from '~~/server/utils/moduleLogs'
+
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
   await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const docker = useDocker()
   const info = await docker.getService(id).inspect().catch(() => null)
-  await docker.getService(id).remove()
-  await audit({ actor: user.username, action: 'service.remove', target: info?.Spec?.Name || id })
+  const name = info?.Spec?.Name || id
+
+  try {
+    await docker.getService(id).remove()
+  } catch (err: any) {
+    await logSystem('docker', 'error', 'service.delete.failed',
+      `${user.username} failed to delete service "${name}": ${dockerErrorMessage(err)}`)
+    throwDockerError(err, `Failed to delete service "${name}"`)
+  }
+  await audit({ actor: user.username, action: 'service.remove', target: name })
+  await logSystem('docker', 'info', 'service.deleted', `${user.username} deleted service "${name}"`)
   return { ok: true }
 })

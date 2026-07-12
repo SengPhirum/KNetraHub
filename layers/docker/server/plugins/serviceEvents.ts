@@ -1,5 +1,6 @@
 import { getDb, migrate } from '~~/server/utils/db'
 import { migrateMetrics, recordServiceStatusEvent } from '~~/server/utils/metrics'
+import { logSystem } from '~~/server/utils/moduleLogs'
 import { fireAlert } from '~~/server/utils/alertNotify'
 import { getAlertRule } from '~~/server/utils/alertRules'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
@@ -28,8 +29,10 @@ export default defineNitroPlugin(async () => {
   try {
     await migrate()
     await migrateMetrics(getDb(), useRuntimeConfig().metrics.retentionDays)
-  } catch (err) {
+  } catch (err: any) {
     console.error('[serviceEvents] could not migrate, will not start listener', err)
+    await logSystem('docker', 'error', 'service-events.start.failed',
+      `Could not migrate the metrics schema - service status history will not be recorded: ${err?.message || err}`)
     return
   }
 
@@ -136,8 +139,9 @@ async function pollTaskStates() {
         for (const stack of stacksToRefresh) scheduleDetailPush('stack', stack, () => computeStackDetail(stack))
       }
     }
-  } catch {
+  } catch (err: any) {
     // Docker/swarm not reachable yet - try again next tick
+    await logSystem('docker', 'debug', 'task.poll.failed', String(err?.message || err))
   } finally {
     setTimeout(pollTaskStates, POLL_INTERVAL_MS)
   }

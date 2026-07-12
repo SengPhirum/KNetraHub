@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import { getDb } from '~~/server/utils/db'
-import { isHostUnderMaintenance, fireServerActions } from '~~/layers/monitoring/server/utils/serverMonitor'
+import { isHostUnderMaintenance, fireServerActions, fireServerRecovery } from '~~/layers/monitoring/server/utils/serverMonitor'
 import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
 
 /**
@@ -87,10 +87,16 @@ export async function handleTrap(pdu: any, sourceIp: string): Promise<void> {
   if (!host) return // can't correlate to a known host - logged only
 
   if (name === 'Link Up') {
-    await db.query(
-      `UPDATE server_problems SET status = 'resolved', r_clock = $1 WHERE host_id = $2 AND name = 'Link Down' AND status = 'problem' AND trigger_id IS NULL`,
+    const resolved = await db.query(
+      `UPDATE server_problems SET status = 'resolved', r_clock = $1
+       WHERE host_id = $2 AND name = 'Link Down' AND status = 'problem' AND trigger_id IS NULL
+       RETURNING suppressed, severity_num`,
       [now, host.id]
     )
+    const notifiable = resolved.rows.find((r: any) => !r.suppressed)
+    if (notifiable) {
+      await fireServerRecovery(host.name, 'Link Down', Number(notifiable.severity_num) || 0, 'Link Up trap received')
+    }
     return
   }
   if (name === 'Link Down' || name === 'Authentication Failure' || name === 'EGP Neighbor Loss') {

@@ -1,4 +1,5 @@
 import Docker from 'dockerode'
+import { isError } from 'h3'
 import { readFileSync, existsSync } from 'node:fs'
 
 let _docker: Docker | null = null
@@ -39,6 +40,33 @@ export function useDocker(): Docker {
   }
 
   return _docker
+}
+
+/** dockerode errors carry the daemon's HTTP status and a noisy prefix like
+ *  "(HTTP code 500) server error - rpc error: ... desc = ...". Extract the
+ *  daemon's actual message so the UI and the system log can show why an
+ *  action failed instead of a generic "internal server error". */
+export function dockerErrorMessage(err: any, fallback = 'Docker request failed'): string {
+  const raw = String(err?.message || err || '')
+  const cleaned = raw
+    .replace(/^\(HTTP code \d+\)[^-]*-\s*/i, '')
+    .replace(/^rpc error:.*?desc\s*=\s*/i, '')
+    .trim()
+  return cleaned || fallback
+}
+
+/** Re-throw a dockerode error as a clean H3 error. The daemon reports
+ *  "still in use" conflicts inconsistently (403/409/500 depending on the
+ *  resource) - normalize those to 409 so clients can treat them uniformly. */
+export function throwDockerError(err: any, fallback: string): never {
+  if (isError(err)) throw err // already a clean H3 error (e.g. from a pre-check)
+  const message = dockerErrorMessage(err, fallback)
+  const status = Number(err?.statusCode)
+  const conflict = /in use|active endpoints|is used by/i.test(message)
+  throw createError({
+    statusCode: conflict ? 409 : status >= 400 && status < 500 ? status : 500,
+    statusMessage: message
+  })
 }
 
 /** Throws a clean 503 when the daemon is unreachable. */

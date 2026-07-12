@@ -1,5 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 import { notifyChannel } from '~~/server/utils/alertNotify'
+import { getAlertChannelWithConfig } from '~~/server/utils/alertChannels'
+import { logSystem } from '~~/server/utils/moduleLogs'
 import type { HostMetrics } from '~~/layers/monitoring/server/utils/netMonitor'
 
 /**
@@ -63,23 +65,52 @@ function safeArr(v: any): string[] {
   try { const a = JSON.parse(v); return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [] } catch { return [] }
 }
 
+// Matches app/utils/serverSeverity.ts labels (0-5 problem severity scale).
+const SEVERITY_LABELS = ['Not classified', 'Information', 'Warning', 'Average', 'High', 'Disaster']
+
+function severityLabel(severity: number): string {
+  return SEVERITY_LABELS[severity] ?? String(severity)
+}
+
 /** Fire every enabled Action whose min_severity is met by a new (non-suppressed)
  *  problem, notifying its linked alert channel. Shared by the trigger-based
  *  poller and the SNMP trap receiver — both open server_problems rows, just
  *  from different sources. */
 export async function fireServerActions(hostName: string, problemName: string, severity: number): Promise<void> {
+  const msg = `🔴 PROBLEM — ${hostName}: ${problemName} (severity: ${severityLabel(severity)})`
+  await notifyServerActionChannels(severity, msg, problemName)
+}
+
+/** Recovery counterpart of fireServerActions: notify the same actions when a
+ *  problem resolves (poller falling edge, trap-based link-up, or manual close),
+ *  so on-call staff see the incident end, not just begin. */
+export async function fireServerRecovery(hostName: string, problemName: string, severity: number, reason?: string): Promise<void> {
+  const msg = `✅ RESOLVED — ${hostName}: ${problemName}${reason ? ` (${reason})` : ''}`
+  await notifyServerActionChannels(severity, msg, problemName)
+}
+
+async function notifyServerActionChannels(severity: number, msg: string, problemName: string): Promise<void> {
   const db = getDb()
-  const { rows: actions } = await db.query(`SELECT * FROM server_actions WHERE status = 'enabled' AND min_severity <= $1 AND channel_id IS NOT NULL`, [severity])
-  if (!actions.length) return
-  const msg = `🔴 PROBLEM (sev ${severity}) — ${hostName}: ${problemName}`
+  const { rows: actions } = await db.query(
+    `SELECT * FROM server_actions WHERE status = 'enabled' AND min_severity <= $1 AND channel_id IS NOT NULL`,
+    [severity]
+  )
+  let delivered = 0
   for (const a of actions) {
     try {
-      const ch = await db.query('SELECT type, config FROM alert_channels WHERE id = $1 AND enabled = true', [a.channel_id])
-      if (!ch.rows.length) continue
-      const config = typeof ch.rows[0].config === 'string' ? JSON.parse(ch.rows[0].config || '{}') : (ch.rows[0].config || {})
-      await notifyChannel({ type: ch.rows[0].type, config }, msg)
+      // Channel configs are stored encrypted - resolve through the helper that
+      // decrypts them (reading alert_channels.config raw yields ciphertext).
+      const channel = await getAlertChannelWithConfig(a.channel_id)
+      if (!channel?.enabled) continue
+      await notifyChannel(channel, msg)
+      delivered++
     } catch (e: any) {
-      console.error('[serverMonitor] action notify failed:', e?.message || e)
+      await logSystem('monitoring', 'error', 'server.action.notify.failed',
+        `Action "${a.name}" failed to notify for "${problemName}": ${e?.message || e}`)
     }
+  }
+  if (delivered) {
+    await logSystem('monitoring', 'info', 'server.action.notified',
+      `"${problemName}" - notified ${delivered} action channel(s)`)
   }
 }

@@ -14,8 +14,9 @@ import {
   type SnmpInterface
 } from '~~/layers/monitoring/server/utils/netMonitor'
 import { recordServerItemSample } from '~~/server/utils/metrics'
-import { metricForItemKey, evaluateCondition, isHostUnderMaintenance, fireServerActions } from '~~/layers/monitoring/server/utils/serverMonitor'
+import { metricForItemKey, evaluateCondition, isHostUnderMaintenance, fireServerActions, fireServerRecovery } from '~~/layers/monitoring/server/utils/serverMonitor'
 import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
+import { logSystem } from '~~/server/utils/moduleLogs'
 
 /**
  * Real Server poller (Zabbix engine). On each cycle it ICMP-pings every enabled
@@ -36,7 +37,7 @@ export default defineNitroPlugin(() => {
   const tick = async () => {
     if (running) return
     running = true
-    try { await pollAll(cfg) } catch (e) { console.error('[serverPoller] cycle error:', e) } finally { running = false }
+    try { await pollAll(cfg) } catch (e: any) { await logSystem('monitoring', 'error', 'server.poll.failed', `Polling cycle failed: ${e?.message || e}`) } finally { running = false }
   }
   setTimeout(tick, 10000) // let the DB warm up
   setInterval(tick, intervalMs)
@@ -57,9 +58,10 @@ async function pollAll(cfg: ServerConfig) {
   const { rows: hosts } = await db.query(`SELECT * FROM server_hosts WHERE monitoring_enabled IS NOT FALSE`)
   const concurrency = Math.max(1, Number(cfg.pollConcurrency) || 16)
   if (hosts.length) {
-    await mapLimit(hosts, concurrency, (h) => pollHost(h, cfg).catch((e) => console.error(`[serverPoller] ${h.ip} failed:`, e?.message || e)))
+    await mapLimit(hosts, concurrency, (h) => pollHost(h, cfg).catch((e) =>
+      logSystem('monitoring', 'debug', 'server.host.poll.failed', `${h.name || h.ip} (${h.ip}): ${e?.message || e}`)))
   }
-  await pollWebScenarios(cfg).catch((e) => console.error('[serverPoller] web checks failed:', e?.message || e))
+  await pollWebScenarios(cfg).catch((e) => logSystem('monitoring', 'debug', 'server.web.poll.failed', String(e?.message || e)))
   emitMonitoringEvent('server')
 }
 
@@ -90,6 +92,13 @@ async function pollWebScenarios(cfg: ServerConfig) {
     }
     await db.query('UPDATE server_web_scenarios SET last_status = $1, last_code = $2, last_ms = $3, last_check = $4 WHERE id = $5',
       [allUp ? 'up' : 'down', lastCode, totalMs, now, w.id])
+
+    // Log only up<->down transitions, not every check.
+    const newStatus = allUp ? 'up' : 'down'
+    if (w.last_status && w.last_status !== newStatus) {
+      if (allUp) await logSystem('monitoring', 'info', 'web.scenario.up', `Web check "${w.name || w.url}" passed again (${totalMs}ms)`)
+      else await logSystem('monitoring', 'warning', 'web.scenario.down', `Web check "${w.name || w.url}" failed (HTTP ${lastCode ?? 'no response'})`)
+    }
   })
 }
 
@@ -150,6 +159,15 @@ async function pollHost(host: any, cfg: ServerConfig) {
     [availability, availability === 'available' ? 'Available' : availability === 'unavailable' ? 'Offline' : 'Unknown',
       now, ping.rttMs, sysName, sysDescr, uptime, host.id]
   )
+
+  // Log only availability transitions, not every poll.
+  if (host.availability && host.availability !== 'unknown' && host.availability !== availability) {
+    if (availability === 'unavailable') {
+      await logSystem('monitoring', 'warning', 'server.host.down', `Host "${host.name || host.ip}" (${host.ip}) became unavailable`)
+    } else if (availability === 'available') {
+      await logSystem('monitoring', 'info', 'server.host.up', `Host "${host.name || host.ip}" (${host.ip}) is available again`)
+    }
+  }
 
   await evaluateTriggers(host, now)
 }
@@ -330,8 +348,18 @@ async function evaluateTriggers(host: any, now: string) {
     } else {
       if (tr.since) await db.query('UPDATE server_triggers SET since = NULL WHERE id = $1', [tr.id])
       if (tr.last_state === 'problem') {
-        await db.query(`UPDATE server_problems SET status = 'resolved', r_clock = $1 WHERE trigger_id = $2 AND status = 'problem'`, [now, tr.id])
+        // Only notify recovery for problems that actually alerted (suppressed
+        // ones opened silently under maintenance - they should close silently).
+        const resolved = await db.query(
+          `UPDATE server_problems SET status = 'resolved', r_clock = $1
+           WHERE trigger_id = $2 AND status = 'problem' RETURNING suppressed`,
+          [now, tr.id]
+        )
         await db.query(`UPDATE server_triggers SET last_state = 'ok' WHERE id = $1`, [tr.id])
+        await logSystem('monitoring', 'info', 'server.problem.resolved', `${host.name || host.ip}: "${tr.name}" resolved`)
+        if (resolved.rows.some((r: any) => !r.suppressed)) {
+          await fireServerRecovery(host.name || host.ip, tr.name, Number(tr.severity) || 0)
+        }
       }
     }
   }
@@ -349,5 +377,7 @@ async function openProblem(host: any, tr: any, now: string) {
      VALUES ($1,$2,$3,$4,$4,$5,$6,'problem',false,$7)`,
     [nanoid(), host.id, tr.id, tr.name, Number(tr.severity) || 0, now, suppressed]
   )
+  await logSystem('monitoring', 'warning', 'server.problem.opened',
+    `${host.name || host.ip}: "${tr.name}" (severity ${Number(tr.severity) || 0})${suppressed ? ' - suppressed by maintenance' : ''}`)
   if (!suppressed) await fireServerActions(host.name, tr.name, Number(tr.severity) || 0)
 }

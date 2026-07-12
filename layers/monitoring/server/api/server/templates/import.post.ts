@@ -1,6 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
 import { isZabbixExport, zabbixTemplateToNative, type NativeTemplate } from '~~/layers/monitoring/server/utils/importExport'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 /**
  * Import one or more templates. Accepts THREE shapes, auto-detected:
@@ -15,6 +16,7 @@ import { isZabbixExport, zabbixTemplateToNative, type NativeTemplate } from '~~/
  * Existing templates with the same name are skipped (not overwritten).
  */
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<any>(event)
 
   let natives: NativeTemplate[] = []

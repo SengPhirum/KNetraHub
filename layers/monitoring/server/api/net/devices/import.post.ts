@@ -1,6 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
 import { parseCsv } from '~~/layers/monitoring/server/utils/importExport'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 interface ImportBody { format?: 'json' | 'csv'; content?: string }
 
@@ -10,6 +11,7 @@ interface ImportBody { format?: 'json' | 'csv'; content?: string }
 // secrets (auth/priv passwords) are never exported so a round-tripped device
 // needs its credentials re-entered on the device's Settings tab.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<ImportBody>(event)
   let rows: Record<string, any>[] = []
   try {

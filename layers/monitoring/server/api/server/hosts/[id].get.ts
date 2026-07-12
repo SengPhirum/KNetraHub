@@ -1,4 +1,5 @@
 import { getDb } from '~~/server/utils/db'
+import { stripSnmpSecrets } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Full host detail: the host row + its groups, interfaces, linked templates,
 // items (with latest value), and triggers (with current state).
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   return {
-    ...res.rows[0],
+    ...stripSnmpSecrets(res.rows[0]),
     groups: groups.rows,
     interfaces: interfaces.rows,
     templates: templates.rows,

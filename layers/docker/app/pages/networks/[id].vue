@@ -30,7 +30,7 @@ async function remove() {
     toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
     navigateTo('/networks')
   } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
   }
 }
 </script>

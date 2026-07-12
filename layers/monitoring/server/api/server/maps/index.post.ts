@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create an empty map (nodes/links added in the editor).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<{ name?: string }>(event)
   const name = (body.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Map name is required' })

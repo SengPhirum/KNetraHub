@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a trigger on a host, bound to one of its items.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ host_id?: string; item_id?: string; name?: string; operator?: string; threshold?: number; for_seconds?: number; severity?: number }>(event)
   const hostId = (b.host_id || '').trim()
   const name = (b.name || '').trim()

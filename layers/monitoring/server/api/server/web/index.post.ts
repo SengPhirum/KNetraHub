@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a web monitoring scenario (HTTP GET polled for status + latency).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ name?: string; url?: string; expected_status?: number; interval?: number; host_id?: string }>(event)
   const name = (b.name || '').trim()
   const url = (b.url || '').trim()

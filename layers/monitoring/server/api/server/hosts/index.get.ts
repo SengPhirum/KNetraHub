@@ -1,4 +1,5 @@
 import { getDb } from '~~/server/utils/db'
+import { stripSnmpSecrets } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Hosts with their groups + item/trigger/open-problem counts (Zabbix host list).
 export default defineEventHandler(async () => {
@@ -20,5 +21,5 @@ export default defineEventHandler(async () => {
     if (!byHost.has(m.host_id)) byHost.set(m.host_id, [])
     byHost.get(m.host_id)!.push({ id: m.id, name: m.name })
   }
-  return hosts.map((h) => ({ ...h, groups: byHost.get(h.id) || [] }))
+  return hosts.map((h) => ({ ...stripSnmpSecrets(h), groups: byHost.get(h.id) || [] }))
 })

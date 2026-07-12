@@ -1,10 +1,12 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Bulk-create device templates from an uploaded JSON array (or {templates:[]}).
 // Native format only - device templates have no Zabbix equivalent. Existing
 // templates with the same name are skipped rather than duplicated.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<any>(event)
   const rows: any[] = Array.isArray(body) ? body : Array.isArray(body?.templates) ? body.templates : []
   if (!rows.length) throw createError({ statusCode: 400, statusMessage: 'Expected a list of templates' })

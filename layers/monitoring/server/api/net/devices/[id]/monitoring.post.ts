@@ -1,10 +1,12 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Pause / resume monitoring for a device (PRTG-style). A paused device is
 // skipped by the poller (server/plugins/netPoller.ts) and shown as "paused"
 // instead of flapping to "down". Resuming resets it to "unknown" so the next
 // poll cycle fills in the real status.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'operator')
   const id = getRouterParam(event, 'id')
   const body = await readBody<{ enabled?: boolean }>(event)
   const enabled = body.enabled !== false

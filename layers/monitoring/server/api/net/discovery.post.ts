@@ -1,5 +1,6 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 import {
   cidrHosts,
   pingHost,
@@ -22,6 +23,7 @@ import {
 const MAX_HOSTS = 1024
 
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'operator')
   const body = await readBody(event).catch(() => ({}))
   const cidr = String(body?.cidr || '').trim()
   const method = ['ping', 'snmp', 'ping+snmp'].includes(body?.method) ? body.method : 'ping+snmp'

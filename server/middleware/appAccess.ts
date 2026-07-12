@@ -1,63 +1,80 @@
 import { readSession, resolveUserEntitlements } from '~~/server/utils/auth'
+import type { AppKey } from '../../shared/utils/entitlements'
 
 /**
- * Authoritative per-app access gate (KNetraHub). The "Dock" app is the existing
- * Docker Swarm feature set, still served by this app's own API. This middleware
- * is the real security boundary for it: any request to a Docker API route is
- * allowed only if the caller has a `docker` entitlement (resolved from their
- * Keycloak realm roles + the Settings app-role map, or the local-admin
- * superuser bypass). It also publishes the caller's effective tier on
- * event.context so the existing endpoint handlers' requireRole/requirePermission
- * checks enforce the per-app tier instead of the global role - without any of
- * those handlers changing.
+ * Authoritative per-app access gate (KNetraHub). Every API route that belongs
+ * to a sub-app (Dock/Docker, Monitoring) is allowed only if the caller has an
+ * entitlement for that app (resolved from their Keycloak realm roles + the
+ * Settings app-role map, or the local-admin superuser bypass). It also
+ * publishes the caller's effective tier on event.context so endpoint handlers'
+ * requireRole/requirePermission checks enforce the per-app tier instead of the
+ * global role - without those handlers changing.
  *
- * Net/Server/IPMgt are separate services with their own gates; their access is
- * carried in the short-lived subsystem token (issueSubsystemToken).
+ * Enforcement differs per app because of handler history:
+ *  - docker routes: handlers all call requireUser/requireRole themselves, so an
+ *    unauthenticated request falls through for the handler to 401 cleanly.
+ *  - monitoring routes (/api/net, /api/server): this middleware IS the
+ *    authentication boundary - unauthenticated requests are rejected here, and
+ *    read access requires at least a viewer tier. Mutation endpoints
+ *    additionally call requireMonitoring(...) for their operator/manager tier.
  *
- * Routes NOT in the Docker set (auth, user prefs, settings, portal audit, the
- * launcher's own data) fall through untouched and keep their original handler
- * guards (e.g. requireRole('admin') for portal administration).
+ * IPMgt guards itself per-handler (requireIpam). Routes not matched here
+ * (auth, user prefs, settings, portal audit) keep their original guards.
  */
 
-// Prefixes whose endpoints belong to the Dock app. system/overview + system/metrics
-// are swarm dashboard data; system/audit is portal-admin and intentionally excluded.
-const DOCKER_PREFIXES = [
-  '/api/services',
-  '/api/stacks',
-  '/api/nodes',
-  '/api/tasks',
-  '/api/containers',
-  '/api/networks',
-  '/api/volumes',
-  '/api/secrets',
-  '/api/configs',
-  '/api/registries',
-  '/api/alerts',
-  '/api/gitlab',
-  '/api/sse',
-  '/api/system/overview',
-  '/api/system/metrics'
+// Ordered: first matching prefix wins, so the more specific /api/sse/monitoring
+// must precede /api/sse (the docker events stream).
+const APP_PREFIXES: [string, AppKey][] = [
+  ['/api/sse/monitoring', 'monitoring'],
+  ['/api/net', 'monitoring'],
+  ['/api/server', 'monitoring'],
+  ['/api/services', 'docker'],
+  ['/api/stacks', 'docker'],
+  ['/api/nodes', 'docker'],
+  ['/api/tasks', 'docker'],
+  ['/api/containers', 'docker'],
+  ['/api/networks', 'docker'],
+  ['/api/volumes', 'docker'],
+  ['/api/secrets', 'docker'],
+  ['/api/configs', 'docker'],
+  ['/api/registries', 'docker'],
+  ['/api/alerts', 'docker'],
+  ['/api/gitlab', 'docker'],
+  ['/api/sse', 'docker'],
+  ['/api/system/overview', 'docker'],
+  ['/api/system/metrics', 'docker']
 ]
 
-function isDockerRoute(path: string): boolean {
-  return DOCKER_PREFIXES.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'))
+function appForRoute(path: string): AppKey | null {
+  for (const [p, app] of APP_PREFIXES) {
+    if (path === p || path.startsWith(p + '/') || path.startsWith(p + '?')) return app
+  }
+  return null
 }
+
+const APP_LABEL: Record<AppKey, string> = { docker: 'Dock', monitoring: 'Monitoring', ipmgt: 'IP Management' }
 
 export default defineEventHandler(async (event) => {
   const path = event.path || ''
-  if (!path.startsWith('/api/') || !isDockerRoute(path)) return
+  if (!path.startsWith('/api/')) return
+  const app = appForRoute(path)
+  if (!app) return
 
   const user = await readSession(event)
-  // Unauthenticated: let the handler's requireUser produce a clean 401.
-  if (!user) return
+  if (!user) {
+    // Docker handlers 401 via their own requireUser; monitoring handlers
+    // historically had no guards, so the middleware must reject here.
+    if (app === 'docker') return
+    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+  }
 
   const apps = await resolveUserEntitlements(user)
-  const tier = apps.docker
+  const tier = apps[app]
   if (!tier) {
-    throw createError({ statusCode: 403, statusMessage: 'No access to the Dock app' })
+    throw createError({ statusCode: 403, statusMessage: `No access to the ${APP_LABEL[app]} app` })
   }
 
   // Hand the resolved tier to requireRole/requirePermission downstream.
-  event.context.effectiveApp = 'docker'
+  event.context.effectiveApp = app
   event.context.effectiveTier = tier
 })

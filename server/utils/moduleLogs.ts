@@ -66,6 +66,7 @@ export async function getModuleDebug(module: LogModule): Promise<ModuleDebugConf
 export async function setModuleDebug(module: LogModule, enabled: boolean, actor: string): Promise<ModuleDebugConfig> {
   await setAppSetting(`logs.debug.${module}`, String(enabled), actor)
   debugCache.set(module, { enabled, expiresAt: Date.now() + DEBUG_CACHE_TTL_MS })
+  await logSystem(module, 'info', 'logs.debug.changed', `${actor} ${enabled ? 'enabled' : 'disabled'} debug logging for ${module}`)
   return { module, enabled }
 }
 
@@ -120,9 +121,19 @@ export async function logActivity(entry: Omit<ActivityEntry, 'id' | 'ts'>): Prom
   )
 }
 
+const CONSOLE_BY_LEVEL: Record<SystemEntry['level'], (...args: any[]) => void> = {
+  debug: console.debug,
+  info: console.info,
+  warning: console.warn,
+  error: console.error
+}
+
 export async function logSystem(module: LogModule, level: SystemEntry['level'], event: string, detail?: string): Promise<void> {
   try {
     if (level === 'debug' && !(await getModuleDebug(module)).enabled) return
+    // Mirror every stored entry to stdout/stderr so container logs carry the
+    // same trail as the system_log table (whose retention is housekeeping-managed).
+    CONSOLE_BY_LEVEL[level](`[${module}] ${level.toUpperCase()} ${event}${detail ? ` - ${detail}` : ''}`)
     await getDb().query(
       'INSERT INTO system_log (id, ts, module, level, event, detail) VALUES ($1, $2, $3, $4, $5, $6)',
       [nanoid(), new Date().toISOString(), module, level, event, detail ?? null]
@@ -235,6 +246,8 @@ export async function runLogHousekeeping(): Promise<{ activityRemoved: number; s
 
   if (activityRemoved || systemRemoved) {
     await logSystem('portal', 'info', 'log-housekeeping', `Trimmed ${activityRemoved} activity and ${systemRemoved} system entries`)
+  } else {
+    await logSystem('portal', 'debug', 'log-housekeeping', 'Housekeeping ran - nothing to trim')
   }
   return { activityRemoved, systemRemoved }
 }

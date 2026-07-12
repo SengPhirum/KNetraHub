@@ -1,5 +1,6 @@
 import { getDb } from '~~/server/utils/db'
 import { provisionHostFromTemplates } from '~~/layers/monitoring/server/utils/serverProvision'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 interface HostBody {
   name?: string; ip?: string; os?: string; description?: string
@@ -13,6 +14,7 @@ interface HostBody {
 // Update a host's fields, group membership (set-semantics), and template links
 // (re-provisioning newly linked templates' items/triggers).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const b = await readBody<HostBody>(event)
   const db = getDb()
@@ -25,10 +27,13 @@ export default defineEventHandler(async (event) => {
   if (!name || !ip) throw createError({ statusCode: 400, statusMessage: 'Name and IP / DNS are required' })
   const pollMethod = ['icmp', 'snmp', 'none'].includes(b.poll_method || '') ? b.poll_method : 'icmp'
 
+  // Credentials follow the "blank keeps the current value" convention - GET
+  // responses never include them (see stripSnmpSecrets), so an edit form
+  // submits them empty unless the user typed a replacement.
   await db.query(
     `UPDATE server_hosts SET name=$1, ip=$2, os=$3, description=$4, poll_method=$5,
-       snmp_version=$6, snmp_community=$7, snmp_sec_level=$8, snmp_auth_user=$9, snmp_auth_protocol=$10,
-       snmp_auth_password=$11, snmp_priv_protocol=$12, snmp_priv_password=$13
+       snmp_version=$6, snmp_community=COALESCE($7, snmp_community), snmp_sec_level=$8, snmp_auth_user=$9, snmp_auth_protocol=$10,
+       snmp_auth_password=COALESCE($11, snmp_auth_password), snmp_priv_protocol=$12, snmp_priv_password=COALESCE($13, snmp_priv_password)
      WHERE id=$14`,
     [name.slice(0, 120), ip.slice(0, 120), (b.os || '').slice(0, 120) || null, (b.description || '').slice(0, 500) || null,
       pollMethod, b.snmp_version || null, b.snmp_community || null, b.snmp_sec_level || null, b.snmp_auth_user || null,

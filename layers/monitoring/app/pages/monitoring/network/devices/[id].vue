@@ -36,7 +36,9 @@ watch(device, (val) => {
       ip: val.ip,
       poll_method: val.poll_method,
       snmp_version: val.snmp_version,
-      snmp_community: val.snmp_community,
+      // Stored credentials are never returned by the API - blank means "keep
+      // the current value" on save (the server COALESCEs blanks away).
+      snmp_community: '',
       category: val.category,
       type: val.type || 'Unknown',
       group_id: val.group_id || '',
@@ -45,9 +47,9 @@ watch(device, (val) => {
       snmp_sec_level: val.snmp_sec_level || v3.snmp_sec_level,
       snmp_auth_user: val.snmp_auth_user || v3.snmp_auth_user,
       snmp_auth_protocol: val.snmp_auth_protocol || v3.snmp_auth_protocol,
-      snmp_auth_password: val.snmp_auth_password || v3.snmp_auth_password,
+      snmp_auth_password: '',
       snmp_priv_protocol: val.snmp_priv_protocol || v3.snmp_priv_protocol,
-      snmp_priv_password: val.snmp_priv_password || v3.snmp_priv_password
+      snmp_priv_password: ''
     })
   }
 }, { immediate: true })
@@ -320,7 +322,7 @@ function downloadBackup(backup: any) {
               <USelect v-model="settingsForm.poll_method" :items="[{value:'snmp', label:'SNMP'}, {value:'ping', label:'Ping Only'}]" value-key="value" label-key="label" class="w-full" />
             </UFormField>
             <template v-if="settingsForm.poll_method === 'snmp'">
-              <NetSnmpFields :form="settingsForm" />
+              <NetSnmpFields :form="settingsForm" keep-blank />
             </template>
           </div>
           <div class="pt-6 flex justify-end">

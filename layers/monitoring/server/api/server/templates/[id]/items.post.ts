@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Add an item definition to a template.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const templateId = getRouterParam(event, 'id')
   const b = await readBody<{ name?: string; key_?: string; type?: string; value_type?: string; units?: string; snmp_oid?: string; update_interval?: number }>(event)
   const name = (b.name || '').trim()

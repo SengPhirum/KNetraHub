@@ -1,5 +1,6 @@
 import snmp from 'net-snmp'
 import { handleTrap } from '~~/layers/monitoring/server/utils/trapMonitor'
+import { logSystem } from '~~/server/utils/moduleLogs'
 
 /**
  * SNMP trap receiver: a UDP listener for incoming v1/v2c/v3 traps and informs,
@@ -21,17 +22,22 @@ export default defineNitroPlugin(() => {
       { port: cfg.trapPort, address: cfg.trapBindAddress, disableAuthorization: true },
       (error: any, data: any) => {
         if (error) {
-          console.error('[trapReceiver] error:', error?.message || error)
+          void logSystem('monitoring', 'error', 'trap.receiver.error', String(error?.message || error))
           return
         }
         const sourceIp = data?.rinfo?.address
         if (!sourceIp || !data?.pdu) return
-        handleTrap(data.pdu, sourceIp).catch((e: any) => console.error('[trapReceiver] handleTrap failed:', e?.message || e))
+        handleTrap(data.pdu, sourceIp).catch((e: any) =>
+          logSystem('monitoring', 'error', 'trap.handle.failed', `Trap from ${sourceIp}: ${e?.message || e}`))
       }
     )
     console.log(`[trapReceiver] listening on ${cfg.trapBindAddress}:${cfg.trapPort}`)
+    // Deferred so the boot-time DB migration has finished before this insert.
+    setTimeout(() => {
+      void logSystem('monitoring', 'info', 'trap.receiver.started', `SNMP trap receiver listening on ${cfg.trapBindAddress}:${cfg.trapPort}`)
+    }, 15_000)
   } catch (e: any) {
-    console.error('[trapReceiver] failed to start:', e?.message || e)
+    void logSystem('monitoring', 'error', 'trap.receiver.start.failed', String(e?.message || e))
   }
 })
 

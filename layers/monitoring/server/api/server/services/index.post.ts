@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a service node (optionally under a parent; leaf maps to a trigger).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ name?: string; parent_id?: string; algorithm?: string; sla_target?: number; trigger_id?: string }>(event)
   const name = (b.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Name is required' })

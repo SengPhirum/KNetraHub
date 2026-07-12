@@ -13,6 +13,7 @@ import {
   type AppEntitlements
 } from '../../shared/utils/entitlements'
 import { getAppRoleMap } from './appRoles'
+import { logSystem } from './moduleLogs'
 
 export interface SessionUser {
   id: string
@@ -89,8 +90,9 @@ export async function setSession(event: H3Event, user: SessionUser) {
   let sid: string | undefined
   try {
     sid = await createSession(user.id, userAgent, ip)
-  } catch (err) {
-    console.error('[auth] could not create session row; issuing token without sid', err)
+  } catch (err: any) {
+    await logSystem('portal', 'warning', 'auth.session.degraded',
+      `Could not create session row for ${user.username}; issued an un-revocable token instead: ${err?.message || err}`)
   }
   const token = await issueToken(user, sid)
   setCookie(event, COOKIE, token, {

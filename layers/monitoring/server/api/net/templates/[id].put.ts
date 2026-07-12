@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Update a device template (full replace of its monitoring fields).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const body = await readBody<Record<string, any>>(event)
   const name = (body.name || '').trim()

@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Add a trigger definition to a template (bound to a template item by key).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const templateId = getRouterParam(event, 'id')
   const b = await readBody<{ name?: string; item_key?: string; operator?: string; threshold?: number; for_seconds?: number; severity?: number }>(event)
   const name = (b.name || '').trim()

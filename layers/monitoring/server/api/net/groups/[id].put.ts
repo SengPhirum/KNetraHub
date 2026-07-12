@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Rename a group / edit its description.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const body = await readBody<{ name?: string; description?: string }>(event)
   const db = getDb()

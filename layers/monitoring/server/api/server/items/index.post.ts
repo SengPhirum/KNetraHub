@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create an item directly on a host (Zabbix "Create item").
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ host_id?: string; name?: string; key_?: string; type?: string; value_type?: string; units?: string; snmp_oid?: string; update_interval?: number }>(event)
   const hostId = (b.host_id || '').trim()
   const name = (b.name || '').trim()

@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Append a step to a web scenario.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const scenarioId = getRouterParam(event, 'id')
   const b = await readBody<{ name?: string; url?: string; expected_status?: number; required_string?: string }>(event)
   const name = (b.name || '').trim()

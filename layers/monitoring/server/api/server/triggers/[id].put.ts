@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Edit a trigger (condition/severity/status).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const b = await readBody<{ name?: string; item_id?: string; operator?: string; threshold?: number; for_seconds?: number; severity?: number; status?: string }>(event)
   const name = (b.name || '').trim()

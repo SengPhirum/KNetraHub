@@ -1,6 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
 import { provisionHostFromTemplates } from '~~/layers/monitoring/server/utils/serverProvision'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 interface HostBody {
   name?: string; ip?: string; os?: string; description?: string
@@ -14,6 +15,7 @@ interface HostBody {
 // Create a host + its group memberships + template links, then provision the
 // linked templates' items/triggers onto it.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<HostBody>(event)
   const name = (b.name || '').trim()
   const ip = (b.ip || '').trim()

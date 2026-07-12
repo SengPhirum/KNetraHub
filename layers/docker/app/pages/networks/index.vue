@@ -58,7 +58,7 @@ async function remove(n: any) {
     toast.add({ title: `Deleted ${n.name}`, color: 'primary' })
   } catch (e: any) {
     data.value = saved
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
   }
 }
 

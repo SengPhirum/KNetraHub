@@ -21,12 +21,16 @@ const props = withDefaults(defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 const password = ref('')
 const errorMsg = ref('')
+// Delete-conflict 409s name the exact services/containers still using the
+// resource (data.usedBy) - shown as a list so the user knows what to detach.
+const usedBy = ref<{ type: string; name: string }[]>([])
 const working = ref(false)
 
 watch(open, (isOpen) => {
   if (isOpen) {
     password.value = ''
     errorMsg.value = ''
+    usedBy.value = []
   }
 })
 
@@ -37,11 +41,19 @@ async function submit() {
   }
   working.value = true
   errorMsg.value = ''
+  usedBy.value = []
   try {
     await props.action(password.value)
     open.value = false
   } catch (e: any) {
-    errorMsg.value = e?.data?.statusMessage || e?.message || 'Confirmation failed'
+    const message = e?.data?.statusMessage || e?.message || 'Confirmation failed'
+    const items = e?.data?.data?.usedBy
+    if (Array.isArray(items) && items.length) {
+      usedBy.value = items
+      errorMsg.value = `${String(message).split(' is in use by:')[0]} is still in use by:`
+    } else {
+      errorMsg.value = message
+    }
   } finally {
     working.value = false
   }
@@ -67,6 +79,12 @@ async function submit() {
             @keydown.enter="submit"
           />
         </UFormField>
+        <ul v-if="usedBy.length" class="notice-danger panel-flush space-y-1 p-3 text-xs">
+          <li v-for="item in usedBy" :key="`${item.type}:${item.name}`" class="flex items-center gap-2">
+            <UIcon :name="item.type === 'service' ? 'i-lucide-layers' : 'i-lucide-box'" class="size-3.5 shrink-0" />
+            <span class="font-mono">{{ item.type }} "{{ item.name }}"</span>
+          </li>
+        </ul>
       </div>
     </template>
     <template #footer>

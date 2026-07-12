@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Save a map: rename and/or persist its node/link layout.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const body = await readBody<{ name?: string; config?: { nodes?: any[]; links?: any[] } }>(event)
   const db = getDb()

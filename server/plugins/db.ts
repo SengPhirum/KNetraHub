@@ -1,5 +1,6 @@
 import { getDb, migrate, waitForDb } from '../utils/db'
 import { migrateMetrics } from '../utils/metrics'
+import { logSystem } from '../utils/moduleLogs'
 
 export default defineNitroPlugin(async () => {
   // The docs-only static build (NUXT_STATIC_DOCS=true) has no database - it
@@ -12,7 +13,7 @@ export default defineNitroPlugin(async () => {
     await waitForDb()
     await migrate()
     await migrateMetrics(getDb(), useRuntimeConfig().metrics.retentionDays)
-    console.log('[db] migrations complete')
+    await logSystem('portal', 'info', 'db.migrated', 'Database connected and migrations complete')
   } catch (err) {
     console.error('[db] could not connect/migrate - exiting so the orchestrator restarts this container', err)
     process.exit(1)

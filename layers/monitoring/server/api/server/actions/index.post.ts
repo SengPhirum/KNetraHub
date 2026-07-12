@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create an action: notify a channel when a problem >= min_severity opens.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ name?: string; min_severity?: number; channel_id?: string; status?: string }>(event)
   const name = (b.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Name is required' })

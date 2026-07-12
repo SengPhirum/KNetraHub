@@ -36,7 +36,7 @@ async function remove(s: any) {
     await $fetch(`/api/secrets/${s.id}`, { method: 'DELETE' })
     toast.add({ title: `Deleted ${s.name}`, color: 'primary' })
     refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
+  } catch (e: any) { toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } }) }
 }
 
 function openSecret(s: any) {

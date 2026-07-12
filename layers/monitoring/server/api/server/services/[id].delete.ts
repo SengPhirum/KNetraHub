@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Delete a service; re-parent its children to its parent so the tree stays valid.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const db = getDb()
   const res = await db.query('SELECT parent_id FROM server_services WHERE id = $1', [id])

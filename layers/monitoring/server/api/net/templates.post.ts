@@ -1,9 +1,11 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a device template. Stores the same monitoring fields a device carries
 // (minus hostname/ip) so onboarding a new device is a single pick.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const body = await readBody<Record<string, any>>(event)
   const name = (body.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Template name is required' })

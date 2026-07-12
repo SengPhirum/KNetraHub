@@ -1,5 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
-import { useDocker } from '~~/layers/docker/server/utils/docker'
+import { useDocker, throwDockerError } from '~~/layers/docker/server/utils/docker'
 import { audit } from '~~/server/utils/store'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
     Attachable: b.attachable ?? true, Internal: b.internal ?? false,
     EnableIPv6: b.ipv6 ?? false,
     IPAM: b.subnet ? { Config: [{ Subnet: b.subnet }] } : undefined
-  })
+  }).catch((err: any) => throwDockerError(err, `Failed to create network "${b.name}"`))
   await audit({ actor: user.username, action: 'network.create', target: b.name })
   return { id: net.id }
 })

@@ -1,6 +1,8 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const b = await readBody<{ name?: string; min_severity?: number; channel_id?: string; status?: string }>(event)
   const name = (b.name || '').trim()

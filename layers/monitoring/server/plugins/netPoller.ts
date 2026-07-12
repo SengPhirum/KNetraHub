@@ -12,6 +12,7 @@ import {
 } from '~~/layers/monitoring/server/utils/netMonitor'
 import { recordNetSample, recordSensorReadings } from '~~/server/utils/metrics'
 import { emitMonitoringEvent } from '~~/layers/monitoring/server/utils/monitoringEvents'
+import { logSystem } from '~~/server/utils/moduleLogs'
 
 /**
  * Real Network poller. On each cycle it ICMP-pings every device, and for SNMP
@@ -36,8 +37,8 @@ export default defineNitroPlugin(() => {
     running = true
     try {
       await pollAllDevices(cfg)
-    } catch (err) {
-      console.error('[netPoller] cycle error:', err)
+    } catch (err: any) {
+      await logSystem('monitoring', 'error', 'net.poll.failed', `Polling cycle failed: ${err?.message || err}`)
     } finally {
       running = false
     }
@@ -64,9 +65,9 @@ async function pollAllDevices(cfg: NetConfig) {
   const { rows: devices } = await db.query('SELECT * FROM net_devices WHERE monitoring_enabled IS NOT FALSE')
   if (!devices.length) return
   const concurrency = Math.max(1, Number(cfg.pollConcurrency) || 16)
-  await mapLimit(devices, concurrency, (d) => pollDevice(d, cfg).catch((e) => {
-    console.error(`[netPoller] ${d.ip} failed:`, e?.message || e)
-  }))
+  await mapLimit(devices, concurrency, (d) => pollDevice(d, cfg).catch((e) =>
+    logSystem('monitoring', 'debug', 'net.device.poll.failed', `${d.hostname || d.ip} (${d.ip}): ${e?.message || e}`)
+  ))
   emitMonitoringEvent('net')
 }
 
@@ -247,6 +248,8 @@ async function upsertPingSensor(deviceId: string, rttMs: number | null): Promise
 async function handleStatusChange(device: any, newStatus: string, now: string) {
   const db = getDb()
   if (newStatus === 'down') {
+    await logSystem('monitoring', 'warning', 'net.device.down',
+      `Device "${device.hostname}" (${device.ip}) stopped responding to ICMP`)
     const open = await db.query(
       `SELECT id FROM net_alerts WHERE device_id = $1 AND status = 'active' AND message LIKE 'Device down%' LIMIT 1`,
       [device.id]
@@ -259,6 +262,8 @@ async function handleStatusChange(device: any, newStatus: string, now: string) {
       )
     }
   } else if (newStatus === 'up') {
+    await logSystem('monitoring', 'info', 'net.device.up',
+      `Device "${device.hostname}" (${device.ip}) is responding again`)
     await db.query(
       `UPDATE net_alerts SET status = 'recovered' WHERE device_id = $1 AND status = 'active' AND message LIKE 'Device down%'`,
       [device.id]

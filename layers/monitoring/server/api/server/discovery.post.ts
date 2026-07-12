@@ -1,11 +1,13 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
 import { cidrHosts, pingHost, snmpGetSystem, mapLimit } from '~~/layers/monitoring/server/utils/netMonitor'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Real discovery sweep: ping every address in a CIDR (≤1024), optionally read
 // SNMP sysName/description, and create a server_host for each responder not
 // already known. Records a job row. Mirrors the Network module's discovery.
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'operator')
   const b = await readBody<{ cidr?: string; method?: string; community?: string }>(event)
   const cidr = (b.cidr || '').trim()
   const method = b.method === 'icmp+snmp' ? 'icmp+snmp' : 'icmp'

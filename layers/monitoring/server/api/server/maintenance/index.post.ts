@@ -1,8 +1,10 @@
 import { getDb } from '~~/server/utils/db'
 import { nanoid } from 'nanoid'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Create a maintenance window (host/group scope; JSON id arrays).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const b = await readBody<{ name?: string; active_since?: string; active_till?: string; host_ids?: string[]; group_ids?: string[]; description?: string }>(event)
   const name = (b.name || '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Name is required' })

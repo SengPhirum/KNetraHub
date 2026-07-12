@@ -4,6 +4,8 @@ import { gitlabEnabled, commitStackFile } from '~~/layers/docker/server/utils/gi
 import { getStackVersionContent, recordStackVersion } from '~~/layers/docker/server/utils/stackHistory'
 import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
+import { logSystem } from '~~/server/utils/moduleLogs'
+import { throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 
 // Roll a stack back to an earlier version. `version` is a local history row
 // id or a GitLab commit sha (the legacy `sha` body key still works) - the
@@ -34,10 +36,14 @@ export default defineEventHandler(async (event) => {
   }).catch((err: any) => console.error('[stacks] failed to record local history', err))
 
   const result = await deployStack(name, compose).catch(async (err: any) => {
-    await fireAlert({ ruleType: 'deploy_failed', target: name, severity: 'critical', vars: { target: name, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
-    throw err
+    const reason = err?.statusMessage || dockerErrorMessage(err, 'Unknown error')
+    await logSystem('docker', 'error', 'stack.rollback.failed', `${user.username} failed to roll back stack "${name}" to ${ref.slice(0, 8)}: ${reason}`)
+    await fireAlert({ ruleType: 'deploy_failed', target: name, severity: 'critical', vars: { target: name, error: reason, actor: user.username, time: new Date().toISOString() } })
+    throwDockerError(err, `Failed to roll back stack "${name}"`)
   })
   await audit({ actor: user.username, action: 'stack.rollback', target: name, detail: ref.slice(0, 8) })
+  await logSystem('docker', 'info', 'stack.rolledback',
+    `${user.username} rolled back stack "${name}" to ${ref.slice(0, 8)} (${result.created.length} created, ${result.updated.length} updated)`)
   await fireAlert({
     ruleType: 'stack_deployed',
     target: name,

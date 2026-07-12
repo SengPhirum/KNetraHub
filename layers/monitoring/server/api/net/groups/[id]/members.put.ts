@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Replace a group's membership with the given device ids (set semantics).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'manager')
   const id = getRouterParam(event, 'id')
   const body = await readBody<{ device_ids?: string[] }>(event)
   const ids = Array.isArray(body.device_ids) ? body.device_ids.filter((x) => typeof x === 'string') : []

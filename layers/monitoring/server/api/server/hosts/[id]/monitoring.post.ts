@@ -1,7 +1,9 @@
 import { getDb } from '~~/server/utils/db'
+import { requireMonitoring } from '~~/layers/monitoring/server/utils/monitoringAuth'
 
 // Pause / resume monitoring for a host (the poller skips paused hosts).
 export default defineEventHandler(async (event) => {
+  await requireMonitoring(event, 'operator')
   const id = getRouterParam(event, 'id')
   const body = await readBody<{ enabled?: boolean }>(event)
   const enabled = body.enabled !== false
