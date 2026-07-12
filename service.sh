@@ -72,7 +72,8 @@ Commands:
 Run './service.sh <command> --help' for command-specific options.
 
 Examples:
-  ./service.sh release --no-bump
+  ./service.sh release            # rebuild + push the current version
+  ./service.sh release --new      # release a new (patch) version
   ./service.sh dev --full
   ./service.sh dev --reset
   ./service.sh deploy
@@ -89,19 +90,23 @@ Usage: ./service.sh release [options]
 Build and publish KNetraHub to the local Docker registry.
 
 Default behavior:
-  - bump package version by patch
+  - keep the current package version (no bump)
   - generate release notes
   - build the app and agent Docker images
   - push registry.kdsb.com.kh/knetrahub/app:<version> and :latest
   - push registry.kdsb.com.kh/knetrahub/agent:<version> and :latest
 
+To release a NEW version, pass --new (patch bump) or one of the explicit
+bump/version options below.
+
 Options:
-  --patch                 Bump patch version (default)
+  --new                   Release a new version (patch bump)
+  --patch                 Bump patch version (same as --new)
   --minor                 Bump minor version
   --major                 Bump major version
   --bump patch|minor|major
   --version x.y.z         Set an exact version
-  --no-bump               Keep the current package version for test publishes
+  --no-bump               Keep the current package version (default)
   --no-push               Build and tag locally without pushing
   --registry host         Docker registry host (default: registry.kdsb.com.kh)
   --image name            Image name inside the registry (default: knetrahub/app)
@@ -122,11 +127,11 @@ Environment overrides:
                               docker/dev/certs/*.crt if present.
 
 Examples:
-  ./service.sh release
+  ./service.sh release                 # rebuild + push the current version
+  ./service.sh release --new           # new patch release
   ./service.sh release --minor
   ./service.sh release --version 1.2.0
-  ./service.sh release --no-bump
-  ./service.sh release --no-bump --no-push
+  ./service.sh release --no-push
   ./service.sh release --tag-prefix v
 EOF
 }
@@ -200,13 +205,21 @@ cmd_release() {
   # the dev swarm image uses (docker/dev/certs/), auto-detected below if unset.
   local NPM_CA_FILE="${NPM_CA_FILE:-}"
 
-  local BUMP="patch"
+  # No bump by default - a plain `release` rebuilds and republishes the
+  # current package version. Bumping only happens when explicitly requested
+  # via --new / --patch / --minor / --major / --bump / --version.
+  local BUMP=""
   local CUSTOM_VERSION=""
   local NO_BUMP="false"
   local PUSH="true"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --new|--new-version)
+        # Release a new version; defaults to a patch bump unless a more
+        # specific bump flag is also given.
+        [[ -n "${BUMP}" ]] || BUMP="patch"
+        ;;
       --patch)
         BUMP="patch"
         ;;
@@ -264,9 +277,13 @@ cmd_release() {
   done
 
   case "${BUMP}" in
-    patch|minor|major) ;;
+    ''|patch|minor|major) ;;
     *) fail "--bump must be patch, minor, or major" ;;
   esac
+
+  if [[ "${NO_BUMP}" == "true" && -n "${BUMP}" ]]; then
+    fail "--no-bump conflicts with --new/--patch/--minor/--major/--bump"
+  fi
 
   local NODE_BIN DOCKER_BIN GIT_BIN
   NODE_BIN="$(resolve_command node)" || fail "Missing required command: node"
@@ -279,20 +296,23 @@ cmd_release() {
   if [[ -n "${CUSTOM_VERSION}" && "${NO_BUMP}" == "true" ]]; then
     fail "Use either --version or --no-bump, not both"
   fi
+  if [[ -n "${CUSTOM_VERSION}" && -n "${BUMP}" ]]; then
+    fail "Use either --version or a bump option (--new/--patch/--minor/--major/--bump), not both"
+  fi
 
   local next_version
-  if [[ "${NO_BUMP}" == "true" ]]; then
-    next_version="${current_version}"
-    log "Keeping current version ${next_version}"
-  elif [[ -n "${CUSTOM_VERSION}" ]]; then
+  if [[ -n "${CUSTOM_VERSION}" ]]; then
     validate_version "${CUSTOM_VERSION}"
     next_version="${CUSTOM_VERSION}"
     log "Setting exact version ${next_version}"
     write_version "${next_version}"
-  else
+  elif [[ -n "${BUMP}" ]]; then
     next_version="$(bump_version "${current_version}" "${BUMP}")"
     log "Bumping version ${current_version} -> ${next_version}"
     write_version "${next_version}"
+  else
+    next_version="${current_version}"
+    log "Keeping current version ${next_version} (pass --new to release a new version)"
   fi
 
   if [[ -z "${AGENT_IMAGE_NAME}" ]]; then

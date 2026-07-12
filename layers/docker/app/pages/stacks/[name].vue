@@ -59,6 +59,16 @@ async function syncHistory() {
   }
 }
 
+// The deployed (current) version is the newest history entry - used to tag it
+// in the list and to hide "roll back" where rolling back would be a no-op.
+const currentVersionId = computed(() => {
+  let current: any = null
+  for (const c of historyRows.value) {
+    if (!current || String(c.date || '') > String(current.date || '')) current = c
+  }
+  return current?.id || null
+})
+
 function historySourceBadge(source: string) {
   if (source === 'synced') return { label: 'local + git', color: 'primary' as const, icon: 'i-lucide-refresh-cw' }
   if (source === 'gitlab') return { label: 'git only', color: 'warning' as const, icon: 'i-lucide-git-branch' }
@@ -203,25 +213,33 @@ async function rollback(id: string) {
     toast.add({ title: 'Rollback failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
   }
 }
-async function remove() {
-  if (!confirm(`Remove stack "${name}"? This stops and deletes all its services.`)) return
-  try {
-    await $fetch(`/api/stacks/${name}`, { method: 'DELETE' })
-    toast.add({ title: `Removed ${name}`, color: 'primary' })
-    navigateTo('/stacks')
-  } catch (e: any) {
-    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
-  }
-}
-async function deleteFromTracking() {
-  if (!confirm(`Permanently delete "${name}" from version control?\n\nThis removes its compose file and deploy history (local database and GitLab). It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will no longer appear in KNetraHub.`)) return
-  try {
-    await $fetch(`/api/stacks/${name}?git=true`, { method: 'DELETE' })
+// Removing the stack (or erasing it from version control) is destructive -
+// both require the user's password (enforced server-side, see
+// requirePasswordConfirm) via the shared confirmation popup.
+const criticalAction = ref<null | 'remove' | 'untrack'>(null)
+const criticalCopy = computed(() => criticalAction.value === 'untrack'
+  ? {
+      title: 'Delete from version control',
+      message: `The compose file and deploy history of ${name} (local database and GitLab) will be permanently removed. This cannot be undone.`,
+      confirmLabel: 'Delete permanently'
+    }
+  : {
+      title: 'Remove stack',
+      message: `Stack ${name} will be stopped and all of its services deleted.`,
+      confirmLabel: 'Remove stack'
+    })
+function remove() { criticalAction.value = 'remove' }
+function deleteFromTracking() { criticalAction.value = 'untrack' }
+async function confirmCritical(password: string) {
+  const headers = { 'x-confirm-password': password }
+  if (criticalAction.value === 'untrack') {
+    await $fetch(`/api/stacks/${name}?git=true`, { method: 'DELETE', headers })
     toast.add({ title: `Deleted ${name} from version control`, color: 'primary' })
-    navigateTo('/stacks')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
+  } else {
+    await $fetch(`/api/stacks/${name}`, { method: 'DELETE', headers })
+    toast.add({ title: `Removed ${name}`, color: 'primary' })
   }
+  navigateTo('/stacks')
 }
 </script>
 
@@ -505,12 +523,12 @@ async function deleteFromTracking() {
                 <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-faint">
                   <span>{{ c.author || '-' }} - {{ relative(c.date) }} - <span class="font-mono">{{ short(c.id, 8) }}</span></span>
                   <UBadge :color="historySourceBadge(c.source).color" variant="subtle" size="sm" :icon="historySourceBadge(c.source).icon" :label="historySourceBadge(c.source).label" />
-                  <span v-if="i === 0" class="status-current rounded px-1.5 py-0.5 text-[10px]">current</span>
+                  <span v-if="c.id === currentVersionId" class="status-current rounded px-1.5 py-0.5 text-[10px]">current</span>
                 </p>
               </div>
               <div class="flex gap-1.5 shrink-0">
                 <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-eye" label="View" @click="viewCommit(c.id)" />
-                <UButton v-if="can('operator') && i > 0" size="xs" color="warning" variant="soft" icon="i-lucide-history" label="Rollback" @click="rollback(c.id)" />
+                <UButton v-if="can('operator') && c.id !== currentVersionId" size="xs" color="warning" variant="soft" icon="i-lucide-history" label="Rollback" @click="rollback(c.id)" />
               </div>
             </div>
           </div>
@@ -519,6 +537,15 @@ async function deleteFromTracking() {
     </DataState>
 
     <StacksDeployStackModal v-model:open="editOpen" :edit-name="name" :initial-compose="draft" :compose-options="editComposeOptions" @deployed="onRedeployed" />
+
+    <ConfirmPasswordModal
+      :open="!!criticalAction"
+      @update:open="(v: boolean) => { if (!v) criticalAction = null }"
+      :title="criticalCopy.title"
+      :message="criticalCopy.message"
+      :confirm-label="criticalCopy.confirmLabel"
+      :action="confirmCritical"
+    />
 
     <UModal v-model:open="diffOpen" :title="`Compose at ${short(diffSha, 8)}`" :ui="{ content: 'w-[90vw] max-w-[100rem]' }">
       <template #body>
@@ -530,7 +557,7 @@ async function deleteFromTracking() {
       <template #footer>
         <div class="flex justify-end gap-2 w-full">
           <UButton color="neutral" variant="ghost" label="Close" @click="diffOpen = false" />
-          <UButton v-if="can('operator')" color="warning" icon="i-lucide-history" label="Roll back to this" @click="rollback(diffSha)" />
+          <UButton v-if="can('operator') && diffSha !== currentVersionId" color="warning" icon="i-lucide-history" label="Roll back to this" @click="rollback(diffSha)" />
         </div>
       </template>
     </UModal>

@@ -140,15 +140,14 @@ async function redeploy() {
   }
 }
 
-async function remove() {
-  if (!confirm(`Delete service "${name.value}"?`)) return
-  try {
-    await $fetch(`/api/services/${id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${name.value}`, color: 'primary' })
-    navigateTo('/services')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+// Deleting the service is destructive - it must be confirmed with the user's
+// password (enforced server-side, see requirePasswordConfirm).
+const removeOpen = ref(false)
+function remove() { removeOpen.value = true }
+async function confirmRemove(password: string) {
+  await $fetch(`/api/services/${id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: `Deleted ${name.value}`, color: 'primary' })
+  navigateTo('/services')
 }
 
 function viewLogs() {
@@ -815,6 +814,14 @@ function configRows(config: any) {
       :data="data"
       :initial-tab="editModalTab"
       @saved="onServiceSaved"
+    />
+
+    <ConfirmPasswordModal
+      v-model:open="removeOpen"
+      title="Delete service"
+      :message="`Service ${name} will be deleted and all of its tasks stopped.`"
+      confirm-label="Delete service"
+      :action="confirmRemove"
     />
   </div>
 </template>

@@ -48,13 +48,23 @@ export async function listStacks(): Promise<StackSummary[]> {
       updatedAt: null
     }).get(name)!
 
+  const stackByServiceId = new Map<string, string>()
+  const globalServiceIds = new Set<string>()
   for (const s of services) {
     const ns = s.Spec?.Labels?.[STACK_LABEL]
     if (!ns) continue
     const e = ensure(ns)
     e.services++
-    const replicas = s.Spec?.Mode?.Replicated?.Replicas
-    if (typeof replicas === 'number') e.desiredTasks += replicas
+    if (s.ID) stackByServiceId.set(s.ID, ns)
+    // Global services have no replica count - their desired total is counted
+    // from the tasks the scheduler actually placed (one per eligible node),
+    // in the task loop below.
+    if (s.Spec?.Mode?.Global) {
+      if (s.ID) globalServiceIds.add(s.ID)
+    } else {
+      const replicas = s.Spec?.Mode?.Replicated?.Replicas
+      if (typeof replicas === 'number') e.desiredTasks += replicas
+    }
     if (s.UpdatedAt && (!e.updatedAt || s.UpdatedAt > e.updatedAt)) e.updatedAt = s.UpdatedAt
   }
   for (const n of networks) {
@@ -74,8 +84,14 @@ export async function listStacks(): Promise<StackSummary[]> {
     if (ns) ensure(ns).secrets++
   }
   for (const t of tasks as any[]) {
-    const ns = t.Spec?.ContainerSpec?.Labels?.[STACK_LABEL] || t.Labels?.[STACK_LABEL]
-    if (ns && map.has(ns) && t.Status?.State === 'running') ensure(ns).runningTasks++
+    // Resolve the task's stack via its service first - container labels are
+    // absent on tasks of stacks deployed by tools that only label the service.
+    const ns = stackByServiceId.get(t.ServiceID) || t.Spec?.ContainerSpec?.Labels?.[STACK_LABEL] || t.Labels?.[STACK_LABEL]
+    if (!ns || !map.has(ns)) continue
+    if (t.Status?.State === 'running') ensure(ns).runningTasks++
+    if (globalServiceIds.has(t.ServiceID) && t.DesiredState !== 'shutdown' && t.Status?.State !== 'shutdown') {
+      ensure(ns).desiredTasks++
+    }
   }
 
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))

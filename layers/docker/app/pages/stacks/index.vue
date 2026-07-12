@@ -52,15 +52,21 @@ function openHistory(s: any) {
   historyOpen.value = true
 }
 
-async function deleteFromTracking(s: any) {
-  if (!confirm(`Permanently delete "${s.name}" from version control?\n\nThis removes its compose file and deploy history (local database${s.inGit ? ' and GitLab' : ''}). It is not currently deployed, so nothing will be stopped - but this cannot be undone and the stack will disappear from this list.`)) return
-  try {
-    await $fetch(`/api/stacks/${s.name}?git=true`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${s.name} from version control`, color: 'primary' })
-    refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
-  }
+// Deleting from version control is irreversible - it must be confirmed with
+// the user's password (enforced server-side, see requirePasswordConfirm).
+const deleteTarget = ref<any | null>(null)
+function deleteFromTracking(s: any) {
+  deleteTarget.value = s
+}
+async function confirmDeleteFromTracking(password: string) {
+  const s = deleteTarget.value
+  if (!s) return
+  await $fetch(`/api/stacks/${s.name}?git=true`, {
+    method: 'DELETE',
+    headers: { 'x-confirm-password': password }
+  })
+  toast.add({ title: `Deleted ${s.name} from version control`, color: 'primary' })
+  refresh()
 }
 
 function onDeployed() {
@@ -179,5 +185,13 @@ function onDeployed() {
 
     <StacksDeployStackModal v-model:open="open" @deployed="onDeployed" />
     <StacksStackHistoryModal v-model:open="historyOpen" :name="historyName" @changed="refresh()" />
+    <ConfirmPasswordModal
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete stack from version control"
+      :message="deleteTarget ? `The compose file and deploy history of ${deleteTarget.name} (local database${deleteTarget.inGit ? ' and GitLab' : ''}) will be permanently removed. This cannot be undone.` : ''"
+      confirm-label="Delete permanently"
+      :action="confirmDeleteFromTracking"
+    />
   </div>
 </template>

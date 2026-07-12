@@ -40,9 +40,33 @@ export interface SystemEntry {
   id: string
   ts: string
   module: LogModule
-  level: 'info' | 'warning' | 'error'
+  level: 'debug' | 'info' | 'warning' | 'error'
   event: string
   detail?: string
+}
+
+export interface ModuleDebugConfig {
+  module: LogModule
+  enabled: boolean
+}
+
+const DEBUG_CACHE_TTL_MS = 30_000
+const debugCache = new Map<LogModule, { enabled: boolean; expiresAt: number }>()
+
+export async function getModuleDebug(module: LogModule): Promise<ModuleDebugConfig> {
+  const cached = debugCache.get(module)
+  if (cached && cached.expiresAt > Date.now()) return { module, enabled: cached.enabled }
+
+  const raw = await getAppSetting(`logs.debug.${module}`)
+  const enabled = raw === 'true'
+  debugCache.set(module, { enabled, expiresAt: Date.now() + DEBUG_CACHE_TTL_MS })
+  return { module, enabled }
+}
+
+export async function setModuleDebug(module: LogModule, enabled: boolean, actor: string): Promise<ModuleDebugConfig> {
+  await setAppSetting(`logs.debug.${module}`, String(enabled), actor)
+  debugCache.set(module, { enabled, expiresAt: Date.now() + DEBUG_CACHE_TTL_MS })
+  return { module, enabled }
 }
 
 // Route-prefix → module. Everything not matched belongs to the portal itself.
@@ -98,6 +122,7 @@ export async function logActivity(entry: Omit<ActivityEntry, 'id' | 'ts'>): Prom
 
 export async function logSystem(module: LogModule, level: SystemEntry['level'], event: string, detail?: string): Promise<void> {
   try {
+    if (level === 'debug' && !(await getModuleDebug(module)).enabled) return
     await getDb().query(
       'INSERT INTO system_log (id, ts, module, level, event, detail) VALUES ($1, $2, $3, $4, $5, $6)',
       [nanoid(), new Date().toISOString(), module, level, event, detail ?? null]
@@ -120,11 +145,18 @@ export async function listActivity(opts: { module?: LogModule; limit?: number } 
   }))
 }
 
-export async function listSystem(opts: { module?: LogModule; limit?: number } = {}): Promise<SystemEntry[]> {
+export async function listSystem(opts: { module?: LogModule; limit?: number; includeDebug?: boolean } = {}): Promise<SystemEntry[]> {
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 1000)
-  const { rows } = opts.module
-    ? await getDb().query('SELECT * FROM system_log WHERE module = $1 ORDER BY ts DESC LIMIT $2', [opts.module, limit])
-    : await getDb().query('SELECT * FROM system_log ORDER BY ts DESC LIMIT $1', [limit])
+  const conditions: string[] = []
+  const values: any[] = []
+  if (opts.module) {
+    values.push(opts.module)
+    conditions.push(`module = $${values.length}`)
+  }
+  if (!opts.includeDebug) conditions.push(`level <> 'debug'`)
+  values.push(limit)
+  const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''
+  const { rows } = await getDb().query(`SELECT * FROM system_log${where} ORDER BY ts DESC LIMIT $${values.length}`, values)
   return rows.map((r: any) => ({ id: r.id, ts: r.ts, module: r.module, level: r.level, event: r.event, detail: r.detail ?? undefined }))
 }
 

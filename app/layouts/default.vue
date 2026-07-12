@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { user, logout, can } = useAuth()
 const { fetchPreferences } = usePreferences()
+const userNotifications = useUserNotifications()
 const route = useRoute()
 const mobileOpen = ref(false)
 
@@ -25,7 +26,12 @@ watch(() => route.fullPath, () => { mobileOpen.value = false })
 
 // Load user preferences once after auth is hydrated
 watch(user, async (u) => {
-  if (u) await fetchPreferences().catch(() => null)
+  if (u) {
+    await fetchPreferences().catch(() => null)
+    await userNotifications.start()
+  } else {
+    userNotifications.stop()
+  }
 }, { immediate: true })
 
 const userMenu = computed(() => [

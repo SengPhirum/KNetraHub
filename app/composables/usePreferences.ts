@@ -1,4 +1,5 @@
 export interface NotificationPreferences {
+  delivery: 'browser' | 'toast'
   deployFailures: boolean
   nodeDown: boolean
   replicasDegraded: boolean
@@ -26,6 +27,7 @@ export interface UserPreferences {
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
+  delivery: 'browser',
   deployFailures: true,
   nodeDown: true,
   replicasDegraded: true,
@@ -42,7 +44,7 @@ export function usePreferences() {
   async function fetchPreferences() {
     try {
       const data = await $fetch<UserPreferences>('/api/user/preferences')
-      prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, dashboards: data.dashboards || {} }
+      prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {} }
       // Sync theme to Nuxt colorMode
       colorMode.preference = data.theme
     } catch {
@@ -52,7 +54,7 @@ export function usePreferences() {
 
   async function updatePreferences(patch: Partial<UserPreferences>) {
     const data = await $fetch<UserPreferences>('/api/user/preferences', { method: 'PATCH', body: patch })
-    prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, dashboards: data.dashboards || {} }
+    prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {} }
     if (patch.theme !== undefined) colorMode.preference = patch.theme
     return data
   }

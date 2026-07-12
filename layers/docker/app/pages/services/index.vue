@@ -126,16 +126,23 @@ async function redeploy(svc: any) {
   }
 }
 
-async function remove(svc: any) {
-  if (!confirm(`Remove service "${svc.name}"? This stops all its tasks.`)) return
+// Removing a service is destructive - it must be confirmed with the user's
+// password (enforced server-side, see requirePasswordConfirm).
+const removeTarget = ref<any | null>(null)
+function remove(svc: any) {
+  removeTarget.value = svc
+}
+async function confirmRemove(password: string) {
+  const svc = removeTarget.value
+  if (!svc) return
   const saved = [...(data.value ?? [])]
   data.value = saved.filter((s) => s.id !== svc.id)
   try {
-    await $fetch(`/api/services/${svc.id}`, { method: 'DELETE' })
+    await $fetch(`/api/services/${svc.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
     toast.add({ title: `Removed ${svc.name}`, color: 'primary' })
-  } catch (e: any) {
+  } catch (e) {
     data.value = saved
-    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
+    throw e // keep the confirmation popup open with the error
   }
 }
 
@@ -395,6 +402,15 @@ function memoryValue(svc: any) {
         </div>
       </template>
     </UModal>
+
+    <ConfirmPasswordModal
+      :open="!!removeTarget"
+      @update:open="(v: boolean) => { if (!v) removeTarget = null }"
+      title="Remove service"
+      :message="removeTarget ? `Service ${removeTarget.name} will be deleted and all of its tasks stopped.` : ''"
+      confirm-label="Remove service"
+      :action="confirmRemove"
+    />
   </div>
 </template>
 

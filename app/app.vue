@@ -58,7 +58,7 @@ useHead({
 </script>
 
 <template>
-  <UApp :toaster="{ position: 'bottom-right' }">
+  <UApp :toaster="{ position: 'bottom-left' }">
     <NuxtLayout>
       <NuxtPage :transition="{ name: 'page', mode: 'out-in' }" />
     </NuxtLayout>

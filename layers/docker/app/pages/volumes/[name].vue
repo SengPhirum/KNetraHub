@@ -18,15 +18,16 @@ useIntervalFn(() => {
 
 const title = computed(() => `Volume ${data.value?.name || name}`)
 
-async function remove() {
-  if (!data.value || !confirm(`Delete volume "${data.value.name}"? Data will be lost.`)) return
-  try {
-    await $fetch(`/api/volumes/${encodedName.value}?force=true`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
-    navigateTo('/volumes')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+// Deleting a volume destroys its data - it must be confirmed with the user's
+// password (enforced server-side, see requirePasswordConfirm).
+const removeOpen = ref(false)
+function remove() {
+  if (data.value) removeOpen.value = true
+}
+async function confirmRemove(password: string) {
+  await $fetch(`/api/volumes/${encodedName.value}?force=true`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: `Deleted ${data.value?.name}`, color: 'primary' })
+  navigateTo('/volumes')
 }
 </script>
 
@@ -69,5 +70,13 @@ async function remove() {
         <ResourceServicesTable :services="data?.services" empty-label="No services use this volume." />
       </div>
     </DataState>
+
+    <ConfirmPasswordModal
+      v-model:open="removeOpen"
+      title="Delete volume"
+      :message="`Volume ${data?.name || name} and all data stored in it will be permanently deleted.`"
+      confirm-label="Delete volume"
+      :action="confirmRemove"
+    />
   </div>
 </template>

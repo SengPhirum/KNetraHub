@@ -32,13 +32,18 @@ async function create() {
     setTimeout(refresh, 500)
   } catch (e: any) { toast.add({ title: 'Create failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
-async function remove(v: any) {
-  if (!confirm(`Delete volume "${v.name}"? Data will be lost.`)) return
-  try {
-    await $fetch(`/api/volumes/${encodeURIComponent(v.name)}?force=true`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${v.name}`, color: 'primary' })
-    refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
+// Deleting a volume destroys its data - it must be confirmed with the user's
+// password (enforced server-side, see requirePasswordConfirm).
+const removeTarget = ref<any | null>(null)
+function remove(v: any) {
+  removeTarget.value = v
+}
+async function confirmRemove(password: string) {
+  const v = removeTarget.value
+  if (!v) return
+  await $fetch(`/api/volumes/${encodeURIComponent(v.name)}?force=true`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: `Deleted ${v.name}`, color: 'primary' })
+  refresh()
 }
 
 function openVolume(v: any) {
@@ -108,5 +113,14 @@ function openVolume(v: any) {
         </div>
       </template>
     </UModal>
+
+    <ConfirmPasswordModal
+      :open="!!removeTarget"
+      @update:open="(v: boolean) => { if (!v) removeTarget = null }"
+      title="Delete volume"
+      :message="removeTarget ? `Volume ${removeTarget.name} and all data stored in it will be permanently deleted.` : ''"
+      confirm-label="Delete volume"
+      :action="confirmRemove"
+    />
   </div>
 </template>

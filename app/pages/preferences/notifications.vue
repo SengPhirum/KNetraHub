@@ -9,7 +9,8 @@ const toast = useToast()
 const local = reactive({ ...prefs.value.notifications })
 watch(() => prefs.value.notifications, (v) => Object.assign(local, v), { immediate: true })
 
-const items: { key: keyof typeof local; label: string; description: string; icon: string }[] = [
+type NotificationEventKey = Exclude<keyof typeof local, 'delivery'>
+const items: { key: NotificationEventKey; label: string; description: string; icon: string }[] = [
   { key: 'deployFailures',   label: 'Deploy failures',     description: 'A stack deploy, rollback, redeploy, image update, or scale fails.', icon: 'i-lucide-circle-x' },
   { key: 'nodeDown',         label: 'Node down',           description: 'A swarm node stops reporting heartbeats.',                         icon: 'i-lucide-server-off' },
   { key: 'replicasDegraded', label: 'Replicas degraded',   description: 'A service stays under its desired replica count.',                 icon: 'i-lucide-trending-down' },
@@ -21,6 +22,9 @@ const saving = ref(false)
 async function save() {
   saving.value = true
   try {
+    if (local.delivery === 'browser' && import.meta.client && 'Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission()
+    }
     await updatePreferences({ notifications: { ...local } })
     toast.add({ title: 'Notification preferences saved', color: 'primary', icon: 'i-lucide-check' })
   } catch (e: any) {
@@ -38,6 +42,21 @@ await fetchPreferences()
     <PageHeader title="Notifications" subtitle="Choose which events you want to be notified about" icon="i-lucide-bell" />
 
     <div class="panel p-5 max-w-2xl">
+      <div class="mb-4 border-b border-hull pb-4">
+        <p class="text-sm font-medium text-foam">Delivery method</p>
+        <p class="mb-3 text-xs text-(--color-muted)">Browser notifications are requested automatically. If permission is unavailable or denied, alerts fall back to in-app toast messages.</p>
+        <USelect
+          v-model="local.delivery"
+          :items="[
+            { label: 'Browser notification (recommended)', value: 'browser' },
+            { label: 'In-app toast only', value: 'toast' }
+          ]"
+          value-key="value"
+          label-key="label"
+          class="w-full sm:w-80"
+        />
+      </div>
+
       <div class="divide-y divide-hull">
         <div v-for="item in items" :key="item.key" class="flex items-center gap-3 py-3.5">
           <UIcon :name="item.icon" class="size-4 shrink-0 text-beacon" />

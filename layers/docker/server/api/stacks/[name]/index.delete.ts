@@ -1,4 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
+import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
 import { removeStack } from '~~/layers/docker/server/utils/stack'
 import { gitlabEnabled, deleteStackFile } from '~~/layers/docker/server/utils/gitlab'
 import { deleteStackHistory } from '~~/layers/docker/server/utils/stackHistory'
@@ -6,6 +7,7 @@ import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
+  await requirePasswordConfirm(event)
   const name = getRouterParam(event, 'name')!
   // ?git=true - also erase the stack from version control (GitLab file AND
   // local history rows), not just stop its services.

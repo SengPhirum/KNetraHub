@@ -28,6 +28,7 @@ export interface User {
 }
 
 export interface NotificationPreferences {
+  delivery: 'browser' | 'toast'
   deployFailures: boolean
   nodeDown: boolean
   replicasDegraded: boolean
@@ -56,6 +57,7 @@ export interface UserPreferences {
 }
 
 export const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
+  delivery: 'browser',
   deployFailures: true,
   nodeDown: true,
   replicasDegraded: true,
@@ -326,7 +328,8 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
 function sanitizeNotifications(input: any): NotificationPreferences {
   const out: NotificationPreferences = { ...DEFAULT_NOTIFICATIONS }
   if (input && typeof input === 'object' && !Array.isArray(input)) {
-    for (const key of Object.keys(DEFAULT_NOTIFICATIONS) as (keyof NotificationPreferences)[]) {
+    if (input.delivery === 'browser' || input.delivery === 'toast') out.delivery = input.delivery
+    for (const key of ['deployFailures', 'nodeDown', 'replicasDegraded', 'diskUsage', 'newLogin'] as const) {
       if (typeof input[key] === 'boolean') out[key] = input[key]
     }
   }

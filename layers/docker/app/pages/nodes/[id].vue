@@ -163,13 +163,14 @@ async function saveLabels() {
   } catch (e: any) { toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
 
-async function remove() {
-  if (!confirm(`Remove node "${hostname.value}" from the swarm? It must be down or drained first.`)) return
-  try {
-    await $fetch(`/api/nodes/${id}?force=true`, { method: 'DELETE' })
-    toast.add({ title: `Removed ${hostname.value}`, color: 'primary' })
-    navigateTo('/nodes')
-  } catch (e: any) { toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' }) }
+// Removing a node from the swarm is critical - it must be confirmed with the
+// user's password (enforced server-side, see requirePasswordConfirm).
+const removeOpen = ref(false)
+function remove() { removeOpen.value = true }
+async function confirmRemove(password: string) {
+  await $fetch(`/api/nodes/${id}?force=true`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: `Removed ${hostname.value}`, color: 'primary' })
+  navigateTo('/nodes')
 }
 
 async function refreshAll() {
@@ -401,6 +402,14 @@ async function refreshAll() {
         </div>
       </template>
     </UModal>
+
+    <ConfirmPasswordModal
+      v-model:open="removeOpen"
+      title="Remove node from swarm"
+      :message="`Node ${hostname} will be removed from the swarm. It must be down or drained first.`"
+      confirm-label="Remove node"
+      :action="confirmRemove"
+    />
   </div>
 </template>
 
