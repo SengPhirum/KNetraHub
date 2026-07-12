@@ -81,7 +81,10 @@ const { items: filteredTasks, search, sortBy, sortDir, sortOptions, filters: tas
   sortOptions: taskSortOptions,
   defaultSortBy: 'slot',
   filterOptions: taskFilterOptions,
-  defaultFilters: { state: ['running'] }
+  // Failed tasks are exactly what you come to this table to find, so the
+  // default filter shows them alongside running ones. Users can still change
+  // or clear the filter entirely (the choice persists per user).
+  defaultFilters: { state: ['running', 'failed'] }
 })
 
 const statusEvents = ref<any[]>([])
@@ -827,7 +830,7 @@ function configRows(config: any) {
   justify-content: center;
   border-radius: 9999px;
   padding: 0.5rem;
-  transition: filter 0.16s ease, transform 0.16s ease;
+  /* transition lives in main.css - a scoped one would override the animated ring sweep */
 }
 
 .summary-ring:focus-visible,

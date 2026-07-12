@@ -415,7 +415,7 @@ async function refreshAll() {
   justify-content: center;
   border-radius: 9999px;
   padding: 0.5rem;
-  transition: filter 0.16s ease, transform 0.16s ease;
+  /* transition lives in main.css - a scoped one would override the animated ring sweep */
 }
 
 .summary-ring:focus-visible,

@@ -83,12 +83,11 @@ function historySourceBadge(source: string) {
 }
 
 const draft = ref('')
-const editMessage = ref('')
 const editOpen = ref(false)
-const saving = ref(false)
 watch(data, (d) => {
-  if (d?.compose != null && !editOpen.value) draft.value = d.compose
+  if (!editOpen.value) draft.value = d?.composeStates?.[0]?.compose || d?.compose || ''
 }, { immediate: true })
+const editComposeOptions = computed(() => data.value?.composeStates || [])
 
 const composeSourceLabel = computed(() => {
   if (data.value?.composeSource === 'gitlab') return 'GitLab desired state'
@@ -178,38 +177,19 @@ function listLabel(items: string[] = []) {
 }
 
 function openEdit() {
-  if (!data.value?.compose) {
+  const engineCompose = data.value?.composeStates?.find((item: any) => item.value === 'engine')?.compose
+  const initial = engineCompose || data.value?.compose
+  if (!initial) {
     toast.add({ title: 'No compose source available', color: 'warning' })
     return
   }
-  draft.value = data.value.compose
-  editMessage.value = `Update ${name} via KNetraHub`
+  draft.value = initial
   editOpen.value = true
 }
 
-function cancelEdit() {
-  editOpen.value = false
-  draft.value = data.value?.compose || ''
-}
-
-async function redeploy() {
-  if (!draft.value) { toast.add({ title: 'No compose content', color: 'warning' }); return }
-  saving.value = true
-  try {
-    const res: any = await $fetch('/api/stacks', {
-      method: 'POST',
-      body: { name, compose: draft.value, message: editMessage.value || `Update ${name} via KNetraHub` }
-    })
-    toast.add({ title: `Redeployed ${name}`, description: `${res.created?.length || 0} created, ${res.updated?.length || 0} updated`, color: 'primary', icon: 'i-lucide-rocket' })
-    if (res.warnings?.length) toast.add({ title: 'Warnings', description: res.warnings.slice(0, 3).join('; '), color: 'warning' })
-    editOpen.value = false
-    tab.value = 'overview'
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Deploy failed', description: e?.data?.statusMessage || e?.message, color: 'error' })
-  } finally {
-    saving.value = false
-  }
+async function onRedeployed() {
+  tab.value = 'overview'
+  await refresh()
 }
 
 const diffOpen = ref(false)
@@ -583,32 +563,7 @@ async function deleteFromTracking() {
       </div>
     </DataState>
 
-    <UModal v-model:open="editOpen" title="Edit stack" :ui="{ content: 'max-w-4xl' }">
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Name">
-            <UInput :model-value="name" class="w-full font-mono" disabled />
-          </UFormField>
-          <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <UFormField label="Compose source">
-              <UInput :model-value="composeSourceLabel" class="w-full" disabled />
-            </UFormField>
-            <UFormField label="Commit message" :hint="data?.composeSource === 'engine' ? 'Creates GitLab state when GitLab is configured' : undefined">
-              <UInput v-model="editMessage" class="w-full" :disabled="saving" />
-            </UFormField>
-          </div>
-          <UFormField label="Compose file" required>
-            <UTextarea v-model="draft" :rows="22" class="w-full font-mono text-xs" :ui="{ base: 'font-mono' }" spellcheck="false" :disabled="saving" />
-          </UFormField>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2 w-full">
-          <UButton color="neutral" variant="ghost" label="Cancel" :disabled="saving" @click="cancelEdit" />
-          <UButton color="primary" icon="i-lucide-rocket" label="Save and redeploy" :loading="saving" @click="redeploy" />
-        </div>
-      </template>
-    </UModal>
+    <StacksDeployStackModal v-model:open="editOpen" :edit-name="name" :initial-compose="draft" :compose-options="editComposeOptions" @deployed="onRedeployed" />
 
     <UModal v-model:open="diffOpen" :title="`Compose at ${short(diffSha, 8)}`" :ui="{ content: 'max-w-2xl' }">
       <template #body>
@@ -638,7 +593,7 @@ async function deleteFromTracking() {
   justify-content: center;
   border-radius: 9999px;
   padding: 0.5rem;
-  transition: filter 0.16s ease, transform 0.16s ease;
+  /* transition lives in main.css - a scoped one would override the animated ring sweep */
 }
 
 .summary-ring:focus-visible,

@@ -405,7 +405,7 @@ function memoryValue(svc: any) {
   justify-content: center;
   border-radius: 9999px;
   padding: 0.5rem;
-  transition: background 0.5s ease;
+  /* transition lives in main.css - a scoped one would override the animated ring sweep */
 }
 
 .summary-ring-inner {

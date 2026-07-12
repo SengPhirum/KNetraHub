@@ -2,6 +2,7 @@ import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { withServiceSpec } from '~~/layers/docker/server/utils/serviceMutation'
 import { AUTOREDEPLOY_LABEL, parseImageRef, fetchRemoteDigest, extractPinnedDigest } from '~~/layers/docker/server/utils/registryClient'
 import { audit } from '~~/server/utils/store'
+import { logSystem } from '~~/server/utils/moduleLogs'
 import { fireAlert } from '~~/server/utils/alertNotify'
 
 // Swarmpit-style "autoredeploy": services opted in via the knetrahub.autoredeploy
@@ -55,6 +56,7 @@ async function checkAndRedeployOne(svc: any, timeoutMs: number) {
     target: info.Spec.Name,
     detail: `${bareImage} ${pinnedDigest} -> ${remoteDigest}`
   })
+  await logSystem('docker', 'info', 'service.autoredeploy', `${info.Spec.Name}: ${bareImage} ${pinnedDigest} -> ${remoteDigest}`)
   await fireAlert({
     ruleType: 'service_redeployed',
     target: info.Spec.Name,

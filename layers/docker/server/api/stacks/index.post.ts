@@ -5,10 +5,10 @@ import { recordStackVersion } from '~~/layers/docker/server/utils/stackHistory'
 import { audit } from '~~/server/utils/store'
 import { fireAlert } from '~~/server/utils/alertNotify'
 
-/** Where this deploy's compose gets versioned. Local DB history is the
- *  default; GitLab layers on top when configured. 'both' keeps the two
- *  trails linked (the local row carries the commit sha). */
-export type StackTrackOption = 'local' | 'gitlab' | 'both' | 'none'
+/** Where this deploy's compose gets versioned. New deploys automatically
+ * prefer GitLab when configured and otherwise use the local DB. `both`
+ * remains accepted for older callers that explicitly request both trails. */
+export type StackTrackOption = 'local' | 'gitlab' | 'both'
 
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
@@ -29,9 +29,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const glOn = await gitlabEnabled()
-  // Default: both trails when GitLab is configured, local otherwise. The
-  // legacy `commit: false` flag maps to "skip GitLab" for older callers.
-  let track: StackTrackOption = body.track || (glOn ? 'both' : 'local')
+  // Default: GitLab when configured, local DB otherwise. The legacy
+  // `commit: false` flag still maps to "skip GitLab" for older callers.
+  let track: StackTrackOption = body.track && ['local', 'gitlab', 'both'].includes(body.track)
+    ? body.track
+    : (glOn ? 'gitlab' : 'local')
   if (body.commit === false && !body.track) track = 'local'
   const wantGitlab = glOn && (track === 'both' || track === 'gitlab')
   // A GitLab-only choice without GitLab configured still records locally -

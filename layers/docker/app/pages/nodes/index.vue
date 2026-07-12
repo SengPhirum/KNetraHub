@@ -390,7 +390,7 @@ function nodeBadges(n: any) {
                 <span class="shrink-0 font-mono text-xs font-semibold text-foam">{{ metric.value }}</span>
               </div>
               <div class="node-bar mt-2">
-                <span class="node-bar-fill" :style="metricBarStyle(metric.percent, metric.available)" />
+                <span class="node-bar-fill usage-bar-fill" :style="metricBarStyle(metric.percent, metric.available)" />
               </div>
               <p class="mt-1.5 truncate font-mono text-[11px] text-(--color-muted)">{{ metric.hint }}</p>
             </div>
@@ -457,7 +457,7 @@ function nodeBadges(n: any) {
                   <p class="shrink-0 font-mono text-[11px] text-foam">{{ metric.value }}</p>
                 </div>
                 <div class="node-bar node-bar-sm mt-1.5">
-                  <span class="node-bar-fill" :style="metricBarStyle(metric.percent, metric.available)" />
+                  <span class="node-bar-fill usage-bar-fill" :style="metricBarStyle(metric.percent, metric.available)" />
                 </div>
               </div>
             </div>
@@ -499,6 +499,6 @@ function nodeBadges(n: any) {
   display: block;
   height: 100%;
   border-radius: inherit;
-  transition: width 0.25s ease, background-color 0.25s ease;
+  /* width/color transition comes from .usage-bar-fill in main.css */
 }
 </style>

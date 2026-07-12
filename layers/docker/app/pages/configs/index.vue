@@ -93,7 +93,7 @@ function openConfig(c: any) {
       </div>
     </DataState>
 
-    <UModal v-model:open="open" title="Create config">
+    <UModal v-model:open="open" title="Create config" :dismissible="false">
       <template #body>
         <div class="space-y-4">
           <UFormField label="Name" required><UInput v-model="form.name" class="w-full font-mono" placeholder="nginx.conf" /></UFormField>

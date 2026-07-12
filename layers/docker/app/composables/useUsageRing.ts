@@ -23,12 +23,23 @@ export function useUsageRing() {
     return `color-mix(in srgb, var(--color-hull) ${hullPercent}%, ${trackColor}) 0`
   }
 
+  // The sweep and color live in registered custom properties (see the
+  // "usage gauges" section of app/assets/css/main.css) so value changes
+  // animate - a conic-gradient baked into `background` can only snap.
+  function ringStyleVars(color: string, safe: number, hullPercent: number, trackColor: string) {
+    return {
+      '--ring-value': `${safe}%`,
+      '--ring-color': color,
+      background: `conic-gradient(var(--ring-color) var(--ring-value), ${track(hullPercent, trackColor)})`
+    }
+  }
+
   // CPU/RAM/Disk gauges - a full ring means "at capacity", so it goes amber
   // then red as it approaches the limit.
   function usageRingStyle(percent?: number | null, opts: { hullPercent?: number; trackColor?: string } = {}) {
     const safe = clampPercent(percent)
     const { hullPercent = 72, trackColor = 'var(--color-surface-2)' } = opts
-    return { background: `conic-gradient(${ringColor(safe)} ${safe}%, ${track(hullPercent, trackColor)})` }
+    return ringStyleVars(ringColor(safe), safe, hullPercent, trackColor)
   }
 
   // Fulfillment gauges (e.g. replicas running/desired) - a full ring means
@@ -36,7 +47,7 @@ export function useUsageRing() {
   function fulfillmentRingStyle(percent?: number | null, opts: { hullPercent?: number; trackColor?: string } = {}) {
     const safe = clampPercent(percent)
     const { hullPercent = 72, trackColor = 'var(--color-surface-2)' } = opts
-    return { background: `conic-gradient(var(--color-running) ${safe}%, ${track(hullPercent, trackColor)})` }
+    return ringStyleVars('var(--color-running)', safe, hullPercent, trackColor)
   }
 
   return { clampPercent, ringColor, usageRingStyle, fulfillmentRingStyle }

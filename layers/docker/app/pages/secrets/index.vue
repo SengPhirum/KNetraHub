@@ -96,7 +96,7 @@ function openSecret(s: any) {
       </div>
     </DataState>
 
-    <UModal v-model:open="open" title="Create secret">
+    <UModal v-model:open="open" title="Create secret" :dismissible="false">
       <template #body>
         <div class="space-y-4">
           <UFormField label="Name" required><UInput v-model="form.name" class="w-full font-mono" placeholder="db_password" /></UFormField>

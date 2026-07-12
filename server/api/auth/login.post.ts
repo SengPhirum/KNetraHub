@@ -2,6 +2,7 @@ import { ldapAuthenticate } from '~~/server/utils/ldap'
 import { getLdapSettings } from '~~/server/utils/authSettings'
 import { verifyLocalUser, upsertExternalUser, touchLogin, audit } from '~~/server/utils/store'
 import { setSession, resolveUserEntitlements } from '~~/server/utils/auth'
+import { logSystem } from '~~/server/utils/moduleLogs'
 
 export default defineEventHandler(async (event) => {
   const { username, password } = await readBody<{ username: string; password: string }>(event)
@@ -51,12 +52,14 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!session) {
+    await logSystem('portal', 'warning', 'auth.login.failed', `Failed login attempt for "${username}"`)
     throw createError({ statusCode: 401, statusMessage: 'Invalid username or password' })
   }
 
   await touchLogin(session.username)
   await setSession(event, session)
   await audit({ actor: session.username, action: 'auth.login', detail: `via ${session.source}` })
+  await logSystem('portal', 'info', 'auth.login', `${session.username} signed in via ${session.source}`)
 
   const apps = await resolveUserEntitlements(session)
   return { user: { ...session, apps } }

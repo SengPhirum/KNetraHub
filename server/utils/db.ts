@@ -138,6 +138,41 @@ async function runMigrations(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit (ts DESC);
 
+    -- Per-module user activity trail (who did what, from which module's UI).
+    -- Written automatically for every authenticated state-changing API call
+    -- (see server/plugins/moduleLogs.ts), so every action button a user clicks
+    -- lands here with the acting user - separate from the portal-level "audit"
+    -- table, which keeps its curated, long-retention entries.
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id TEXT PRIMARY KEY,
+      ts TEXT NOT NULL,
+      module TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      role TEXT,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target TEXT,
+      status INTEGER,
+      ip TEXT,
+      detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_log_module_ts ON activity_log (module, ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_activity_log_ts ON activity_log (ts DESC);
+
+    -- System/runtime events, stored separately from user activity by design
+    -- (login failures, auto-redeploys, housekeeping runs, module errors).
+    CREATE TABLE IF NOT EXISTS system_log (
+      id TEXT PRIMARY KEY,
+      ts TEXT NOT NULL,
+      module TEXT NOT NULL,
+      level TEXT NOT NULL,
+      event TEXT NOT NULL,
+      detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_system_log_module_ts ON system_log (module, ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_system_log_ts ON system_log (ts DESC);
+
     CREATE TABLE IF NOT EXISTS api_tokens (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -2,6 +2,13 @@
 import type { ServiceModel, NetworkModel, VolumeModel, ConfigModel, SecretModel } from '~~/layers/docker/app/composables/useComposeBuilder'
 
 const open = defineModel<boolean>('open', { default: false })
+const props = defineProps<{
+  /** Set to edit an existing stack: the name locks and the form/YAML prefill
+   *  from this compose instead of starting empty. */
+  editName?: string
+  initialCompose?: string
+  composeOptions?: Array<{ value: string; label: string; compose: string; date?: string; message?: string }>
+}>()
 const emit = defineEmits<{ deployed: [] }>()
 const toast = useToast()
 const { data: gl } = useFetch('/api/gitlab/status', { lazy: true })
@@ -16,55 +23,86 @@ const yamlText = ref('')
 const deploying = ref(false)
 const validating = ref(false)
 
-// ── Version tracking: local DB history is the always-available default;
-// GitLab becomes selectable once the integration is configured. ────────────
-type TrackOption = 'local' | 'gitlab' | 'both' | 'none'
-const track = ref<TrackOption>('local')
-const trackItems = computed(() => [
-  ...(gl.value?.enabled
-    ? [
-        { label: 'Local + GitLab (recommended)', value: 'both' },
-        { label: 'Local history only', value: 'local' },
-        { label: 'GitLab only', value: 'gitlab' }
-      ]
-    : [{ label: 'Local history (default)', value: 'local' }]),
-  { label: 'No versioning', value: 'none' }
-])
-const messageLabel = computed(() => track.value === 'gitlab' || track.value === 'both' ? 'Commit message' : 'Version message')
+// History tracking is automatic: prefer the configured GitLab integration,
+// otherwise keep the version in the always-available local database.
+const historyTrack = computed<'local' | 'gitlab'>(() => gl.value?.enabled ? 'gitlab' : 'local')
+const historyBadge = computed(() => historyTrack.value === 'gitlab'
+  ? { label: 'GitLab history', icon: 'i-lucide-git-branch', color: 'primary' as const }
+  : { label: 'Local DB history', icon: 'i-lucide-database', color: 'neutral' as const })
+const composeState = ref('engine')
+const composeStateItems = computed(() => (props.composeOptions || []).map((item) => ({ label: item.label, value: item.value })))
 
 interface ValidationResult { valid: boolean; errors: string[]; warnings: string[]; needsSecrets: { key: string; fullName: string }[]; needsConfigs: { key: string; fullName: string }[] }
 const lastValidation = ref<ValidationResult | null>(null)
 
 // ── Form <-> YAML live sync ("last edited wins") ────────────────────────────
-let syncing = false
+// Watchers run as separately queued jobs, so a flag reset synchronously in one
+// callback is already cleared by the time the opposite watcher fires. Each
+// side instead marks its write and the *other* watcher consumes the mark -
+// otherwise every form edit round-trips through YAML and half-filled rows
+// (blank constraints, labels without keys) get clobbered on the way back.
+let fromModel = false
+let fromYaml = false
+
+function syncYamlFromModel() {
+  const text = modelToYaml(model.value)
+  if (text === yamlText.value) return
+  fromModel = true
+  yamlText.value = text
+}
+
 watch(model, () => {
-  if (syncing) return
-  syncing = true
-  yamlText.value = modelToYaml(model.value)
-  syncing = false
+  if (fromYaml) { fromYaml = false; return }
+  syncYamlFromModel()
 }, { deep: true })
 
 watch(yamlText, (text) => {
-  if (syncing) return
+  if (fromModel) { fromModel = false; return }
   const parsed = parseComposeToModel(text, model.value)
   if (!parsed) return // invalid YAML mid-edit - keep the last good model, don't clobber it
-  syncing = true
+  fromYaml = true
   model.value = parsed
-  syncing = false
 })
 
 // ── Reset whenever the modal opens ──────────────────────────────────────────
+// In edit mode (editName set) the form/YAML prefill from the stack's current
+// compose; the fromYaml/fromModel marks suppress the sync watchers so the
+// original YAML text survives verbatim instead of being re-serialized.
+function loadComposeSource(text: string) {
+  const parsed = parseComposeToModel(text, null)
+  mode.value = parsed && parsed.services.length ? 'form' : 'yaml'
+  fromYaml = true
+  model.value = parsed && parsed.services.length ? parsed : emptyModel()
+  if (yamlText.value !== text) {
+    fromModel = true
+    yamlText.value = text
+  }
+  activeNav.value = `service:${model.value.services[0]?.id || ''}`
+  lastValidation.value = null
+}
+
+watch(composeState, (value) => {
+  if (!open.value || !props.editName) return
+  const selected = props.composeOptions?.find((item) => item.value === value)
+  if (selected) loadComposeSource(selected.compose)
+})
+
 watch(open, (isOpen) => {
   if (!isOpen) return
-  mode.value = 'form'
-  stackName.value = ''
-  commitMessage.value = ''
-  track.value = gl.value?.enabled ? 'both' : 'local'
-  model.value = emptyModel()
-  syncing = true
-  yamlText.value = modelToYaml(model.value)
-  syncing = false
-  activeNav.value = `service:${model.value.services[0]!.id}`
+  stackName.value = props.editName || ''
+  if (props.editName) {
+    commitMessage.value = `Update ${props.editName} via KNetraHub`
+    const selected = props.composeOptions?.find((item) => item.value === 'engine') || props.composeOptions?.[0]
+    composeState.value = selected?.value || 'engine'
+    loadComposeSource(selected?.compose || props.initialCompose || '')
+  } else {
+    commitMessage.value = ''
+    mode.value = 'form'
+    model.value = emptyModel()
+    syncYamlFromModel()
+  }
+  activeNav.value = `service:${model.value.services[0]?.id || ''}`
+  loadSwarmNodes()
   lastValidation.value = null
   secretsPopupOpen.value = false
   for (const k of Object.keys(secretsForm)) delete secretsForm[k]
@@ -142,6 +180,60 @@ function addLabel(svc: ServiceModel) { svc.labels.push({ key: '', value: '' }) }
 function addServiceLabel(svc: ServiceModel) { svc.serviceLabels.push({ key: '', value: '' }) }
 function addConstraint(svc: ServiceModel) { svc.placementConstraints.push('') }
 
+// ── Placement constraint suggestions from the live swarm ───────────────────
+// Roles are always offered; hostnames and node labels come from /api/nodes,
+// refreshed each time the modal opens so newly labelled nodes show up.
+const { data: swarmNodes, execute: loadSwarmNodes } = useFetch('/api/nodes', { lazy: true, immediate: false, default: () => [] as any[] })
+
+const constraintGroups = computed<string[][]>(() => {
+  const hostnames: string[] = []
+  const labels = new Set<string>()
+  for (const n of swarmNodes.value || []) {
+    if (n.hostname) hostnames.push(`node.hostname==${n.hostname}`)
+    for (const [k, v] of Object.entries(n.labels || {})) labels.add(`node.labels.${k}==${v}`)
+  }
+  return [['node.role==manager', 'node.role==worker'], hostnames, [...labels].sort()].filter((g) => g.length > 0)
+})
+
+function constraintMenuItems(svc: ServiceModel, index: number | null) {
+  return constraintGroups.value.map((group) => group.map((c) => ({
+    label: c,
+    onSelect: () => {
+      if (index === null) svc.placementConstraints.push(c)
+      else svc.placementConstraints[index] = c
+    }
+  })))
+}
+
+// Spread preferences take a node label *key* (tasks spread across its values).
+function addPreference(svc: ServiceModel) { svc.placementPreferences.push('') }
+const preferenceOptions = computed(() => {
+  const keys = new Set<string>()
+  for (const n of swarmNodes.value || []) for (const k of Object.keys(n.labels || {})) keys.add(`node.labels.${k}`)
+  return [...keys].sort()
+})
+function preferenceMenuItems(svc: ServiceModel) {
+  return preferenceOptions.value.map((d) => ({ label: d, onSelect: () => { svc.placementPreferences.push(d) } }))
+}
+
+const endpointModeItems = [
+  { label: 'Default (vip)', value: '' },
+  { label: 'vip — virtual IP', value: 'vip' },
+  { label: 'dnsrr — DNS round-robin', value: 'dnsrr' }
+]
+const strategyOrderItems = [
+  { label: 'Default (stop-first)', value: '' },
+  { label: 'stop-first', value: 'stop-first' },
+  { label: 'start-first (zero-downtime)', value: 'start-first' }
+]
+const updateFailureItems = [
+  { label: 'Default (pause)', value: '' },
+  { label: 'continue', value: 'continue' },
+  { label: 'rollback', value: 'rollback' },
+  { label: 'pause', value: 'pause' }
+]
+const rollbackFailureItems = updateFailureItems.filter((i) => i.value !== 'rollback')
+
 // ── Validation (debounced, and re-run once more right before deploy) ───────
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleValidate() {
@@ -201,7 +293,7 @@ async function doDeploy() {
         name: stackName.value,
         compose: yamlText.value,
         message: commitMessage.value,
-        track: track.value,
+        track: historyTrack.value,
         secretsContent: { ...secretsForm },
         configsContent: { ...configsForm }
       }
@@ -223,20 +315,34 @@ async function doDeploy() {
 <template>
   <UModal
     v-model:open="open"
-    title="Deploy stack"
+    :title="editName ? `Edit stack: ${editName}` : 'Deploy stack'"
     description="Build it as a form, or write the compose file directly - either view stays in sync with the other."
+    :dismissible="false"
     :ui="{ content: 'w-[95vw] max-w-[1600px] h-[88vh] max-h-[88vh] sm:max-h-[88vh]' }"
   >
+    <template #title>
+      <span class="flex flex-wrap items-center gap-2 pr-8">
+        <span>{{ editName ? `Edit stack: ${editName}` : 'Deploy stack' }}</span>
+        <UBadge
+          :label="historyBadge.label"
+          :icon="historyBadge.icon"
+          :color="historyBadge.color"
+          variant="subtle"
+          size="sm"
+          :title="`History tracking: ${historyBadge.label}`"
+        />
+      </span>
+    </template>
     <template #body>
       <div class="flex h-full min-h-0 flex-col gap-4">
-        <div class="grid shrink-0 gap-3 sm:grid-cols-3">
-          <UFormField label="Stack name" required>
-            <UInput v-model="stackName" placeholder="my-app" icon="i-lucide-layers" class="w-full font-mono" :disabled="deploying" />
+        <div class="grid shrink-0 gap-3" :class="editName ? 'lg:grid-cols-3' : 'sm:grid-cols-2'">
+          <UFormField label="Stack name" required :hint="editName ? 'Fixed while editing' : undefined">
+            <UInput v-model="stackName" placeholder="my-app" icon="i-lucide-layers" class="w-full font-mono" :disabled="deploying || !!editName" />
           </UFormField>
-          <UFormField label="History tracking" :hint="gl?.enabled ? undefined : 'Configure GitLab in Dock settings to also version in Git'">
-            <USelect v-model="track" :items="trackItems" value-key="value" label-key="label" icon="i-lucide-history" class="w-full" :disabled="deploying" />
+          <UFormField v-if="editName" label="Compose file" hint="Choose the state to load into the editor">
+            <USelect v-model="composeState" :items="composeStateItems" value-key="value" label-key="label" icon="i-lucide-file-clock" class="w-full" :disabled="deploying" />
           </UFormField>
-          <UFormField v-if="track !== 'none'" :label="messageLabel">
+          <UFormField label="Version message">
             <UInput v-model="commitMessage" placeholder="Deploy my-app via KNetraHub" class="w-full" :disabled="deploying" />
           </UFormField>
         </div>
@@ -311,6 +417,9 @@ async function doDeploy() {
                     <UFormField v-if="activeService.mode === 'replicated'" label="Replicas">
                       <UInput v-model.number="activeService.replicas" type="number" min="0" class="w-32" :disabled="deploying" />
                     </UFormField>
+                    <UFormField label="Endpoint mode">
+                      <USelect v-model="activeService.endpointMode" :items="endpointModeItems" value-key="value" label-key="label" class="w-56" :disabled="deploying" />
+                    </UFormField>
                   </div>
                 </div>
 
@@ -379,7 +488,7 @@ async function doDeploy() {
                   <div class="space-y-2">
                     <div v-for="(row, i) in activeService.configs" :key="i" class="flex items-center gap-2">
                       <USelect v-model="row.source" :items="configOptions" value-key="value" label-key="label" class="w-1/3" :disabled="deploying" />
-                      <UInput v-model="row.target" placeholder="/target/path" class="w-full font-mono" :disabled="deploying" />
+                      <UInput v-model="row.target" :placeholder="row.source ? `/${row.source} (default)` : '/target/path'" class="w-full font-mono" :disabled="deploying" />
                       <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" :disabled="deploying" @click="activeService.configs.splice(i, 1)" />
                     </div>
                   </div>
@@ -395,7 +504,7 @@ async function doDeploy() {
                   <div class="space-y-2">
                     <div v-for="(row, i) in activeService.secrets" :key="i" class="flex items-center gap-2">
                       <USelect v-model="row.source" :items="secretOptions" value-key="value" label-key="label" class="w-1/3" :disabled="deploying" />
-                      <UInput v-model="row.target" placeholder="/target/path" class="w-full font-mono" :disabled="deploying" />
+                      <UInput v-model="row.target" :placeholder="row.source ? `/run/secrets/${row.source} (default)` : '/run/secrets/<name>'" class="w-full font-mono" :disabled="deploying" />
                       <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" :disabled="deploying" @click="activeService.secrets.splice(i, 1)" />
                     </div>
                   </div>
@@ -407,9 +516,18 @@ async function doDeploy() {
                     <p class="mb-3 text-xs text-faint">Blank = unlimited.</p>
                     <div class="grid grid-cols-2 gap-3">
                       <UFormField label="Reservation CPU"><UInput v-model="activeService.reservationCpus" placeholder="0.5" class="w-full font-mono" :disabled="deploying" /></UFormField>
-                      <UFormField label="Reservation memory"><UInput v-model="activeService.reservationMemory" placeholder="256M" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Reservation memory">
+                        <UInput v-model="activeService.reservationMemory" type="number" min="0" step="1" placeholder="256" class="w-full font-mono" :disabled="deploying">
+                          <template #trailing><span class="text-xs text-faint">MB</span></template>
+                        </UInput>
+                      </UFormField>
                       <UFormField label="Limit CPU"><UInput v-model="activeService.limitCpus" placeholder="1" class="w-full font-mono" :disabled="deploying" /></UFormField>
-                      <UFormField label="Limit memory"><UInput v-model="activeService.limitMemory" placeholder="512M" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Limit memory">
+                        <UInput v-model="activeService.limitMemory" type="number" min="0" step="1" placeholder="512" class="w-full font-mono" :disabled="deploying">
+                          <template #trailing><span class="text-xs text-faint">MB</span></template>
+                        </UInput>
+                      </UFormField>
+                      <UFormField label="Limit PIDs"><UInput v-model="activeService.limitPids" type="number" min="0" placeholder="unlimited" class="w-full font-mono" :disabled="deploying" /></UFormField>
                     </div>
                   </div>
                   <div class="field-card">
@@ -423,18 +541,74 @@ async function doDeploy() {
                   </div>
                 </div>
 
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="field-card">
+                    <p class="field-card-title">Update strategy</p>
+                    <p class="mb-3 text-xs text-faint">How service updates roll out. Blank = Docker defaults.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <UFormField label="Parallelism"><UInput v-model="activeService.updateConfig.parallelism" type="number" min="0" placeholder="1" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Delay"><UInput v-model="activeService.updateConfig.delay" placeholder="10s" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Order"><USelect v-model="activeService.updateConfig.order" :items="strategyOrderItems" value-key="value" label-key="label" class="w-full" :disabled="deploying" /></UFormField>
+                      <UFormField label="Failure action"><USelect v-model="activeService.updateConfig.failureAction" :items="updateFailureItems" value-key="value" label-key="label" class="w-full" :disabled="deploying" /></UFormField>
+                      <UFormField label="Monitor"><UInput v-model="activeService.updateConfig.monitor" placeholder="30s" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Max failure ratio"><UInput v-model="activeService.updateConfig.maxFailureRatio" placeholder="0.2" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                    </div>
+                  </div>
+                  <div class="field-card">
+                    <p class="field-card-title">Rollback strategy</p>
+                    <p class="mb-3 text-xs text-faint">How automatic rollbacks roll out. Blank = Docker defaults.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <UFormField label="Parallelism"><UInput v-model="activeService.rollbackConfig.parallelism" type="number" min="0" placeholder="1" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Delay"><UInput v-model="activeService.rollbackConfig.delay" placeholder="10s" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Order"><USelect v-model="activeService.rollbackConfig.order" :items="strategyOrderItems" value-key="value" label-key="label" class="w-full" :disabled="deploying" /></UFormField>
+                      <UFormField label="Failure action"><USelect v-model="activeService.rollbackConfig.failureAction" :items="rollbackFailureItems" value-key="value" label-key="label" class="w-full" :disabled="deploying" /></UFormField>
+                      <UFormField label="Monitor"><UInput v-model="activeService.rollbackConfig.monitor" placeholder="30s" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                      <UFormField label="Max failure ratio"><UInput v-model="activeService.rollbackConfig.maxFailureRatio" placeholder="0.2" class="w-full font-mono" :disabled="deploying" /></UFormField>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="field-card">
                   <div class="field-card-header">
                     <p class="field-card-title">Placement constraints</p>
-                    <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="xs" label="Add constraint" :disabled="deploying" @click="addConstraint(activeService)" />
+                    <div class="flex items-center gap-1.5">
+                      <UDropdownMenu :items="constraintMenuItems(activeService, null)" :content="{ align: 'end' }" :ui="{ content: 'max-h-72 overflow-y-auto', item: 'font-mono text-xs' }">
+                        <UButton icon="i-lucide-tags" trailing-icon="i-lucide-chevron-down" color="neutral" variant="soft" size="xs" label="From nodes" :disabled="deploying" />
+                      </UDropdownMenu>
+                      <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="xs" label="Add constraint" :disabled="deploying" @click="addConstraint(activeService)" />
+                    </div>
                   </div>
                   <p v-if="!activeService.placementConstraints.length" class="field-card-empty">No placement constraints.</p>
                   <div class="space-y-2">
                     <div v-for="(_, i) in activeService.placementConstraints" :key="i" class="flex items-center gap-2">
                       <UInput v-model="activeService.placementConstraints[i]" placeholder="node.role==worker" class="w-full font-mono" :disabled="deploying" />
+                      <UDropdownMenu :items="constraintMenuItems(activeService, i)" :content="{ align: 'end' }" :ui="{ content: 'max-h-72 overflow-y-auto', item: 'font-mono text-xs' }">
+                        <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="sm" aria-label="Pick node constraint" :disabled="deploying" />
+                      </UDropdownMenu>
                       <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" :disabled="deploying" @click="activeService.placementConstraints.splice(i, 1)" />
                     </div>
                   </div>
+
+                  <div class="field-card-header mt-4">
+                    <p class="field-card-title">Spread preferences</p>
+                    <div class="flex items-center gap-1.5">
+                      <UDropdownMenu :items="preferenceMenuItems(activeService)" :content="{ align: 'end' }" :ui="{ content: 'max-h-72 overflow-y-auto', item: 'font-mono text-xs' }">
+                        <UButton icon="i-lucide-tags" trailing-icon="i-lucide-chevron-down" color="neutral" variant="soft" size="xs" label="From node labels" :disabled="deploying || !preferenceOptions.length" />
+                      </UDropdownMenu>
+                      <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="xs" label="Add preference" :disabled="deploying" @click="addPreference(activeService)" />
+                    </div>
+                  </div>
+                  <p v-if="!activeService.placementPreferences.length" class="field-card-empty">No spread preferences - tasks spread evenly across the values of a node label (e.g. node.labels.zone).</p>
+                  <div class="space-y-2">
+                    <div v-for="(_, i) in activeService.placementPreferences" :key="`pref${i}`" class="flex items-center gap-2">
+                      <UInput v-model="activeService.placementPreferences[i]" placeholder="node.labels.zone" class="w-full font-mono" :disabled="deploying" />
+                      <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" :disabled="deploying" @click="activeService.placementPreferences.splice(i, 1)" />
+                    </div>
+                  </div>
+
+                  <UFormField label="Max replicas per node" class="mt-4" help="Blank = unlimited.">
+                    <UInput v-model="activeService.maxReplicasPerNode" type="number" min="0" class="w-40 font-mono" :disabled="deploying" />
+                  </UFormField>
                 </div>
 
                 <div class="field-card">
@@ -589,14 +763,14 @@ async function doDeploy() {
         </span>
         <div class="flex gap-2">
           <UButton color="neutral" variant="ghost" label="Cancel" :disabled="deploying" @click="open = false" />
-          <UButton color="primary" label="Deploy" icon="i-lucide-rocket" :loading="deploying" @click="attemptDeploy" />
+          <UButton color="primary" :label="editName ? 'Redeploy' : 'Deploy'" icon="i-lucide-rocket" :loading="deploying" @click="attemptDeploy" />
         </div>
       </div>
     </template>
   </UModal>
 
   <!-- Popup: collect content for any non-external secret/config Docker doesn't already have -->
-  <UModal v-model:open="secretsPopupOpen" title="Create secrets &amp; configs" description="These are declared in the compose file but don't exist in Docker yet - provide their content so they can be created before the stack deploys.">
+  <UModal v-model:open="secretsPopupOpen" title="Create secrets &amp; configs" description="These are declared in the compose file but don't exist in Docker yet - provide their content so they can be created before the stack deploys." :dismissible="false">
     <template #body>
       <div class="space-y-4">
         <div v-for="s in lastValidation?.needsSecrets || []" :key="`s:${s.key}`">

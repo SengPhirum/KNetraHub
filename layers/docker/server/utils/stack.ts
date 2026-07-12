@@ -257,6 +257,31 @@ export async function deployStack(stackName: string, composeText: string, option
     result.networks.push(fullName)
   }
 
+  // 1a. Default network semantics from `docker stack deploy`: services that
+  // list no networks join the stack's "default" overlay network. Without it,
+  // two services in the same stack share no network at all and can't resolve
+  // each other by name (UnknownHostException on the other service's hostname).
+  const needsDefaultNetwork = Object.values(composeServices).some((def: any) => {
+    const nets = def?.networks
+    return !nets || (Array.isArray(nets) ? nets.length === 0 : Object.keys(nets).length === 0)
+  })
+  if (needsDefaultNetwork && !netNameToId.has('default')) {
+    const fullName = `${stackName}_default`
+    const found = existingNetworks.find((n) => n.Name === fullName)
+    if (found) {
+      netNameToId.set('default', found.Id)
+    } else {
+      const created = await docker.createNetwork({
+        Name: fullName,
+        Driver: 'overlay',
+        Attachable: true,
+        Labels: { [STACK_LABEL]: stackName }
+      })
+      netNameToId.set('default', created.id)
+      result.networks.push(fullName)
+    }
+  }
+
   // 1b. Ensure secrets/configs - external ones must already exist; non-external
   // ones are auto-created here from user-supplied content (see DeployOptions),
   // the same way `docker stack deploy` expects a `file:` on disk, except a
@@ -403,7 +428,7 @@ function buildServiceSpec(
   const ports = normalizePorts(def.ports, warnings)
 
   // networks
-  const Networks = normalizeServiceNetworks(def.networks, netNameToId, warnings)
+  const Networks = normalizeServiceNetworks(def.networks, netNameToId, svcKey, warnings)
 
   // mounts
   const Mounts = normalizeMounts(def.volumes, warnings)
@@ -419,19 +444,14 @@ function buildServiceSpec(
   const RestartPolicy = normalizeRestart(deploy.restart_policy)
 
   // placement
-  const Placement = deploy.placement?.constraints
-    ? { Constraints: ([] as string[]).concat(deploy.placement.constraints) }
-    : undefined
+  const Placement = normalizePlacement(deploy.placement)
 
-  // update config
-  const UpdateConfig = deploy.update_config
-    ? {
-        Parallelism: deploy.update_config.parallelism ?? 1,
-        Delay: parseDuration(deploy.update_config.delay),
-        Order: deploy.update_config.order || 'stop-first',
-        FailureAction: deploy.update_config.failure_action || 'pause'
-      }
-    : undefined
+  // update / rollback config (same shape in both the compose file and the API)
+  const UpdateConfig = normalizeChangeConfig(deploy.update_config)
+  const RollbackConfig = normalizeChangeConfig(deploy.rollback_config)
+
+  // endpoint mode (vip is the engine default; dnsrr disables the virtual IP)
+  const endpointMode = deploy.endpoint_mode === 'dnsrr' || deploy.endpoint_mode === 'vip' ? deploy.endpoint_mode : undefined
 
   // healthcheck
   const Healthcheck = normalizeHealthcheck(def.healthcheck)
@@ -461,7 +481,36 @@ function buildServiceSpec(
     },
     Mode,
     UpdateConfig,
-    EndpointSpec: ports.length ? { Ports: ports } : undefined
+    RollbackConfig,
+    EndpointSpec: ports.length || endpointMode
+      ? { Mode: endpointMode, Ports: ports.length ? ports : undefined }
+      : undefined
+  }
+}
+
+function normalizePlacement(p: any) {
+  if (!p) return undefined
+  const out: any = {}
+  if (p.constraints) out.Constraints = ([] as string[]).concat(p.constraints)
+  if (p.preferences) {
+    out.Preferences = ([] as any[])
+      .concat(p.preferences)
+      .map((pref) => ({ Spread: { SpreadDescriptor: String(pref?.spread ?? pref) } }))
+  }
+  if (p.max_replicas_per_node != null) out.MaxReplicas = Number(p.max_replicas_per_node)
+  return Object.keys(out).length ? out : undefined
+}
+
+// deploy.update_config / deploy.rollback_config -> UpdateConfig/RollbackConfig
+function normalizeChangeConfig(cfg: any) {
+  if (!cfg) return undefined
+  return {
+    Parallelism: cfg.parallelism != null ? Number(cfg.parallelism) : 1,
+    Delay: parseDuration(cfg.delay),
+    Order: cfg.order || 'stop-first',
+    FailureAction: cfg.failure_action || 'pause',
+    Monitor: parseDuration(cfg.monitor),
+    MaxFailureRatio: cfg.max_failure_ratio != null ? Number(cfg.max_failure_ratio) : undefined
   }
 }
 
@@ -520,13 +569,23 @@ function normalizePorts(ports: any, warnings: string[]) {
   return out
 }
 
-function normalizeServiceNetworks(nets: any, netNameToId: Map<string, string>, warnings: string[]) {
-  if (!nets) return netNameToId.size ? [{ Target: [...netNameToId.values()][0] }] : undefined
-  const keys = Array.isArray(nets) ? nets : Object.keys(nets)
+function normalizeServiceNetworks(nets: any, netNameToId: Map<string, string>, svcKey: string, warnings: string[]) {
+  // `docker stack deploy` registers the bare compose service name as a network
+  // alias on every attachment - that's what lets one service reach another as
+  // "postgres-db" instead of only "<stack>_postgres-db". Without the alias,
+  // cross-service DNS by compose name fails (UnknownHostException).
+  const attach = (id: string) => ({ Target: id, Aliases: [svcKey] })
+  const keys = Array.isArray(nets) ? nets : Object.keys(nets || {})
+  if (!keys.length) {
+    // No explicit networks -> the stack's default network (compose semantics),
+    // falling back to the first declared network for older deploys.
+    const fallback = netNameToId.get('default') || [...netNameToId.values()][0]
+    return fallback ? [attach(fallback)] : undefined
+  }
   const out: any[] = []
   for (const k of keys) {
     const id = netNameToId.get(String(k))
-    if (id) out.push({ Target: id })
+    if (id) out.push(attach(id))
     else warnings.push(`Service references unknown network "${k}"`)
   }
   return out.length ? out : undefined
@@ -587,7 +646,8 @@ function normalizeResources(resources: any) {
   if (resources.limits) {
     out.Limits = {
       NanoCPUs: resources.limits.cpus ? Math.round(Number(resources.limits.cpus) * 1e9) : undefined,
-      MemoryBytes: parseBytes(resources.limits.memory)
+      MemoryBytes: parseBytes(resources.limits.memory),
+      Pids: resources.limits.pids != null ? Number(resources.limits.pids) : undefined
     }
   }
   if (resources.reservations) {

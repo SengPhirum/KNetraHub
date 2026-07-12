@@ -334,6 +334,46 @@ body {
   .sonar::after { animation: none; }
 }
 
+/* ─── usage gauges (CPU/RAM/Disk rings & bars) ─────────────────────────────── */
+/* The ring sweep is a conic-gradient driven by registered custom properties
+   (set inline by useUsageRing), so increases and decreases glide to the new
+   value instead of snapping. Browsers without @property support just skip
+   the transition and render the final value directly. */
+@property --ring-value {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+@property --ring-color {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: transparent;
+}
+
+/* filter/transform cover the pages' hover pop - declared here because a
+   scoped `transition` on .summary-ring would override the ring animation. */
+.summary-ring,
+.dashboard-ring {
+  transition:
+    --ring-value 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    --ring-color 0.45s ease,
+    filter 0.16s ease,
+    transform 0.16s ease;
+}
+
+/* Linear usage bars (nodes list) share the same feel. */
+.usage-bar-fill {
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.45s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-ring,
+  .dashboard-ring,
+  .usage-bar-fill {
+    transition: none;
+  }
+}
+
 /* scrollbars - thin, in keeping with the instrument feel */
 * {
   scrollbar-width: thin;

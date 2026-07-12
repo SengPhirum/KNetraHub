@@ -3,7 +3,7 @@ import { requireUser } from '~~/server/utils/auth'
 import { stackServices, STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { gitlabEnabled, getStackFile } from '~~/layers/docker/server/utils/gitlab'
-import { combinedStackHistory, getLatestStackVersion } from '~~/layers/docker/server/utils/stackHistory'
+import { combinedStackHistory, getLatestStackVersion, getStackVersionContent } from '~~/layers/docker/server/utils/stackHistory'
 import { getDb } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -96,6 +96,13 @@ export async function computeStackDetail(name: string) {
   let compose: string | null = null
   let composeSource: 'gitlab' | 'local' | 'engine' | null = null
   const history = await combinedStackHistory(name).catch(() => [])
+  const engineCompose = services.length
+    ? composeFromEngineState(name, services, networkById, volumeByName, configById, secretById)
+    : null
+  const [lastDeployed, previouslyDeployed] = await Promise.all([
+    history[0]?.id ? getStackVersionContent(name, history[0].id).catch(() => null) : null,
+    history[1]?.id ? getStackVersionContent(name, history[1].id).catch(() => null) : null
+  ])
   if (await gitlabEnabled()) {
     compose = await getStackFile(name).catch(() => null)
     if (compose) composeSource = 'gitlab'
@@ -107,8 +114,8 @@ export async function computeStackDetail(name: string) {
       composeSource = 'local'
     }
   }
-  if (!compose && services.length) {
-    compose = composeFromEngineState(name, services, networkById, volumeByName, configById, secretById)
+  if (!compose && engineCompose) {
+    compose = engineCompose
     composeSource = 'engine'
   }
 
@@ -165,6 +172,13 @@ export async function computeStackDetail(name: string) {
     name,
     compose,
     composeSource,
+    // The editor always starts from live Swarm state, while the two newest
+    // recorded deploys remain directly selectable for comparison/redeploy.
+    composeStates: [
+      engineCompose ? { value: 'engine', label: 'Current engine state', compose: engineCompose } : null,
+      lastDeployed ? { value: 'last', label: 'Last deployed', compose: lastDeployed.compose, date: lastDeployed.date, message: lastDeployed.message } : null,
+      previouslyDeployed ? { value: 'previous', label: 'Previously deployed (rollback)', compose: previouslyDeployed.compose, date: previouslyDeployed.date, message: previouslyDeployed.message } : null
+    ].filter(Boolean),
     history,
     summary: {
       status: stackStatus(services.length, runningTasks, desiredTasks, compose),
@@ -397,17 +411,23 @@ function composeFromEngineState(
 
     const serviceConfigs = (container.Configs || []).map((config: any) => {
       const item = configById.get(config.ConfigID)
-      const key = displayName(stackName, config.ConfigName || item?.Spec?.Name)
-      configs.set(key, item || { Spec: { Name: config.ConfigName } })
-      return key
+      const fullName = config.ConfigName || item?.Spec?.Name
+      if (!fullName) return null
+      // Swarm stores stack resources under their real prefixed name
+      // (asset_config), while File.Name is the target inside the container.
+      // Keep those separate so the reconstructed compose resolves the
+      // existing object instead of looking for an unprefixed external one.
+      configs.set(fullName, item || { Spec: { Name: fullName } })
+      return composeAttachment(stackName, fullName, config.File)
     }).filter(Boolean)
     if (serviceConfigs.length) svc.configs = serviceConfigs
 
     const serviceSecrets = (container.Secrets || []).map((secret: any) => {
       const item = secretById.get(secret.SecretID)
-      const key = displayName(stackName, secret.SecretName || item?.Spec?.Name)
-      secrets.set(key, item || { Spec: { Name: secret.SecretName } })
-      return key
+      const fullName = secret.SecretName || item?.Spec?.Name
+      if (!fullName) return null
+      secrets.set(fullName, item || { Spec: { Name: fullName } })
+      return composeAttachment(stackName, fullName, secret.File)
     }).filter(Boolean)
     if (serviceSecrets.length) svc.secrets = serviceSecrets
 
@@ -424,13 +444,23 @@ function composeFromEngineState(
     doc.volumes = Object.fromEntries([...volumes].map(([key, volume]) => [key, composeVolume(stackName, key, volume)]))
   }
   if (configs.size) {
-    doc.configs = Object.fromEntries([...configs].map(([key, config]) => [key, composeExternalResource(stackName, key, config.Spec?.Name)]))
+    doc.configs = Object.fromEntries([...configs].map(([key]) => [key, { external: true }]))
   }
   if (secrets.size) {
-    doc.secrets = Object.fromEntries([...secrets].map(([key, secret]) => [key, composeExternalResource(stackName, key, secret.Spec?.Name)]))
+    doc.secrets = Object.fromEntries([...secrets].map(([key]) => [key, { external: true }]))
   }
 
   return stringifyYaml(doc, { singleQuote: true })
+}
+
+function composeAttachment(stackName: string, source: string, file?: any) {
+  const target = file?.Name || displayName(stackName, source)
+  const out: any = { source }
+  if (target) out.target = target
+  if (file?.UID) out.uid = String(file.UID)
+  if (file?.GID) out.gid = String(file.GID)
+  if (file?.Mode != null) out.mode = file.Mode
+  return out
 }
 
 function envObject(env: string[]) {
@@ -481,12 +511,12 @@ function composeDeploy(service: any) {
   if (limits.NanoCPUs || limits.MemoryBytes) {
     outResources.limits = {}
     if (limits.NanoCPUs) outResources.limits.cpus = String(limits.NanoCPUs / 1e9)
-    if (limits.MemoryBytes) outResources.limits.memory = String(limits.MemoryBytes)
+    if (limits.MemoryBytes) outResources.limits.memory = memoryAsMb(limits.MemoryBytes)
   }
   if (reservations.NanoCPUs || reservations.MemoryBytes) {
     outResources.reservations = {}
     if (reservations.NanoCPUs) outResources.reservations.cpus = String(reservations.NanoCPUs / 1e9)
-    if (reservations.MemoryBytes) outResources.reservations.memory = String(reservations.MemoryBytes)
+    if (reservations.MemoryBytes) outResources.reservations.memory = memoryAsMb(reservations.MemoryBytes)
   }
   if (Object.keys(outResources).length) deploy.resources = outResources
 
@@ -531,11 +561,6 @@ function composeVolume(stackName: string, key: string, volume: any) {
   return volume.Driver ? { driver: volume.Driver } : {}
 }
 
-function composeExternalResource(stackName: string, key: string, fullName?: string) {
-  if (fullName && fullName !== `${stackName}_${key}`) return { external: true, name: fullName }
-  return { external: true }
-}
-
 function compactObject(value: any): any {
   if (Array.isArray(value)) return value.map(compactObject)
   if (!value || typeof value !== 'object') return value
@@ -551,4 +576,8 @@ function nanos(value?: number | null) {
   if (!value) return undefined
   if (value % 1e9 === 0) return `${value / 1e9}s`
   return `${value}ns`
+}
+
+function memoryAsMb(bytes: number) {
+  return `${Number((bytes / (1024 ** 2)).toFixed(3))}M`
 }

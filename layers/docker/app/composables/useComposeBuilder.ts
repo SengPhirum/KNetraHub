@@ -14,6 +14,17 @@ export interface MountModel { type: 'volume' | 'bind'; source: string; target: s
 export interface AttachmentModel { source: string; target: string; uid: string; gid: string; mode: string }
 export interface LabelModel { key: string; value: string }
 
+/** deploy.update_config / deploy.rollback_config - all fields optional ('' =
+ *  not set, so the deploy block only emits what the user actually filled). */
+export interface DeployStrategyModel {
+  parallelism: string
+  delay: string
+  order: '' | 'stop-first' | 'start-first'
+  failureAction: '' | 'continue' | 'pause' | 'rollback'
+  monitor: string
+  maxFailureRatio: string
+}
+
 export interface ServiceModel {
   /** Stable internal identity, independent of `key` (the editable compose
    *  service name) - lets the deploy modal keep the correct panel/nav item
@@ -28,6 +39,7 @@ export interface ServiceModel {
   user: string
   mode: 'replicated' | 'global'
   replicas: number
+  endpointMode: '' | 'vip' | 'dnsrr'
   ports: PortModel[]
   environment: EnvModel[]
   volumes: MountModel[]
@@ -38,13 +50,18 @@ export interface ServiceModel {
   serviceLabels: LabelModel[]
   limitCpus: string
   limitMemory: string
+  limitPids: string
   reservationCpus: string
   reservationMemory: string
   restartCondition: 'any' | 'on-failure' | 'none'
   restartDelay: string
   restartMaxAttempts: string
   restartWindow: string
+  updateConfig: DeployStrategyModel
+  rollbackConfig: DeployStrategyModel
   placementConstraints: string[]
+  placementPreferences: string[]
+  maxReplicasPerNode: string
   healthcheckTest: string
   healthcheckInterval: string
   healthcheckTimeout: string
@@ -82,6 +99,7 @@ export function useComposeBuilder() {
       user: '',
       mode: 'replicated',
       replicas: 1,
+      endpointMode: '',
       ports: [],
       environment: [],
       volumes: [],
@@ -92,13 +110,18 @@ export function useComposeBuilder() {
       serviceLabels: [],
       limitCpus: '',
       limitMemory: '',
+      limitPids: '',
       reservationCpus: '',
       reservationMemory: '',
       restartCondition: 'any',
       restartDelay: '',
       restartMaxAttempts: '',
       restartWindow: '',
+      updateConfig: emptyStrategy(),
+      rollbackConfig: emptyStrategy(),
       placementConstraints: [],
+      placementPreferences: [],
+      maxReplicasPerNode: '',
       healthcheckTest: '',
       healthcheckInterval: '',
       healthcheckTimeout: '',
@@ -109,6 +132,34 @@ export function useComposeBuilder() {
 
   function genId(): string {
     return Math.random().toString(36).slice(2, 10)
+  }
+
+  function emptyStrategy(): DeployStrategyModel {
+    return { parallelism: '', delay: '', order: '', failureAction: '', monitor: '', maxFailureRatio: '' }
+  }
+
+  function parseStrategy(cfg: any): DeployStrategyModel {
+    const c = cfg || {}
+    return {
+      parallelism: c.parallelism != null ? String(c.parallelism) : '',
+      delay: c.delay != null ? String(c.delay) : '',
+      order: c.order === 'start-first' || c.order === 'stop-first' ? c.order : '',
+      failureAction: ['continue', 'pause', 'rollback'].includes(c.failure_action) ? c.failure_action : '',
+      monitor: c.monitor != null ? String(c.monitor) : '',
+      maxFailureRatio: c.max_failure_ratio != null ? String(c.max_failure_ratio) : ''
+    }
+  }
+
+  function strategyToYaml(s: DeployStrategyModel): Record<string, any> | null {
+    const out = compact({
+      parallelism: s.parallelism ? Number(s.parallelism) : undefined,
+      delay: s.delay || undefined,
+      failure_action: s.failureAction || undefined,
+      monitor: s.monitor || undefined,
+      max_failure_ratio: s.maxFailureRatio ? Number(s.maxFailureRatio) : undefined,
+      order: s.order || undefined
+    })
+    return Object.keys(out).length ? out : null
   }
 
   function newNetwork(key: string): NetworkModel {
@@ -177,6 +228,7 @@ export function useComposeBuilder() {
       user: def.user || '',
       mode: deploy.mode === 'global' ? 'global' : 'replicated',
       replicas: deploy.replicas != null ? Number(deploy.replicas) : 1,
+      endpointMode: deploy.endpoint_mode === 'vip' || deploy.endpoint_mode === 'dnsrr' ? deploy.endpoint_mode : '',
       ports: (def.ports || []).map(parsePort),
       environment: parseEnv(def.environment),
       volumes: (def.volumes || []).map(parseMount),
@@ -186,14 +238,19 @@ export function useComposeBuilder() {
       labels: parseLabels(def.labels),
       serviceLabels: parseLabels(deploy.labels),
       limitCpus: resources.limits?.cpus != null ? String(resources.limits.cpus) : '',
-      limitMemory: resources.limits?.memory != null ? String(resources.limits.memory) : '',
+      limitMemory: memoryToMb(resources.limits?.memory),
+      limitPids: resources.limits?.pids != null ? String(resources.limits.pids) : '',
       reservationCpus: resources.reservations?.cpus != null ? String(resources.reservations.cpus) : '',
-      reservationMemory: resources.reservations?.memory != null ? String(resources.reservations.memory) : '',
+      reservationMemory: memoryToMb(resources.reservations?.memory),
       restartCondition: restart.condition === 'on-failure' || restart.condition === 'none' ? restart.condition : 'any',
       restartDelay: restart.delay != null ? String(restart.delay) : '',
       restartMaxAttempts: restart.max_attempts != null ? String(restart.max_attempts) : '',
       restartWindow: restart.window != null ? String(restart.window) : '',
+      updateConfig: parseStrategy(deploy.update_config),
+      rollbackConfig: parseStrategy(deploy.rollback_config),
       placementConstraints: (deploy.placement?.constraints || []).map(String),
+      placementPreferences: (deploy.placement?.preferences || []).map((p: any) => String(p?.spread ?? p ?? '')).filter(Boolean),
+      maxReplicasPerNode: deploy.placement?.max_replicas_per_node != null ? String(deploy.placement.max_replicas_per_node) : '',
       healthcheckTest: Array.isArray(hc.test) ? hc.test.slice(1).join(' ') : (hc.test || ''),
       healthcheckInterval: hc.interval != null ? String(hc.interval) : '',
       healthcheckTimeout: hc.timeout != null ? String(hc.timeout) : '',
@@ -255,10 +312,16 @@ export function useComposeBuilder() {
       if (svc.hostname) out.hostname = svc.hostname
       if (svc.workingDir) out.working_dir = svc.workingDir
       if (svc.user) out.user = svc.user
-      if (svc.environment.length) out.environment = Object.fromEntries(svc.environment.filter((e) => e.key).map((e) => [e.key, e.value]))
-      if (svc.labels.length) out.labels = Object.fromEntries(svc.labels.filter((l) => l.key).map((l) => [l.key, l.value]))
-      if (svc.ports.length) {
-        out.ports = svc.ports.filter((p) => p.target).map((p) => ({
+      // Filter half-filled rows first and only emit non-empty results - a row
+      // the user just added (and hasn't typed into yet) must not leave
+      // `environment: {}` / `ports: []` artifacts in the YAML.
+      const environment = svc.environment.filter((e) => e.key)
+      if (environment.length) out.environment = Object.fromEntries(environment.map((e) => [e.key, e.value]))
+      const labels = svc.labels.filter((l) => l.key)
+      if (labels.length) out.labels = Object.fromEntries(labels.map((l) => [l.key, l.value]))
+      const ports = svc.ports.filter((p) => p.target)
+      if (ports.length) {
+        out.ports = ports.map((p) => ({
           target: Number(p.target),
           ...(p.published ? { published: Number(p.published) } : {}),
           protocol: p.protocol,
@@ -266,14 +329,17 @@ export function useComposeBuilder() {
         }))
       }
       if (svc.networks.length) out.networks = svc.networks
-      if (svc.volumes.length) {
-        out.volumes = svc.volumes.filter((v) => v.source && v.target).map((v) => ({ type: v.type, source: v.source, target: v.target, read_only: v.readOnly }))
+      const mounts = svc.volumes.filter((v) => v.source && v.target)
+      if (mounts.length) {
+        out.volumes = mounts.map((v) => ({ type: v.type, source: v.source, target: v.target, read_only: v.readOnly }))
       }
-      if (svc.configs.length) {
-        out.configs = svc.configs.filter((c) => c.source).map((c) => attachmentToYaml(c))
+      const configs = svc.configs.filter((c) => c.source)
+      if (configs.length) {
+        out.configs = configs.map((c) => attachmentToYaml(c))
       }
-      if (svc.secrets.length) {
-        out.secrets = svc.secrets.filter((s) => s.source).map((s) => attachmentToYaml(s))
+      const secrets = svc.secrets.filter((s) => s.source)
+      if (secrets.length) {
+        out.secrets = secrets.map((s) => attachmentToYaml(s))
       }
       if (svc.healthcheckTest) {
         out.healthcheck = compact({
@@ -288,10 +354,12 @@ export function useComposeBuilder() {
       const deploy: any = {}
       if (svc.mode === 'global') deploy.mode = 'global'
       else if (svc.replicas != null) deploy.replicas = svc.replicas
-      if (svc.serviceLabels.length) deploy.labels = Object.fromEntries(svc.serviceLabels.filter((l) => l.key).map((l) => [l.key, l.value]))
+      if (svc.endpointMode) deploy.endpoint_mode = svc.endpointMode
+      const serviceLabels = svc.serviceLabels.filter((l) => l.key)
+      if (serviceLabels.length) deploy.labels = Object.fromEntries(serviceLabels.map((l) => [l.key, l.value]))
       const resources = compact({
-        limits: compact({ cpus: svc.limitCpus || undefined, memory: svc.limitMemory || undefined }),
-        reservations: compact({ cpus: svc.reservationCpus || undefined, memory: svc.reservationMemory || undefined })
+        limits: compact({ cpus: svc.limitCpus || undefined, memory: svc.limitMemory ? `${svc.limitMemory}M` : undefined, pids: svc.limitPids ? Number(svc.limitPids) : undefined }),
+        reservations: compact({ cpus: svc.reservationCpus || undefined, memory: svc.reservationMemory ? `${svc.reservationMemory}M` : undefined })
       })
       if (Object.keys(resources).length) deploy.resources = resources
       if (svc.restartCondition !== 'any' || svc.restartDelay || svc.restartMaxAttempts || svc.restartWindow) {
@@ -302,29 +370,44 @@ export function useComposeBuilder() {
           window: svc.restartWindow || undefined
         })
       }
-      if (svc.placementConstraints.length) deploy.placement = { constraints: svc.placementConstraints.filter(Boolean) }
+      const updateConfig = strategyToYaml(svc.updateConfig)
+      if (updateConfig) deploy.update_config = updateConfig
+      const rollbackConfig = strategyToYaml(svc.rollbackConfig)
+      if (rollbackConfig) deploy.rollback_config = rollbackConfig
+      const constraints = svc.placementConstraints.filter(Boolean)
+      const preferences = svc.placementPreferences.filter(Boolean)
+      const placement = compact({
+        constraints: constraints.length ? constraints : undefined,
+        preferences: preferences.length ? preferences.map((p) => ({ spread: p })) : undefined,
+        max_replicas_per_node: svc.maxReplicasPerNode ? Number(svc.maxReplicasPerNode) : undefined
+      })
+      if (Object.keys(placement).length) deploy.placement = placement
       if (Object.keys(deploy).length) out.deploy = deploy
 
       doc.services[svc.key] = out
     }
 
-    if (model.networks.length) {
-      doc.networks = Object.fromEntries(model.networks.filter((n) => n.key).map((n) => [n.key,
+    const networks = model.networks.filter((n) => n.key)
+    if (networks.length) {
+      doc.networks = Object.fromEntries(networks.map((n) => [n.key,
         n.external ? compact({ external: true, name: n.externalName || undefined }) : compact({ driver: n.driver || undefined, attachable: n.attachable })
       ]))
     }
-    if (model.volumes.length) {
-      doc.volumes = Object.fromEntries(model.volumes.filter((v) => v.key).map((v) => [v.key,
+    const volumes = model.volumes.filter((v) => v.key)
+    if (volumes.length) {
+      doc.volumes = Object.fromEntries(volumes.map((v) => [v.key,
         v.external ? compact({ external: true, name: v.externalName || undefined }) : compact({ driver: v.driver || undefined })
       ]))
     }
-    if (model.configs.length) {
-      doc.configs = Object.fromEntries(model.configs.filter((c) => c.key).map((c) => [c.key,
+    const configs = model.configs.filter((c) => c.key)
+    if (configs.length) {
+      doc.configs = Object.fromEntries(configs.map((c) => [c.key,
         c.external ? compact({ external: true, name: c.externalName || undefined }) : {}
       ]))
     }
-    if (model.secrets.length) {
-      doc.secrets = Object.fromEntries(model.secrets.filter((s) => s.key).map((s) => [s.key,
+    const secrets = model.secrets.filter((s) => s.key)
+    if (secrets.length) {
+      doc.secrets = Object.fromEntries(secrets.map((s) => [s.key,
         s.external ? compact({ external: true, name: s.externalName || undefined }) : {}
       ]))
     }
@@ -335,6 +418,22 @@ export function useComposeBuilder() {
   function attachmentToYaml(a: AttachmentModel) {
     if (!a.target && !a.uid && !a.gid && !a.mode) return a.source
     return compact({ source: a.source, target: a.target || undefined, uid: a.uid || undefined, gid: a.gid || undefined, mode: a.mode ? Number(a.mode) : undefined })
+  }
+
+  /** Normalize raw Compose memory values to the numeric MiB value shown in
+   * the form. Unitless Compose values are bytes; M values are already MiB. */
+  function memoryToMb(value: any): string {
+    if (value == null || value === '') return ''
+    const match = String(value).trim().match(/^(\d+(?:\.\d+)?)\s*([kmgt]?)b?$/i)
+    if (!match) return ''
+    const amount = Number(match[1])
+    const unit = match[2]!.toLowerCase()
+    const mb = unit === 't' ? amount * 1024 * 1024
+      : unit === 'g' ? amount * 1024
+        : unit === 'm' ? amount
+          : unit === 'k' ? amount / 1024
+            : amount / (1024 ** 2)
+    return String(Number(mb.toFixed(3)))
   }
 
   function compact(obj: Record<string, any>): Record<string, any> {

@@ -48,7 +48,8 @@ const DOCK_GROUPS: NavGroup[] = [
   {
     label: 'Administration',
     items: [
-      { label: 'Settings', to: '/docker/settings', icon: 'i-lucide-settings', permission: 'docker.manage' }
+      { label: 'Settings',   to: '/docker/settings',   icon: 'i-lucide-settings',    permission: 'docker.manage' },
+      { label: 'Logs',       to: '/docker/logs',       icon: 'i-lucide-scroll-text', permission: 'docker.manage' }
     ]
   }
 ]
@@ -122,9 +123,10 @@ const MONITORING_GROUPS: NavGroup[] = [
     ]
   },
   {
-    label: 'Admin',
+    label: 'Administration',
     items: [
-      { label: 'Settings', to: '/monitoring/settings', icon: 'i-lucide-settings', permission: 'monitoring.manage' }
+      { label: 'Settings',   to: '/monitoring/settings',   icon: 'i-lucide-settings',    permission: 'monitoring.manage' },
+      { label: 'Logs',       to: '/monitoring/logs',       icon: 'i-lucide-scroll-text', permission: 'monitoring.scan' }
     ]
   }
 ]
@@ -157,9 +159,10 @@ const IPMGT_GROUPS: NavGroup[] = [
     ]
   },
   {
-    label: 'IP Management admin',
+    label: 'Administration',
     items: [
-      { label: 'Settings', to: '/ipmgt/settings', icon: 'i-lucide-settings', permission: 'ipmgt.settings' }
+      { label: 'Settings',   to: '/ipmgt/settings',   icon: 'i-lucide-settings',    permission: 'ipmgt.settings' },
+      { label: 'Logs',       to: '/ipmgt/logs',       icon: 'i-lucide-scroll-text', permission: 'ipmgt.create' }
     ]
   }
 ]

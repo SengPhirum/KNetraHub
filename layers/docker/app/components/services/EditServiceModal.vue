@@ -274,7 +274,7 @@ async function save() {
 </script>
 
 <template>
-  <UModal v-model:open="open" title="Edit service" description="Configure every aspect of this service, organized like a deploy wizard." :ui="{ content: 'max-w-5xl' }">
+  <UModal v-model:open="open" title="Edit service" description="Configure every aspect of this service, organized like a deploy wizard." :dismissible="false" :ui="{ content: 'max-w-5xl' }">
     <template #body>
       <div class="flex flex-col gap-4 sm:flex-row sm:gap-6">
         <!-- Tab rail: horizontal scroller on mobile, vertical sidebar from sm+ -->

@@ -42,20 +42,18 @@ defineProps<{
   min-height: 12rem;
 }
 
+/* Fills the full height of the grid track next to the chart; scrolls its own
+   overflow instead of stretching the panel. */
 .dashboard-usage-legend {
   display: flex;
-  max-height: 8rem;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
   flex-direction: column;
   gap: 0.35rem;
   overflow-y: auto;
   padding-right: 0.25rem;
   scrollbar-width: thin;
   scrollbar-color: var(--color-faint) transparent;
-}
-
-@media (min-width: 1024px) {
-  .dashboard-usage-legend {
-    align-self: center;
-  }
 }
 </style>

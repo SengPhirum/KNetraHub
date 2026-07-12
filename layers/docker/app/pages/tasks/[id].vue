@@ -69,20 +69,32 @@ const logsOpen = ref(false)
 const logs = ref('')
 const logsLoading = ref(false)
 const tail = ref(200)
+const liveLogs = ref(false)
+const logsBox = ref<HTMLElement | null>(null)
 async function loadLogs() {
   logsLoading.value = true
   try {
     const res: any = await $fetch(`/api/tasks/${id}/logs`, { query: { tail: tail.value } })
     logs.value = res.logs || ''
+    // In live mode keep the newest lines in view.
+    if (liveLogs.value) nextTick(() => { if (logsBox.value) logsBox.value.scrollTop = logsBox.value.scrollHeight })
   } catch (e: any) {
     logs.value = `Failed to load logs: ${e?.data?.statusMessage || e?.message}`
   } finally {
     logsLoading.value = false
   }
 }
+// Live mode: the logs API is tail-only (no follow stream), so poll it while
+// the modal is open and the toggle is on.
+const { pause: pauseLiveLogs, resume: resumeLiveLogs } = useIntervalFn(loadLogs, 2000, { immediate: false })
+watch([logsOpen, liveLogs], ([isOpen, live]) => {
+  if (isOpen && live) resumeLiveLogs()
+  else pauseLiveLogs()
+  if (!isOpen && live) liveLogs.value = false
+})
 function viewLogs() {
   logsOpen.value = true
-  if (!logs.value) loadLogs()
+  loadLogs()
 }
 </script>
 
@@ -176,23 +188,36 @@ function viewLogs() {
             </ClientOnly>
           </section>
 
-          <section v-if="logsOpen" class="panel p-0 overflow-hidden">
-            <div class="flex items-center justify-between gap-2 border-b border-hull px-4 py-2.5">
-              <span class="flex items-center gap-2 text-xs text-(--color-muted)"><UIcon name="i-lucide-scroll-text" class="size-4" /> Last {{ tail }} lines</span>
-              <div class="flex gap-2">
-                <USelect v-model="tail" :items="[100, 200, 500, 1000]" size="xs" @update:model-value="loadLogs" />
-                <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-refresh-cw" :loading="logsLoading" @click="loadLogs" />
-                <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="logsOpen = false" />
-              </div>
-            </div>
-            <div v-if="logsLoading && !logs" class="flex items-center justify-center py-16 text-(--color-muted)">
-              <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Streaming...
-            </div>
-            <pre v-else class="logstream max-h-[60vh] overflow-auto px-4 py-3 text-xs whitespace-pre-wrap">{{ logs || 'No log output.' }}</pre>
-          </section>
         </div>
       </div>
     </DataState>
+
+    <UModal
+      v-model:open="logsOpen"
+      :title="`Logs — ${data?.serviceName || short(id)}${data?.slot != null ? '.' + data.slot : ''}`"
+      description="Task container output (stdout + stderr)."
+      :ui="{ content: 'w-[calc(100vw-3rem)] max-w-[110rem]' }"
+    >
+      <template #body>
+        <div class="flex h-[72dvh] min-h-0 flex-col gap-3">
+          <div class="flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <span class="flex items-center gap-2 text-xs text-(--color-muted)">
+              <UIcon name="i-lucide-scroll-text" class="size-4" />
+              Last {{ tail }} lines<template v-if="liveLogs"> — live, refreshing every 2s</template>
+            </span>
+            <div class="flex items-center gap-3">
+              <USwitch v-model="liveLogs" color="primary" size="sm" label="Live" />
+              <USelect v-model="tail" :items="[100, 200, 500, 1000]" size="xs" class="w-24" @update:model-value="loadLogs" />
+              <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-refresh-cw" :loading="logsLoading" @click="loadLogs" />
+            </div>
+          </div>
+          <div v-if="logsLoading && !logs" class="flex flex-1 items-center justify-center text-(--color-muted)">
+            <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Loading…
+          </div>
+          <pre v-else ref="logsBox" class="logstream min-h-0 flex-1 overflow-auto px-4 py-3 text-xs whitespace-pre-wrap">{{ logs || 'No log output.' }}</pre>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
 
@@ -207,7 +232,7 @@ function viewLogs() {
   justify-content: center;
   border-radius: 9999px;
   padding: 0.5rem;
-  transition: filter 0.16s ease, transform 0.16s ease;
+  /* transition lives in main.css - a scoped one would override the animated ring sweep */
 }
 
 .summary-ring:focus-visible,
