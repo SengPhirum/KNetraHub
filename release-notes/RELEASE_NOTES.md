@@ -11,11 +11,12 @@ Date: 2026-07-12 UTC
 
 ## Source
 
-- Commit: `ca0bfc9`
+- Commit: `939e780`
 - Previous tag: none
 
 ## Changes
 
+- Improve notifications, action safety, and logging (939e780)
 - Fix stack UI (ca0bfc9)
 - Add per-module audit/system logs, full swarm deploy options, stack DNS fix, and UI enhancements (e8e9baa)
 - Update doc (f58bdf2)
