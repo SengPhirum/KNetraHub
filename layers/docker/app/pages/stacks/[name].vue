@@ -16,7 +16,7 @@ useIntervalFn(() => {
   if (!connected.value && prefs.value.refreshInterval > 0) refresh()
 }, computed(() => prefs.value.refreshInterval > 0 ? prefs.value.refreshInterval * 1000 : 60_000), { immediate: false })
 
-const tab = ref<'overview' | 'services' | 'compose' | 'history'>('overview')
+const tab = ref<'overview' | 'compose' | 'history'>('overview')
 const summary = computed(() => data.value?.summary || {})
 const currentUsage = computed(() => summary.value.currentUsage || { available: false, containers: 0, cpuPercent: 0, memoryUsedBytes: 0, memoryLimitBytes: 0, sampledAt: null })
 const serviceRows = computed(() => data.value?.services || [])
@@ -26,23 +26,6 @@ const secretRows = computed(() => data.value?.secrets || [])
 const configRows = computed(() => data.value?.configs || [])
 const historyRows = computed(() => data.value?.history || [])
 
-const serviceSortOptions = [
-  { label: 'Name', value: 'name' },
-  { label: 'Image', value: 'image' },
-  { label: 'Running', value: 'running' },
-  { label: 'Replicas', value: 'replicas' },
-  { label: 'Status', value: 'status' }
-]
-const {
-  items: filteredServices,
-  search: serviceSearch,
-  sortBy: serviceSortBy,
-  sortDir: serviceSortDir,
-  sortOptions: serviceSortOptionsState
-} = useListControls(`stack:${name}:services`, serviceRows, {
-  sortOptions: serviceSortOptions,
-  defaultSortBy: 'name'
-})
 const historySortOptions = [
   { label: 'Date', value: 'date' },
   { label: 'Author', value: 'author' },
@@ -110,7 +93,6 @@ const resourceHint = computed(() => {
 })
 const tabs = computed(() => {
   const t: any[] = [{ key: 'overview', label: 'Overview', icon: 'i-lucide-layout-dashboard' }]
-  t.push({ key: 'services', label: 'Services', icon: 'i-lucide-boxes' })
   if (data.value?.compose != null) t.push({ key: 'compose', label: 'Compose', icon: 'i-lucide-file-code' })
   if (data.value?.history?.length) t.push({ key: 'history', label: 'History', icon: 'i-lucide-history' })
   return t
@@ -483,33 +465,6 @@ async function deleteFromTracking() {
         </div>
       </div>
 
-      <div v-else-if="tab === 'services'" class="space-y-2">
-        <ListControls
-          v-model:search="serviceSearch"
-          v-model:sort-by="serviceSortBy"
-          v-model:sort-dir="serviceSortDir"
-          :sort-options="serviceSortOptionsState"
-          placeholder="Search stack services"
-        />
-        <div v-if="!filteredServices.length" class="panel p-10 text-center text-sm text-(--color-muted)">
-          No running services for this stack.
-        </div>
-        <NuxtLink v-for="s in filteredServices" :key="s.id" :to="`/services/${s.id}`"
-          class="panel-flush p-3.5 flex items-center justify-between gap-3 hover:ring-1 hover:ring-beacon/30 transition group">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="dot" :class="s.status === 'running' ? 'dot-running' : s.status === 'pending' || s.status === 'updating' ? 'dot-pending' : s.status === 'idle' ? 'dot-idle' : 'dot-down'" />
-            <div class="min-w-0">
-              <p class="truncate font-medium text-foam group-hover:text-beacon">{{ s.name || '-' }}</p>
-              <p class="truncate font-mono text-xs text-faint">{{ s.image || '-' }}</p>
-            </div>
-          </div>
-          <div class="shrink-0 text-right">
-            <p class="font-mono text-sm">{{ replicaLabel(s) }}</p>
-            <p class="mt-0.5 max-w-48 truncate font-mono text-[11px] text-faint">{{ portsLabel(s.ports) }}</p>
-          </div>
-        </NuxtLink>
-      </div>
-
       <div v-else-if="tab === 'compose'" class="panel p-0 overflow-hidden">
         <div class="flex items-center justify-between gap-2 border-b border-hull px-4 py-2.5">
           <span class="flex min-w-0 items-center gap-2 font-mono text-xs text-(--color-muted)">
@@ -565,12 +520,12 @@ async function deleteFromTracking() {
 
     <StacksDeployStackModal v-model:open="editOpen" :edit-name="name" :initial-compose="draft" :compose-options="editComposeOptions" @deployed="onRedeployed" />
 
-    <UModal v-model:open="diffOpen" :title="`Compose at ${short(diffSha, 8)}`" :ui="{ content: 'max-w-2xl' }">
+    <UModal v-model:open="diffOpen" :title="`Compose at ${short(diffSha, 8)}`" :ui="{ content: 'w-[90vw] max-w-[100rem]' }">
       <template #body>
         <div v-if="diffLoading" class="flex items-center justify-center py-12 text-(--color-muted)">
           <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin mr-2" /> Loading...
         </div>
-        <pre v-else class="logstream max-h-[55vh] overflow-auto rounded-lg p-3 text-xs">{{ diffContent }}</pre>
+        <pre v-else class="logstream max-h-[72dvh] overflow-auto rounded-lg p-3 text-xs">{{ diffContent }}</pre>
       </template>
       <template #footer>
         <div class="flex justify-end gap-2 w-full">
