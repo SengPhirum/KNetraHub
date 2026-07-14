@@ -1032,6 +1032,36 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_cf_values_entity ON ipmgt_custom_field_values(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_cf_values_value ON ipmgt_custom_field_values(field_id, value);
 
+    -- IPAM Module (Phase 3): IP address request/approval workflow. A request
+    -- targets a subnet (which must have allow_requests=true); the requested
+    -- IP is optional (blank = auto-allocate first-free on approval).
+    -- Approval and fulfillment happen atomically in one step (see
+    -- requests/[id]/approve.post.ts) - phpIPAM's separate "approve" then
+    -- "fulfill" steps are collapsed since nothing in this app defers actual
+    -- provisioning to a later step.
+    CREATE TABLE IF NOT EXISTS ipmgt_requests (
+      id TEXT PRIMARY KEY,
+      subnet_id TEXT NOT NULL,
+      requested_ip TEXT,
+      hostname TEXT,
+      mac TEXT,
+      owner TEXT,
+      description TEXT,
+      justification TEXT,
+      status TEXT NOT NULL DEFAULT 'submitted',
+      requester TEXT NOT NULL,
+      approver TEXT,
+      admin_comment TEXT,
+      ip_id TEXT,
+      assigned_ip TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      decided_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_requests_subnet ON ipmgt_requests(subnet_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_requests_status ON ipmgt_requests(status);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_requests_requester ON ipmgt_requests(requester);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

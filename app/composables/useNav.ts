@@ -167,6 +167,12 @@ const IPMGT_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Operations',
+    items: [
+      { label: 'IP Requests', to: '/ipmgt/requests', icon: 'i-lucide-inbox', permission: 'ipmgt.view' }
+    ]
+  },
+  {
     label: 'Administration',
     items: [
       { label: 'Custom Fields', to: '/ipmgt/customfields', icon: 'i-lucide-list-plus',   permission: 'ipmgt.settings' },

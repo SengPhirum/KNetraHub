@@ -47,10 +47,13 @@ function fmt(n: number | string | undefined): string {
           <StatCard label="Allocated addresses" :value="fmt(data.counts.addresses)" icon="i-lucide-list-ordered" accent />
           <StatCard label="VLANs / VRFs" :value="`${data.counts.vlans} / ${data.counts.vrfs}`" icon="i-lucide-layers" />
         </div>
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Devices" :value="data.counts.devices" icon="i-lucide-server" />
           <StatCard label="Locations" :value="data.counts.locations" icon="i-lucide-map-pin" />
           <StatCard label="Customers" :value="data.counts.customers" icon="i-lucide-building-2" />
+          <NuxtLink to="/ipmgt/requests" class="block">
+            <StatCard label="Pending requests" :value="data.counts.pendingRequests" icon="i-lucide-inbox" :accent="data.counts.pendingRequests > 0" />
+          </NuxtLink>
         </div>
 
         <!-- IPv4 capacity + status breakdown -->

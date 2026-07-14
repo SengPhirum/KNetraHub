@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import type { PoolClient } from 'pg'
 import { nanoid } from 'nanoid'
 import { getDb } from '~~/server/utils/db'
 import { audit } from '~~/server/utils/store'
@@ -66,6 +67,30 @@ export interface SubnetRow {
   vrf_id: string | null
   section_id: string | null
   [k: string]: any
+}
+
+/**
+ * Run `fn` inside a transaction holding a Postgres advisory lock scoped to
+ * `subnetId`, so concurrent "first free address" allocations against the same
+ * subnet (address create-with-first-free, subnet reserve, request approval)
+ * serialize instead of racing to read-then-insert the same free IP. The lock
+ * is transaction-scoped (auto-released on COMMIT/ROLLBACK) - never held
+ * across requests, never needs manual unlock.
+ */
+export async function withSubnetLock<T>(subnetId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await getDb().connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [subnetId])
+    const result = await fn(client)
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 /** Load a subnet or throw 404. */
@@ -188,6 +213,11 @@ export function stripDeviceSnmpSecrets<T extends Record<string, any>>(row: T): O
     snmp_priv_password_set: !!snmp_priv_password_enc
   }
 }
+
+// ─── IP requests ────────────────────────────────────────────────────────────
+
+export const REQUEST_STATUSES = ['submitted', 'approved', 'rejected', 'cancelled'] as const
+export type RequestStatus = typeof REQUEST_STATUSES[number]
 
 // ─── Custom fields ──────────────────────────────────────────────────────────
 

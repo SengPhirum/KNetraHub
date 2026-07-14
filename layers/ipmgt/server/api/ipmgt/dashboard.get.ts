@@ -25,6 +25,8 @@ export default defineEventHandler(async (event) => {
     db.query('SELECT count(*)::int AS c FROM ipmgt_devices')
   ])
 
+  const pendingRequestsRes = await db.query(`SELECT count(*)::int AS c FROM ipmgt_requests WHERE status = 'submitted'`)
+
   // Per-subnet used counts in one grouped query.
   const usedRes = await db.query('SELECT subnet_id, count(*)::int AS c FROM ipmgt_ips GROUP BY subnet_id')
   const usedBySubnet = new Map<string, number>(usedRes.rows.map((r: any) => [r.subnet_id, Number(r.c)]))
@@ -70,7 +72,8 @@ export default defineEventHandler(async (event) => {
       addresses: totalUsed,
       locations: Number(locationsRes.rows[0].c),
       customers: Number(customersRes.rows[0].c),
-      devices: Number(devicesRes.rows[0].c)
+      devices: Number(devicesRes.rows[0].c),
+      pendingRequests: Number(pendingRequestsRes.rows[0].c)
     },
     ipv4: { subnets: v4Subnets, capacity: v4Cap, used: v4Used, free: Math.max(0, v4Cap - v4Used), percent: v4Cap > 0 ? Math.min(100, Math.round((v4Used / v4Cap) * 100)) : 0 },
     ipv6: { subnets: v6Subnets },
