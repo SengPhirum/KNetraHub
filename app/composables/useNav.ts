@@ -156,7 +156,10 @@ const IPMGT_GROUPS: NavGroup[] = [
     items: [
       { label: 'Devices',   to: '/ipmgt/devices',   icon: 'i-lucide-server',      permission: 'ipmgt.view' },
       { label: 'Locations', to: '/ipmgt/locations', icon: 'i-lucide-map-pin',     permission: 'ipmgt.view' },
-      { label: 'Customers', to: '/ipmgt/customers', icon: 'i-lucide-building-2',  permission: 'ipmgt.view' }
+      { label: 'Customers', to: '/ipmgt/customers', icon: 'i-lucide-building-2',  permission: 'ipmgt.view' },
+      { label: 'Racks',     to: '/ipmgt/racks',     icon: 'i-lucide-server-cog',  permission: 'ipmgt.view' },
+      { label: 'Circuits',  to: '/ipmgt/circuits',  icon: 'i-lucide-cable',       permission: 'ipmgt.view' },
+      { label: 'NAT',       to: '/ipmgt/nat',       icon: 'i-lucide-shuffle',     permission: 'ipmgt.view' }
     ]
   },
   {

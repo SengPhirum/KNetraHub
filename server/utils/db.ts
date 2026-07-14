@@ -1079,6 +1079,110 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_scan_history_subnet ON ipmgt_scan_history(subnet_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_scan_history_started ON ipmgt_scan_history(started_at DESC);
 
+    -- IPAM Module (Phase 7): rack elevation - a rack has a fixed U height,
+    -- items (devices or passive gear) occupy a contiguous U range on the
+    -- front or rear face. Overlap/bounds are enforced in the API, not here.
+    CREATE TABLE IF NOT EXISTS ipmgt_racks (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      location_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      room TEXT,
+      row_name TEXT,
+      size_u INTEGER NOT NULL DEFAULT 42,
+      starting_unit INTEGER NOT NULL DEFAULT 1,
+      orientation TEXT NOT NULL DEFAULT 'top-down',
+      active BOOLEAN NOT NULL DEFAULT true,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_racks_location ON ipmgt_racks(location_id);
+
+    CREATE TABLE IF NOT EXISTS ipmgt_rack_items (
+      id TEXT PRIMARY KEY,
+      rack_id TEXT NOT NULL REFERENCES ipmgt_racks(id) ON DELETE CASCADE,
+      device_id TEXT REFERENCES ipmgt_devices(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      item_type TEXT NOT NULL DEFAULT 'device',
+      position_u INTEGER NOT NULL,
+      height_u INTEGER NOT NULL DEFAULT 1,
+      side TEXT NOT NULL DEFAULT 'front',
+      color TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_rack_items_rack ON ipmgt_rack_items(rack_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_rack_items_device ON ipmgt_rack_items(device_id);
+
+    -- IPAM Module (Phase 8): circuits (physical/logical/virtual WAN or
+    -- inter-site links) and their providers/types, tracked for expiry and
+    -- endpoint mapping.
+    CREATE TABLE IF NOT EXISTS ipmgt_circuit_providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ipmgt_circuits (
+      id TEXT PRIMARY KEY,
+      circuit_ref TEXT NOT NULL,
+      provider_id TEXT REFERENCES ipmgt_circuit_providers(id) ON DELETE SET NULL,
+      circuit_type TEXT NOT NULL DEFAULT 'physical',
+      status TEXT NOT NULL DEFAULT 'active',
+      bandwidth TEXT,
+      description TEXT,
+      customer_id TEXT REFERENCES ipmgt_customers(id) ON DELETE SET NULL,
+      order_reference TEXT,
+      install_date TEXT,
+      expiry_date TEXT,
+      endpoint_a_location_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      endpoint_a_device_id TEXT REFERENCES ipmgt_devices(id) ON DELETE SET NULL,
+      endpoint_a_note TEXT,
+      endpoint_b_location_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      endpoint_b_device_id TEXT REFERENCES ipmgt_devices(id) ON DELETE SET NULL,
+      endpoint_b_note TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_circuits_provider ON ipmgt_circuits(provider_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_circuits_customer ON ipmgt_circuits(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_circuits_expiry ON ipmgt_circuits(expiry_date);
+
+    -- IPAM Module (Phase 9): NAT rule bindings between an internal object
+    -- (address/subnet) and its translated external representation.
+    CREATE TABLE IF NOT EXISTS ipmgt_nat_rules (
+      id TEXT PRIMARY KEY,
+      rule_type TEXT NOT NULL DEFAULT 'static',
+      source_ip_id TEXT REFERENCES ipmgt_ips(id) ON DELETE CASCADE,
+      source_subnet_id TEXT REFERENCES ipmgt_subnets(id) ON DELETE CASCADE,
+      source_text TEXT,
+      translated_address TEXT NOT NULL,
+      protocol TEXT,
+      port TEXT,
+      device_id TEXT REFERENCES ipmgt_devices(id) ON DELETE SET NULL,
+      description TEXT,
+      customer_id TEXT REFERENCES ipmgt_customers(id) ON DELETE SET NULL,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_nat_source_ip ON ipmgt_nat_rules(source_ip_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_nat_source_subnet ON ipmgt_nat_rules(source_subnet_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_nat_device ON ipmgt_nat_rules(device_id);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).
