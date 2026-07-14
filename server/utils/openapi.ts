@@ -138,6 +138,75 @@ export function buildOpenApiSpec() {
             refreshInterval: { type: 'integer', description: 'Seconds; 0 = manual only' },
             density: { type: 'string', enum: ['default', 'compact', 'comfortable'] }
           }
+        },
+        IpamSection: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string', nullable: true },
+            parent_id: { type: 'string', nullable: true }, strict_mode: { type: 'boolean' }, active: { type: 'boolean' }
+          }
+        },
+        IpamSubnet: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, network: { type: 'string', example: '10.0.1.0/24' }, name: { type: 'string' },
+            version: { type: 'integer', enum: [4, 6] }, section_id: { type: 'string', nullable: true },
+            vrf_id: { type: 'string', nullable: true }, location_id: { type: 'string', nullable: true },
+            customer_id: { type: 'string', nullable: true }, gateway: { type: 'string', nullable: true },
+            allow_requests: { type: 'boolean' }, scan_enabled: { type: 'boolean' }, ping_enabled: { type: 'boolean' },
+            usage: { type: 'object', properties: { capacity: { type: 'integer' }, used: { type: 'integer' }, free: { type: 'integer' }, percent: { type: 'integer' } } }
+          }
+        },
+        IpamAddress: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, subnet_id: { type: 'string' }, ip: { type: 'string' },
+            hostname: { type: 'string', nullable: true }, mac: { type: 'string', nullable: true },
+            status: { type: 'string', enum: ['used', 'reserved', 'dhcp', 'offline', 'deprecated', 'gateway'] },
+            customer_id: { type: 'string', nullable: true }, device_id: { type: 'string', nullable: true }
+          }
+        },
+        IpamDevice: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, hostname: { type: 'string' }, device_type: { type: 'string', nullable: true },
+            management_ip: { type: 'string', nullable: true }, location_id: { type: 'string', nullable: true },
+            customer_id: { type: 'string', nullable: true }, status: { type: 'string' },
+            snmp_community_set: { type: 'boolean', description: 'True if a community string is stored - the value itself is never returned' },
+            snmp_auth_password_set: { type: 'boolean' }, snmp_priv_password_set: { type: 'boolean' }
+          }
+        },
+        IpamLocation: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' }, city: { type: 'string', nullable: true },
+            country: { type: 'string', nullable: true }, latitude: { type: 'number', nullable: true }, longitude: { type: 'number', nullable: true },
+            parent_id: { type: 'string', nullable: true }
+          }
+        },
+        IpamCustomer: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' }, status: { type: 'string', enum: ['active', 'reserved', 'inactive'] },
+            contact_person: { type: 'string', nullable: true }, email: { type: 'string', nullable: true }
+          }
+        },
+        IpamRequest: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, subnet_id: { type: 'string' }, requested_ip: { type: 'string', nullable: true },
+            status: { type: 'string', enum: ['submitted', 'approved', 'rejected', 'cancelled'] },
+            requester: { type: 'string' }, approver: { type: 'string', nullable: true }, assigned_ip: { type: 'string', nullable: true }
+          }
+        },
+        IpamVaultItemMeta: {
+          type: 'object',
+          description: 'Vault item metadata - never includes the secret value; use POST /ipmgt/vault/{id}/reveal for that.',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' },
+            item_type: { type: 'string', enum: ['password', 'api_credential', 'certificate', 'note'] },
+            owner: { type: 'string', nullable: true }, expiry_date: { type: 'string', nullable: true, format: 'date' }
+          }
         }
       }
     },
@@ -157,7 +226,8 @@ export function buildOpenApiSpec() {
       { name: 'system', description: 'System overview and audit log' },
       { name: 'registries', description: 'Docker registry credentials' },
       { name: 'users', description: 'User management (admin only)' },
-      { name: 'preferences', description: 'Current user preferences and profile' }
+      { name: 'preferences', description: 'Current user preferences and profile' },
+      { name: 'ipam', description: 'IP Address Management: sections, subnets, addresses, VLANs, VRFs, devices, locations, customers, racks, circuits, NAT, requests, custom fields, and vault' }
     ],
     paths: {
       // ─── Auth ─────────────────────────────────────────────────────────────
@@ -934,6 +1004,178 @@ export function buildOpenApiSpec() {
           },
           responses: { 200: { description: 'Updated preferences' } }
         }
+      },
+
+      // ─── IPAM: Sections ─────────────────────────────────────────────────────
+      '/ipmgt/sections': {
+        get: { tags: ['ipam'], summary: 'List sections', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Section list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamSection' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create section', description: 'Requires ipmgt `operator`.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, description: { type: 'string' }, parent_id: { type: 'string', nullable: true }, strict_mode: { type: 'boolean' } } } } } }, responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/sections/{id}': {
+        put: { tags: ['ipam'], summary: 'Update section', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete section', description: 'Requires ipmgt `admin`. Blocked (409) if it still holds subnets unless `?force=true`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'force', in: 'query', schema: { type: 'boolean' } }], responses: { 200: { description: 'Deleted' }, 409: { description: 'Still holds subnets' } } }
+      },
+
+      // ─── IPAM: Subnets ──────────────────────────────────────────────────────
+      '/ipmgt/subnets': {
+        get: { tags: ['ipam'], summary: 'List subnets', description: 'Requires ipmgt `viewer`. Filters: `section_id`, `vrf_id`, `version` (4|6), `q`.', parameters: [{ name: 'section_id', in: 'query', schema: { type: 'string' } }, { name: 'vrf_id', in: 'query', schema: { type: 'string' } }, { name: 'version', in: 'query', schema: { type: 'integer' } }, { name: 'q', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Subnet list with live usage', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamSubnet' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create subnet', description: 'Requires ipmgt `operator`. Validates the CIDR and rejects overlap within the same section/VRF.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['network'], properties: { network: { type: 'string', example: '10.0.1.0/24' }, name: { type: 'string' }, section_id: { type: 'string', nullable: true }, vrf_id: { type: 'string', nullable: true }, location_id: { type: 'string', nullable: true }, customer_id: { type: 'string', nullable: true }, gateway: { type: 'string' }, allow_requests: { type: 'boolean' }, scan_enabled: { type: 'boolean' }, ping_enabled: { type: 'boolean' } } } } } }, responses: { 200: { description: 'Created' }, 409: { description: 'Overlaps an existing subnet' } } }
+      },
+      '/ipmgt/subnets/{id}': {
+        get: { tags: ['ipam'], summary: 'Subnet detail', description: 'Requires ipmgt `viewer`. Includes computed CIDR facts, usage, and child subnets.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Subnet detail' } } },
+        put: { tags: ['ipam'], summary: 'Update subnet', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete subnet', description: 'Requires ipmgt `admin`. Blocked (409) if it holds addresses or child subnets unless `?force=true`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'force', in: 'query', schema: { type: 'boolean' } }], responses: { 200: { description: 'Deleted' }, 409: { description: 'Still in use' } } }
+      },
+      '/ipmgt/subnets/{id}/ips': { get: { tags: ['ipam'], summary: 'Subnet address grid', description: 'Requires ipmgt `viewer`. Capped visual grid of host cells for manageable subnet sizes.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Grid cells' } } } },
+      '/ipmgt/subnets/{id}/first-free': { get: { tags: ['ipam'], summary: 'Find first free address', description: 'Requires ipmgt `viewer`. Does not reserve it.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'First free IP' }, 409: { description: 'No free addresses' } } } },
+      '/ipmgt/subnets/{id}/reserve': { post: { tags: ['ipam'], summary: 'Reserve first free address', description: 'Requires ipmgt `operator`. Concurrency-safe (per-subnet advisory lock) - two simultaneous calls never get the same address.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Reserved' }, 409: { description: 'No free addresses' } } } },
+      '/ipmgt/subnets/{id}/scan': { post: { tags: ['ipam'], summary: 'Run a scan now', description: 'Requires ipmgt `operator`. Runs host-status refresh and/or new-host discovery immediately, regardless of the scheduled interval. Requires `ping_enabled` or `scan_enabled` on the subnet.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Scan report: hostsScanned/hostsUp/newHosts' }, 409: { description: 'Neither ping nor scan enabled' } } } },
+
+      // ─── IPAM: Addresses ────────────────────────────────────────────────────
+      '/ipmgt/addresses': {
+        get: { tags: ['ipam'], summary: 'List addresses', description: 'Requires ipmgt `viewer`. Filters: `subnet_id`, `status`, `q`.', parameters: [{ name: 'subnet_id', in: 'query', schema: { type: 'string' } }, { name: 'status', in: 'query', schema: { type: 'string' } }, { name: 'q', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 5000 } }], responses: { 200: { description: 'Address list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamAddress' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create address', description: 'Requires ipmgt `operator`. Validates the IP is inside the subnet and not a duplicate.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subnet_id', 'ip'], properties: { subnet_id: { type: 'string' }, ip: { type: 'string' }, hostname: { type: 'string' }, mac: { type: 'string' }, status: { type: 'string', enum: ['used', 'reserved', 'dhcp', 'offline', 'deprecated', 'gateway'] }, customer_id: { type: 'string', nullable: true }, device_id: { type: 'string', nullable: true } } } } } }, responses: { 200: { description: 'Created' }, 409: { description: 'Duplicate address' } } }
+      },
+      '/ipmgt/addresses/{id}': {
+        get: { tags: ['ipam'], summary: 'Address detail', description: 'Requires ipmgt `viewer`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Address' } } },
+        put: { tags: ['ipam'], summary: 'Update address', description: 'Requires ipmgt `operator`. Status transitions are recorded in the address history.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Release address', description: 'Requires ipmgt `operator`. Frees the address (free addresses are not stored as rows).', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Released' } } }
+      },
+      '/ipmgt/addresses/{id}/history': { get: { tags: ['ipam'], summary: 'Address change history', description: 'Requires ipmgt `viewer`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'History entries' } } } },
+
+      // ─── IPAM: VLANs, L2 domains, VRFs ──────────────────────────────────────
+      '/ipmgt/vlans': {
+        get: { tags: ['ipam'], summary: 'List VLANs', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'VLAN list' } } },
+        post: { tags: ['ipam'], summary: 'Create VLAN', description: 'Requires ipmgt `operator`. `vlan_id` (1-4094) must be unique within its L2 domain.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['vlan_id', 'name'], properties: { vlan_id: { type: 'integer', minimum: 1, maximum: 4094 }, name: { type: 'string' }, l2domain_id: { type: 'string', nullable: true } } } } } }, responses: { 200: { description: 'Created' }, 409: { description: 'VLAN id already exists in this domain' } } }
+      },
+      '/ipmgt/vlans/{id}': {
+        put: { tags: ['ipam'], summary: 'Update VLAN', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete VLAN', description: 'Requires ipmgt `admin`. Referencing subnets are detached, not deleted.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' } } }
+      },
+      '/ipmgt/l2domains': {
+        get: { tags: ['ipam'], summary: 'List L2 domains', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'L2 domain list' } } },
+        post: { tags: ['ipam'], summary: 'Create L2 domain', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/vrfs': {
+        get: { tags: ['ipam'], summary: 'List VRFs', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'VRF list' } } },
+        post: { tags: ['ipam'], summary: 'Create VRF', description: 'Requires ipmgt `operator`. Subnets in different VRFs may overlap by design.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/vrfs/{id}': {
+        put: { tags: ['ipam'], summary: 'Update VRF', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete VRF', description: 'Requires ipmgt `admin`. Referencing subnets are detached, not deleted.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' } } }
+      },
+
+      // ─── IPAM: Devices ──────────────────────────────────────────────────────
+      '/ipmgt/devices': {
+        get: { tags: ['ipam'], summary: 'List devices', description: 'Requires ipmgt `viewer`. Filters: `device_type`, `status`, `location_id`, `customer_id`, `q`. SNMP secrets are never included - only `snmp_*_set` booleans.', responses: { 200: { description: 'Device list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamDevice' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create device', description: 'Requires ipmgt `operator`. Any posted SNMP secret is encrypted at rest and never echoed back.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['hostname'], properties: { hostname: { type: 'string' }, device_type: { type: 'string' }, management_ip: { type: 'string' }, location_id: { type: 'string', nullable: true }, customer_id: { type: 'string', nullable: true }, snmp_version: { type: 'string', enum: ['v1', 'v2c', 'v3'] }, snmp_community: { type: 'string', writeOnly: true } } } } } }, responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/devices/{id}': {
+        put: { tags: ['ipam'], summary: 'Update device', description: 'Requires ipmgt `operator`. A blank SNMP secret field keeps the currently-stored value.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete device', description: 'Requires ipmgt `admin` + password confirmation (`x-confirm-password` header). Blocked (409) if any address still references it.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 409: { description: 'Still referenced' }, 428: { description: 'Password confirmation required' } } }
+      },
+      '/ipmgt/devices/{id}/snmp-test': { post: { tags: ['ipam'], summary: 'Test SNMP connectivity', description: 'Requires ipmgt `operator`. Decrypts the device\'s stored credentials just-in-time; never returns them.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'sysName/sysDescr/uptime' }, 502: { description: 'No response or invalid credentials' } } } },
+      '/ipmgt/devices/{id}/snmp-discover': { post: { tags: ['ipam'], summary: 'SNMP ARP-table discovery', description: 'Requires ipmgt `operator`. Walks the device\'s ARP table and records IP/MAC pairs that fall inside a known subnet.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'entries/matched/created/updated counts' }, 502: { description: 'SNMP walk failed' } } } },
+
+      // ─── IPAM: Locations, Customers ─────────────────────────────────────────
+      '/ipmgt/locations': {
+        get: { tags: ['ipam'], summary: 'List locations', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Location list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamLocation' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create location', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/locations/{id}': {
+        put: { tags: ['ipam'], summary: 'Update location', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete location', description: 'Requires ipmgt `admin` + password confirmation. Blocked (409, listing referencing records) if still in use.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 409: { description: 'Still in use' }, 428: { description: 'Password confirmation required' } } }
+      },
+      '/ipmgt/customers': {
+        get: { tags: ['ipam'], summary: 'List customers', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Customer list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamCustomer' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create customer', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/customers/{id}': {
+        put: { tags: ['ipam'], summary: 'Update customer', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete customer', description: 'Requires ipmgt `admin` + password confirmation. Blocked (409, listing referencing records) if still in use.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 409: { description: 'Still in use' }, 428: { description: 'Password confirmation required' } } }
+      },
+
+      // ─── IPAM: Racks, Circuits, NAT ─────────────────────────────────────────
+      '/ipmgt/racks': {
+        get: { tags: ['ipam'], summary: 'List racks', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Rack list' } } },
+        post: { tags: ['ipam'], summary: 'Create rack', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/racks/{id}': {
+        get: { tags: ['ipam'], summary: 'Rack detail', description: 'Requires ipmgt `viewer`. Includes every placed item.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Rack + items' } } },
+        put: { tags: ['ipam'], summary: 'Update rack', description: 'Requires ipmgt `operator`. Cannot shrink below already-placed items.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete rack', description: 'Requires ipmgt `admin` + password confirmation. Placed items are removed with it.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 428: { description: 'Password confirmation required' } } }
+      },
+      '/ipmgt/racks/{id}/items': { post: { tags: ['ipam'], summary: 'Place a rack item', description: 'Requires ipmgt `operator`. Validated against rack bounds and existing items on the same face (409 on overlap/overflow).', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Placed' }, 409: { description: 'Overlap or out of bounds' } } } },
+      '/ipmgt/racks/{id}/items/{itemId}': {
+        put: { tags: ['ipam'], summary: 'Update a rack item', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'itemId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' }, 409: { description: 'Overlap or out of bounds' } } },
+        delete: { tags: ['ipam'], summary: 'Remove a rack item', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'itemId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Removed' } } }
+      },
+      '/ipmgt/circuit-providers': {
+        get: { tags: ['ipam'], summary: 'List circuit providers', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Provider list' } } },
+        post: { tags: ['ipam'], summary: 'Create circuit provider', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/circuits': {
+        get: { tags: ['ipam'], summary: 'List circuits', description: 'Requires ipmgt `viewer`. Filters: `status`, `customer_id`.', responses: { 200: { description: 'Circuit list' } } },
+        post: { tags: ['ipam'], summary: 'Create circuit', description: 'Requires ipmgt `operator`.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/circuits/{id}': {
+        put: { tags: ['ipam'], summary: 'Update circuit', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete circuit', description: 'Requires ipmgt `admin`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' } } }
+      },
+      '/ipmgt/nat': {
+        get: { tags: ['ipam'], summary: 'List NAT rules', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'NAT rule list' } } },
+        post: { tags: ['ipam'], summary: 'Create NAT rule', description: 'Requires ipmgt `operator`. Exactly one of `source_ip_id`/`source_subnet_id`/`source_text` must be set.', responses: { 200: { description: 'Created' }, 400: { description: 'Zero or multiple sources specified' } } }
+      },
+      '/ipmgt/nat/{id}': {
+        put: { tags: ['ipam'], summary: 'Update NAT rule', description: 'Requires ipmgt `operator`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete NAT rule', description: 'Requires ipmgt `admin`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' } } }
+      },
+
+      // ─── IPAM: IP requests ──────────────────────────────────────────────────
+      '/ipmgt/requests': {
+        get: { tags: ['ipam'], summary: 'List IP requests', description: 'Requires ipmgt `viewer`. Filters: `status`, `subnet_id`, `mine=true`.', responses: { 200: { description: 'Request list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamRequest' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Submit an IP request', description: 'Requires ipmgt `operator`. Target subnet must have `allow_requests = true`.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subnet_id'], properties: { subnet_id: { type: 'string' }, requested_ip: { type: 'string', nullable: true, description: 'Blank = auto-allocate first-free on approval' }, hostname: { type: 'string' }, justification: { type: 'string' } } } } } }, responses: { 200: { description: 'Submitted' }, 403: { description: 'Subnet does not accept requests' } } }
+      },
+      '/ipmgt/requests/{id}/approve': { post: { tags: ['ipam'], summary: 'Approve a request', description: 'Requires ipmgt `manager`. Atomically allocates the address (concurrency-safe) and creates the address record.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Approved + address allocated' }, 409: { description: 'Already decided, or address unavailable' } } } },
+      '/ipmgt/requests/{id}/reject': { post: { tags: ['ipam'], summary: 'Reject a request', description: 'Requires ipmgt `manager`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Rejected' } } } },
+      '/ipmgt/requests/{id}/cancel': { post: { tags: ['ipam'], summary: 'Cancel a request', description: 'Requires ipmgt `operator`; only the original requester or an ipmgt admin may cancel.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Cancelled' }, 403: { description: 'Not the requester or an admin' } } } },
+
+      // ─── IPAM: Custom fields ────────────────────────────────────────────────
+      '/ipmgt/customfields/defs': {
+        get: { tags: ['ipam'], summary: 'List custom field definitions', description: 'Requires ipmgt `viewer`. Filter: `entity_type`.', responses: { 200: { description: 'Definition list' } } },
+        post: { tags: ['ipam'], summary: 'Create custom field definition', description: 'Requires ipmgt `admin` (module configuration).', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/customfields/defs/{id}': {
+        put: { tags: ['ipam'], summary: 'Update custom field definition', description: 'Requires ipmgt `admin`.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete custom field definition', description: 'Requires ipmgt `admin` + password confirmation. Cascades to every stored value for this field.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 428: { description: 'Password confirmation required' } } }
+      },
+      '/ipmgt/customfields/values': {
+        get: { tags: ['ipam'], summary: 'Get definitions + values for an entity', description: 'Requires ipmgt `viewer`. Query: `entity_type` (required), `entity_id` (omit for create-mode defaults).', parameters: [{ name: 'entity_type', in: 'query', required: true, schema: { type: 'string' } }, { name: 'entity_id', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'defs + values' } } },
+        put: { tags: ['ipam'], summary: 'Bulk-save custom field values for an entity', description: 'Requires ipmgt `operator`. Validates each value (type, required, uniqueness) before writing any of them.', responses: { 200: { description: 'Saved' }, 400: { description: 'Validation failure' }, 409: { description: 'Unique-value conflict' } } }
+      },
+
+      // ─── IPAM: Vault ────────────────────────────────────────────────────────
+      '/ipmgt/vault': {
+        get: { tags: ['ipam'], summary: 'List vault item metadata', description: 'Requires ipmgt `manager`. Never includes the secret value in any form.', responses: { 200: { description: 'Metadata list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/IpamVaultItemMeta' } } } } } } },
+        post: { tags: ['ipam'], summary: 'Create vault item', description: 'Requires ipmgt `manager`. The value is encrypted at rest and never echoed back.', responses: { 200: { description: 'Created' } } }
+      },
+      '/ipmgt/vault/{id}': {
+        put: { tags: ['ipam'], summary: 'Update vault item', description: 'Requires ipmgt `manager`. A blank `value` keeps the currently-stored secret.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Updated' } } },
+        delete: { tags: ['ipam'], summary: 'Delete vault item', description: 'Requires ipmgt `admin` + password confirmation.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Deleted' }, 428: { description: 'Password confirmation required' } } }
+      },
+      '/ipmgt/vault/{id}/reveal': { post: { tags: ['ipam'], summary: 'Reveal a vault item\'s secret', description: 'Requires ipmgt `admin` **and** a fresh password confirmation (`x-confirm-password` header) - re-authorization, not just an existing session. Every reveal is audited.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'The decrypted value, shown once' }, 428: { description: 'Password confirmation required' } } } },
+      '/ipmgt/vault/{id}/access-log': { get: { tags: ['ipam'], summary: 'Vault item access log', description: 'Requires ipmgt `manager`. Who revealed this item, and when.', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Access log entries' } } } },
+
+      // ─── IPAM: Search, dashboard, scans, import/export ─────────────────────
+      '/ipmgt/search': { get: { tags: ['ipam'], summary: 'Global IPAM search', description: 'Requires ipmgt `viewer`. Exact/partial IP, hostname/MAC/device/owner text, or CIDR containment - across addresses, subnets, VLANs, VRFs, sections, devices, locations, and customers.', parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Grouped results' } } } },
+      '/ipmgt/dashboard': { get: { tags: ['ipam'], summary: 'IPAM dashboard summary', description: 'Requires ipmgt `viewer`. Entity counts, IPv4/IPv6 capacity, status breakdown, high-usage subnets, pending requests, recent activity.', responses: { 200: { description: 'Dashboard payload' } } } },
+      '/ipmgt/scans': { get: { tags: ['ipam'], summary: 'Scan run history', description: 'Requires ipmgt `viewer`. Filter: `subnet_id`.', parameters: [{ name: 'subnet_id', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 500 } }], responses: { 200: { description: 'History entries' } } } },
+      '/ipmgt/export': { get: { tags: ['ipam'], summary: 'Bulk export', description: 'Requires ipmgt `viewer` (`ipmgt.export`). Query: `entity_type` (section|subnet|address|vlan|vrf|device|location|customer). Device exports never include SNMP credentials.', parameters: [{ name: 'entity_type', in: 'query', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'JSON rows' } } } },
+      '/ipmgt/import': { post: { tags: ['ipam'], summary: 'Bulk import', description: 'Requires ipmgt `operator` (`ipmgt.import`). Same columns as export; rows are processed one at a time with per-row error collection.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['entity_type', 'content'], properties: { entity_type: { type: 'string' }, format: { type: 'string', enum: ['json', 'csv'] }, content: { type: 'string' }, mode: { type: 'string', enum: ['skip', 'update'] } } } } } }, responses: { 200: { description: 'created/updated/skipped/errors report' } } } },
+      '/ipmgt/calculator': { get: { tags: ['ipam'], summary: 'Subnet calculator', description: 'Requires ipmgt `viewer`. IPv4/v6 CIDR facts and split-into-children.', responses: { 200: { description: 'Calculator result' } } } },
+      '/ipmgt/settings': {
+        get: { tags: ['ipam'], summary: 'Get IPAM module settings', description: 'Requires ipmgt `viewer`.', responses: { 200: { description: 'Settings' } } },
+        put: { tags: ['ipam'], summary: 'Update IPAM module settings', description: 'Requires ipmgt `admin`.', responses: { 200: { description: 'Updated' } } }
       }
     }
   }
