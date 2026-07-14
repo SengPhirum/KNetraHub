@@ -11,11 +11,13 @@ Date: 2026-07-14 UTC
 
 ## Source
 
-- Commit: `51cf4e0`
+- Commit: `4ae4f79`
 - Previous tag: none
 
 ## Changes
 
+- Update (4ae4f79)
+- Add OIDC test/query and clarify Admin/Operator authority scope (ee5a3e6)
 - Add reverse-DNS tooling and module documentation (Phase 13) (51cf4e0)
 - Retrofit step-up auth on Subnet/Section/VLAN/VRF deletes (Phase 12) (b2cd7e4)
 - Document the IPAM REST API in OpenAPI (Phase 11) (be95d2b)
