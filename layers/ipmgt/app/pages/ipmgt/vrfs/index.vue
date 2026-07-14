@@ -33,17 +33,12 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete() {
+async function confirmDelete(password: string) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/ipmgt/vrfs/${deleteTarget.value.id}`, { method: 'DELETE' })
-    toast.add({ title: 'VRF deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
-  finally { deleting.value = false }
+  await $fetch(`/api/ipmgt/vrfs/${deleteTarget.value.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: 'VRF deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -137,16 +132,13 @@ async function confirmDelete() {
       </template>
     </UModal>
 
-    <UModal :open="!!deleteTarget" @update:open="(v: boolean) => { if (!v) deleteTarget = null }" title="Delete VRF">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">Delete VRF <span class="font-medium text-foam">{{ deleteTarget?.name }}</span>? Subnets in it are detached, not deleted.</p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-3">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmPasswordModal
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete VRF"
+      :message="deleteTarget ? `VRF ${deleteTarget.name} will be removed. Subnets in it are detached, not deleted.` : ''"
+      confirm-label="Delete"
+      :action="confirmDelete"
+    />
   </div>
 </template>

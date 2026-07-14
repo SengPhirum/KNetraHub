@@ -1,10 +1,12 @@
 import { getDb } from '~~/server/utils/db'
 import { requireIpam, ipamAudit, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
 
 // Delete a section. Blocked when it still holds subnets unless ?force=true, in
 // which case those subnets are detached (section_id set null), not destroyed.
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
+  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')
   const force = getQuery(event).force === 'true'
   const db = getDb()

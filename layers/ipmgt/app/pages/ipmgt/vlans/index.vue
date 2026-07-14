@@ -42,17 +42,12 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete() {
+async function confirmDelete(password: string) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/ipmgt/vlans/${deleteTarget.value.id}`, { method: 'DELETE' })
-    toast.add({ title: 'VLAN deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
-  finally { deleting.value = false }
+  await $fetch(`/api/ipmgt/vlans/${deleteTarget.value.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: 'VLAN deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -147,16 +142,13 @@ async function confirmDelete() {
       </template>
     </UModal>
 
-    <UModal :open="!!deleteTarget" @update:open="(v: boolean) => { if (!v) deleteTarget = null }" title="Delete VLAN">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">Delete VLAN <span class="font-mono text-foam">{{ deleteTarget?.vlan_id }}</span>? Subnets referencing it are detached, not deleted.</p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-3">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmPasswordModal
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete VLAN"
+      :message="deleteTarget ? `VLAN ${deleteTarget.vlan_id} will be removed. Subnets referencing it are detached, not deleted.` : ''"
+      confirm-label="Delete"
+      :action="confirmDelete"
+    />
   </div>
 </template>

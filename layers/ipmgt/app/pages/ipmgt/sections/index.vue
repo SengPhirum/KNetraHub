@@ -72,18 +72,13 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete(force = false) {
+async function confirmDelete(password: string) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/ipmgt/sections/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE' })
-    toast.add({ title: 'Section deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = false }
+  const force = !!deleteTarget.value.subnet_count
+  await $fetch(`/api/ipmgt/sections/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: 'Section deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -179,22 +174,15 @@ async function confirmDelete(force = false) {
       </template>
     </UModal>
 
-    <UModal :open="!!deleteTarget" @update:open="(v: boolean) => { if (!v) deleteTarget = null }" title="Delete section">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">
-          Delete <span class="font-medium text-foam">{{ deleteTarget?.name }}</span>?
-          <template v-if="deleteTarget?.subnet_count">
-            It still holds <span class="text-foam">{{ deleteTarget.subnet_count }}</span> subnet(s) — force delete detaches them (they are not removed).
-          </template>
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-3">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton v-if="deleteTarget?.subnet_count" color="error" variant="soft" :loading="deleting" @click="confirmDelete(true)">Force delete</UButton>
-          <UButton v-else color="error" :loading="deleting" @click="confirmDelete(false)">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmPasswordModal
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete section"
+      :message="deleteTarget?.subnet_count
+        ? `${deleteTarget.name} still holds ${deleteTarget.subnet_count} subnet(s) - force delete detaches them (they are not removed).`
+        : (deleteTarget ? `${deleteTarget.name} will be permanently removed.` : '')"
+      :confirm-label="deleteTarget?.subnet_count ? 'Force delete' : 'Delete'"
+      :action="confirmDelete"
+    />
   </div>
 </template>

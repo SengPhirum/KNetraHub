@@ -1,9 +1,11 @@
 import { getDb } from '~~/server/utils/db'
 import { requireIpam, ipamAudit, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
 
 // Delete a VRF. Subnets referencing it are detached (vrf_id set null).
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
+  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
   const cur = await db.query('SELECT * FROM ipmgt_vrfs WHERE id = $1', [id])

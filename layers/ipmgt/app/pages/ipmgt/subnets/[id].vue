@@ -91,15 +91,11 @@ async function confirmRelease() {
 // ── Edit / delete subnet ────────────────────────────────────────────────────
 const subnetFormOpen = ref(false)
 const deleteOpen = ref(false)
-const deleting = ref(false)
-async function deleteSubnet(force = false) {
-  deleting.value = true
-  try {
-    await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE' })
-    toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
-    await navigateTo('/ipmgt/subnets')
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' }) }
-  finally { deleting.value = false }
+async function deleteSubnet(password: string) {
+  const force = !!subnet.value?.usage?.used
+  await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
+  await navigateTo('/ipmgt/subnets')
 }
 
 const facts = computed(() => {
@@ -269,19 +265,12 @@ const facts = computed(() => {
       </template>
     </UModal>
 
-    <UModal v-model:open="deleteOpen" title="Delete subnet">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">
-          Delete subnet <span class="font-mono text-foam">{{ subnet?.network }}</span> and all
-          <span class="text-foam">{{ subnet?.usage?.used || 0 }}</span> defined address(es)? This cannot be undone.
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-3">
-          <UButton variant="ghost" @click="deleteOpen = false">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="deleteSubnet(true)">Delete subnet</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmPasswordModal
+      v-model:open="deleteOpen"
+      title="Delete subnet"
+      :message="subnet ? `Subnet ${subnet.network} and all ${subnet.usage?.used || 0} defined address(es) will be permanently removed.` : ''"
+      confirm-label="Delete subnet"
+      :action="deleteSubnet"
+    />
   </div>
 </template>
