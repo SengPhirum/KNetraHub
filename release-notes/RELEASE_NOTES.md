@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-12 UTC
+Date: 2026-07-14 UTC
 
 ## Docker Images
 
@@ -11,11 +11,23 @@ Date: 2026-07-12 UTC
 
 ## Source
 
-- Commit: `2923e53`
+- Commit: `51cf4e0`
 - Previous tag: none
 
 ## Changes
 
+- Add reverse-DNS tooling and module documentation (Phase 13) (51cf4e0)
+- Retrofit step-up auth on Subnet/Section/VLAN/VRF deletes (Phase 12) (b2cd7e4)
+- Document the IPAM REST API in OpenAPI (Phase 11) (be95d2b)
+- Add encrypted vault to IPAM (Phase 10) (eba576d)
+- Add Racks, Circuits, and NAT to IPAM (Phases 7-9) (61d807b)
+- Add real SNMP discovery to IPAM devices (Phase 6) (4db36bf)
+- Add host-status scanning and discovery to IPAM (Phase 5) (ed16c43)
+- Add bulk import/export to IPAM (Phase 4) (f5e53e2)
+- Add IP request/approval workflow to IPAM (Phase 3) (269d2c9)
+- Add Custom Fields system to IPAM (Phase 2) (7821fce)
+- Add Device, Location, and Customer entities to IPAM (Phase 1) (ed27d49)
+- Harden resource actions, monitoring access, and logs (7748e15)
 - Update release node (2923e53)
 - Improve notifications, action safety, and logging (939e780)
 - Fix stack UI (ca0bfc9)
