@@ -21,6 +21,7 @@ const emptyForm = () => ({
 const dialog = reactive({ open: false, editing: null as any })
 const form = reactive(emptyForm())
 const saving = ref(false)
+const cfRef = ref()
 function openCreate() { dialog.editing = null; Object.assign(form, emptyForm()); dialog.open = true }
 function openEdit(l: any) {
   dialog.editing = l
@@ -38,8 +39,10 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, parent_id: form.parent_id || null, latitude: form.latitude === '' ? null : form.latitude, longitude: form.longitude === '' ? null : form.longitude }
+    let id = dialog.editing?.id
     if (dialog.editing) await $fetch(`/api/ipmgt/locations/${dialog.editing.id}`, { method: 'PUT', body })
-    else await $fetch('/api/ipmgt/locations', { method: 'POST', body })
+    else { const res: any = await $fetch('/api/ipmgt/locations', { method: 'POST', body }); id = res.id }
+    await cfRef.value?.saveValues(id)
     toast.add({ title: dialog.editing ? 'Location updated' : 'Location created', color: 'primary', icon: 'i-lucide-check' })
     dialog.open = false
     await refresh()
@@ -164,6 +167,7 @@ async function confirmDelete(password: string) {
             <UTextarea v-model="form.description" class="w-full" :rows="2" />
           </UFormField>
           <UCheckbox v-model="form.active" label="Active" />
+          <IpamCustomFieldsPanel ref="cfRef" entity-type="location" :entity-id="dialog.editing?.id || null" />
         </div>
       </template>
       <template #footer>

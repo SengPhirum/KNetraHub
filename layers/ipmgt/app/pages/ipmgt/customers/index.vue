@@ -21,6 +21,7 @@ const emptyForm = () => ({
 const dialog = reactive({ open: false, editing: null as any })
 const form = reactive(emptyForm())
 const saving = ref(false)
+const cfRef = ref()
 function openCreate() { dialog.editing = null; Object.assign(form, emptyForm()); dialog.open = true }
 function openEdit(c: any) {
   dialog.editing = c
@@ -35,8 +36,10 @@ async function save() {
   if (!form.name.trim()) return
   saving.value = true
   try {
+    let id = dialog.editing?.id
     if (dialog.editing) await $fetch(`/api/ipmgt/customers/${dialog.editing.id}`, { method: 'PUT', body: form })
-    else await $fetch('/api/ipmgt/customers', { method: 'POST', body: form })
+    else { const res: any = await $fetch('/api/ipmgt/customers', { method: 'POST', body: form }); id = res.id }
+    await cfRef.value?.saveValues(id)
     toast.add({ title: dialog.editing ? 'Customer updated' : 'Customer created', color: 'primary', icon: 'i-lucide-check' })
     dialog.open = false
     await refresh()
@@ -149,6 +152,7 @@ function statusClass(s: string) {
           <UFormField label="Notes">
             <UTextarea v-model="form.notes" class="w-full" :rows="2" />
           </UFormField>
+          <IpamCustomFieldsPanel ref="cfRef" entity-type="customer" :entity-id="dialog.editing?.id || null" />
         </div>
       </template>
       <template #footer>

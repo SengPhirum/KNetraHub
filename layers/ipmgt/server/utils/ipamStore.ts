@@ -10,6 +10,7 @@ import {
   cidrInfo,
   cidrsOverlap,
   ipToBigInt,
+  isValidCidr,
   isValidIp,
   parseCidr,
   usableCapacity
@@ -186,6 +187,120 @@ export function stripDeviceSnmpSecrets<T extends Record<string, any>>(row: T): O
     snmp_auth_password_set: !!snmp_auth_password_enc,
     snmp_priv_password_set: !!snmp_priv_password_enc
   }
+}
+
+// ─── Custom fields ──────────────────────────────────────────────────────────
+
+/** Entity types custom fields can be attached to (must match usages below). */
+export const CUSTOM_FIELD_ENTITY_TYPES = [
+  'subnet', 'address', 'device', 'location', 'customer', 'vlan', 'vrf', 'section'
+] as const
+export type CustomFieldEntityType = typeof CUSTOM_FIELD_ENTITY_TYPES[number]
+
+// user_ref is deliberately not offered: /api/users is gated to global admins,
+// so a ref-picker backed by it would 403 for the operator tier that otherwise
+// edits IPAM entities. The other _ref types are all ipmgt-viewer-readable.
+export const CUSTOM_FIELD_TYPES = [
+  'text', 'textarea', 'integer', 'decimal', 'boolean', 'date', 'datetime',
+  'select', 'multiselect', 'url', 'email', 'ip', 'cidr', 'mac',
+  'location_ref', 'device_ref', 'customer_ref'
+] as const
+export type CustomFieldType = typeof CUSTOM_FIELD_TYPES[number]
+
+export interface CustomFieldDefRow {
+  id: string
+  entity_type: string
+  field_key: string
+  label: string
+  field_type: string
+  options: string | null
+  default_value: string | null
+  required: boolean
+  unique_value: boolean
+  searchable: boolean
+  active: boolean
+  [k: string]: any
+}
+
+const MAC_RE = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const URL_RE = /^https?:\/\/[^\s]+$/i
+
+/** Parse a field def's `options` JSON blob into a plain string[] (empty on any parse failure). */
+export function parseFieldOptions(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch { return [] }
+}
+
+/**
+ * Validate + canonicalize a raw posted value against its field definition.
+ * Returns the string to store, or null to clear/omit the value. Throws 400 on
+ * a type/format violation, 400 if a required field is left empty.
+ */
+export function validateCustomFieldValue(def: CustomFieldDefRow, raw: unknown): string | null {
+  const empty = raw === undefined || raw === null || String(raw).trim() === ''
+  if (empty) {
+    if (def.required) throw createError({ statusCode: 400, statusMessage: `"${def.label}" is required` })
+    return null
+  }
+  const s = String(raw).trim()
+  const fail = () => { throw createError({ statusCode: 400, statusMessage: `"${def.label}" has an invalid value` }) }
+
+  switch (def.field_type as CustomFieldType) {
+    case 'integer':
+      if (!/^-?\d+$/.test(s)) fail()
+      return s
+    case 'decimal':
+      if (!Number.isFinite(Number(s))) fail()
+      return s
+    case 'boolean':
+      if (!['true', 'false'].includes(s.toLowerCase())) fail()
+      return s.toLowerCase()
+    case 'date':
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(s))) fail()
+      return s
+    case 'datetime':
+      if (Number.isNaN(Date.parse(s))) fail()
+      return s
+    case 'email':
+      if (!EMAIL_RE.test(s)) fail()
+      return s
+    case 'url':
+      if (!URL_RE.test(s)) fail()
+      return s
+    case 'mac':
+      if (!MAC_RE.test(s)) fail()
+      return s.toLowerCase()
+    case 'ip':
+      if (!isValidIp(s)) fail()
+      return canonicalizeIp(s)
+    case 'cidr':
+      if (!isValidCidr(s)) fail()
+      return s
+    case 'select': {
+      const opts = parseFieldOptions(def.options)
+      if (opts.length && !opts.includes(s)) fail()
+      return s
+    }
+    case 'multiselect': {
+      const opts = parseFieldOptions(def.options)
+      let items: string[]
+      try { items = JSON.parse(s) } catch { items = [s] }
+      if (!Array.isArray(items)) fail()
+      if (opts.length && items.some((i) => !opts.includes(String(i)))) fail()
+      return JSON.stringify(items)
+    }
+    default:
+      return s
+  }
+}
+
+/** Clean up custom field values for an entity being deleted (no FK possible - entity_id spans multiple tables depending on entity_type). */
+export async function deleteCustomFieldValues(entityType: CustomFieldEntityType, entityId: string): Promise<void> {
+  await getDb().query('DELETE FROM ipmgt_custom_field_values WHERE entity_type = $1 AND entity_id = $2', [entityType, entityId])
 }
 
 /** One dependency check for usedByRows(): does `table.col = id` have any rows? */

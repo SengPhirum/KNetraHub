@@ -991,6 +991,47 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_customer ON ipmgt_ips(customer_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_device ON ipmgt_ips(device_id);
 
+    -- IPAM Module (Phase 2): admin-defined custom fields, generic across the
+    -- major entity types. Values are stored as plain TEXT (canonical string
+    -- form per field_type) - matches the house convention of app-level
+    -- validation/coercion over DB-enforced typing, and this app's realistic
+    -- scale doesn't need native JSONB/EAV-typed-column complexity.
+    CREATE TABLE IF NOT EXISTS ipmgt_custom_field_defs (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      field_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      field_type TEXT NOT NULL DEFAULT 'text',
+      options TEXT,
+      default_value TEXT,
+      required BOOLEAN NOT NULL DEFAULT false,
+      unique_value BOOLEAN NOT NULL DEFAULT false,
+      searchable BOOLEAN NOT NULL DEFAULT false,
+      visible_list BOOLEAN NOT NULL DEFAULT true,
+      visible_detail BOOLEAN NOT NULL DEFAULT true,
+      visible_export BOOLEAN NOT NULL DEFAULT true,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ipmgt_cf_defs_key ON ipmgt_custom_field_defs(entity_type, field_key);
+
+    CREATE TABLE IF NOT EXISTS ipmgt_custom_field_values (
+      id TEXT PRIMARY KEY,
+      field_id TEXT NOT NULL REFERENCES ipmgt_custom_field_defs(id) ON DELETE CASCADE,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      value TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ipmgt_cf_values_unique ON ipmgt_custom_field_values(field_id, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_cf_values_entity ON ipmgt_custom_field_values(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_cf_values_value ON ipmgt_custom_field_values(field_id, value);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

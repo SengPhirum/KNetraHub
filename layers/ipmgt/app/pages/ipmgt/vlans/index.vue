@@ -22,6 +22,7 @@ const filtered = computed(() => {
 const dialog = reactive({ open: false, editing: null as any })
 const form = reactive({ vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', location_id: '', customer_id: '', active: true })
 const saving = ref(false)
+const cfRef = ref()
 function openCreate() { dialog.editing = null; Object.assign(form, { vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', location_id: '', customer_id: '', active: true }); dialog.open = true }
 function openEdit(v: any) { dialog.editing = v; Object.assign(form, { vlan_id: v.vlan_id, name: v.name, description: v.description || '', l2domain_id: v.l2domain_id || '', location: v.location || '', location_id: v.location_id || '', customer_id: v.customer_id || '', active: !!v.active }); dialog.open = true }
 async function save() {
@@ -29,8 +30,10 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, l2domain_id: form.l2domain_id || null, location_id: form.location_id || null, customer_id: form.customer_id || null }
+    let id = dialog.editing?.id
     if (dialog.editing) await $fetch(`/api/ipmgt/vlans/${dialog.editing.id}`, { method: 'PUT', body })
-    else await $fetch('/api/ipmgt/vlans', { method: 'POST', body })
+    else { const res: any = await $fetch('/api/ipmgt/vlans', { method: 'POST', body }); id = res.id }
+    await cfRef.value?.saveValues(id)
     toast.add({ title: dialog.editing ? 'VLAN updated' : 'VLAN created', color: 'primary', icon: 'i-lucide-check' })
     dialog.open = false
     await refresh()
@@ -133,6 +136,7 @@ async function confirmDelete() {
             <UTextarea v-model="form.description" class="w-full" :rows="2" />
           </UFormField>
           <UCheckbox v-model="form.active" label="Active" />
+          <IpamCustomFieldsPanel ref="cfRef" entity-type="vlan" :entity-id="dialog.editing?.id || null" />
         </div>
       </template>
       <template #footer>

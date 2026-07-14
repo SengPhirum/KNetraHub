@@ -15,6 +15,7 @@ const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(
 const form = reactive<any>({})
 const saving = ref(false)
 const isEdit = computed(() => !!props.device)
+const cfRef = ref()
 
 function reset() {
   const d = props.device
@@ -39,9 +40,10 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, location_id: form.location_id || null, customer_id: form.customer_id || null }
-    const res = isEdit.value
+    const res: any = isEdit.value
       ? await $fetch(`/api/ipmgt/devices/${props.device.id}`, { method: 'PUT', body })
       : await $fetch('/api/ipmgt/devices', { method: 'POST', body })
+    await cfRef.value?.saveValues(isEdit.value ? props.device.id : res.id)
     toast.add({ title: isEdit.value ? 'Device updated' : 'Device created', color: 'primary', icon: 'i-lucide-check' })
     emit('saved', res)
     emit('update:open', false)
@@ -107,6 +109,7 @@ async function save() {
         <UFormField label="Notes">
           <UTextarea v-model="form.notes" class="w-full" :rows="2" />
         </UFormField>
+        <IpamCustomFieldsPanel ref="cfRef" entity-type="device" :entity-id="isEdit ? device.id : null" />
       </div>
     </template>
     <template #footer>

@@ -20,6 +20,7 @@ const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(
 const form = reactive<any>({})
 const saving = ref(false)
 const isEdit = computed(() => !!props.subnet)
+const cfRef = ref()
 
 function reset() {
   const s = props.subnet
@@ -43,9 +44,10 @@ async function save() {
       section_id: form.section_id || null, vlan_ref: form.vlan_ref || null, vrf_id: form.vrf_id || null,
       location_id: form.location_id || null, customer_id: form.customer_id || null
     }
-    const res = isEdit.value
+    const res: any = isEdit.value
       ? await $fetch(`/api/ipmgt/subnets/${props.subnet.id}`, { method: 'PUT', body })
       : await $fetch('/api/ipmgt/subnets', { method: 'POST', body })
+    await cfRef.value?.saveValues(isEdit.value ? props.subnet.id : res.id)
     toast.add({ title: isEdit.value ? 'Subnet updated' : 'Subnet created', color: 'primary', icon: 'i-lucide-check' })
     emit('saved', res)
     emit('update:open', false)
@@ -112,6 +114,7 @@ async function save() {
           <UCheckbox v-model="form.dns_resolve" label="DNS resolve" />
           <UCheckbox v-model="form.dhcp_range" label="DHCP range" />
         </div>
+        <IpamCustomFieldsPanel ref="cfRef" entity-type="subnet" :entity-id="isEdit ? subnet.id : null" />
       </div>
     </template>
     <template #footer>

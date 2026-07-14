@@ -1,5 +1,5 @@
 import { getDb } from '~~/server/utils/db'
-import { requireIpam, ipamAudit, recordIpHistory } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requireIpam, ipamAudit, recordIpHistory, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Release/delete an address (frees it — free addresses are not stored).
 export default defineEventHandler(async (event) => {
@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
   const row = cur.rows[0]
 
   await db.query('DELETE FROM ipmgt_ips WHERE id = $1', [id])
+  await deleteCustomFieldValues('address', id)
   // Keep the history row but null the ip_id link (record survives the delete).
   await db.query('UPDATE ipmgt_ip_history SET ip_id = NULL WHERE ip_id = $1', [id])
   await recordIpHistory({ ipId: null, subnetId: row.subnet_id, ip: row.ip, action: 'released', actor: user.username })

@@ -39,6 +39,7 @@ const parentItems = computed(() => [
 const dialog = reactive({ open: false, editing: null as any })
 const form = reactive({ name: '', description: '', parent_id: '', strict_mode: false, display_order: 0, active: true })
 const saving = ref(false)
+const cfRef = ref()
 
 function openCreate() {
   dialog.editing = null
@@ -58,8 +59,10 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, parent_id: form.parent_id || null }
+    let id = dialog.editing?.id
     if (dialog.editing) await $fetch(`/api/ipmgt/sections/${dialog.editing.id}`, { method: 'PUT', body })
-    else await $fetch('/api/ipmgt/sections', { method: 'POST', body })
+    else { const res: any = await $fetch('/api/ipmgt/sections', { method: 'POST', body }); id = res.id }
+    await cfRef.value?.saveValues(id)
     toast.add({ title: dialog.editing ? 'Section updated' : 'Section created', color: 'primary', icon: 'i-lucide-check' })
     dialog.open = false
     await refresh()
@@ -165,6 +168,7 @@ async function confirmDelete(force = false) {
             <UCheckbox v-model="form.strict_mode" label="Strict mode" />
             <UCheckbox v-model="form.active" label="Active" />
           </div>
+          <IpamCustomFieldsPanel ref="cfRef" entity-type="section" :entity-id="dialog.editing?.id || null" />
         </div>
       </template>
       <template #footer>

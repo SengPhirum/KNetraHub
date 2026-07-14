@@ -169,6 +169,7 @@ const IPMGT_GROUPS: NavGroup[] = [
   {
     label: 'Administration',
     items: [
+      { label: 'Custom Fields', to: '/ipmgt/customfields', icon: 'i-lucide-list-plus',   permission: 'ipmgt.settings' },
       { label: 'Settings',   to: '/ipmgt/settings',   icon: 'i-lucide-settings',    permission: 'ipmgt.settings' },
       { label: 'Logs',       to: '/ipmgt/logs',       icon: 'i-lucide-scroll-text', permission: 'ipmgt.create' }
     ]

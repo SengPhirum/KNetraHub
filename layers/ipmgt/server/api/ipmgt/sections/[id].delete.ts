@@ -1,5 +1,5 @@
 import { getDb } from '~~/server/utils/db'
-import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requireIpam, ipamAudit, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Delete a section. Blocked when it still holds subnets unless ?force=true, in
 // which case those subnets are detached (section_id set null), not destroyed.
@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
   if (force) await db.query('UPDATE ipmgt_subnets SET section_id = NULL WHERE section_id = $1', [id])
 
   await db.query('DELETE FROM ipmgt_sections WHERE id = $1', [id])
+  await deleteCustomFieldValues('section', id!)
   await ipamAudit(user, 'ipmgt.section.delete', id!, { name: cur.rows[0].name, force })
   return { deleted: 1 }
 })

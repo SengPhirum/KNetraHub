@@ -1,5 +1,5 @@
 import { getDb } from '~~/server/utils/db'
-import { requireIpam, ipamAudit, usedByRows } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requireIpam, ipamAudit, usedByRows, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
 
 // Delete a location. Blocked (409, with the referencing records named) if any
@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await db.query('DELETE FROM ipmgt_locations WHERE id = $1', [id])
+  await deleteCustomFieldValues('location', id)
   await ipamAudit(user, 'ipmgt.location.delete', id, { name: cur.rows[0].name })
   return { deleted: 1 }
 })
