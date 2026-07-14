@@ -20,6 +20,9 @@ interface OidcDiscovery {
   token_endpoint: string
   jwks_uri: string
   userinfo_endpoint?: string
+  scopes_supported?: string[]
+  claims_supported?: string[]
+  grant_types_supported?: string[]
 }
 
 // Short-lived cookie that carries the per-login transaction (CSRF state,
@@ -30,6 +33,24 @@ const TXN_COOKIE = 'knetrahub_oidc_txn'
 const DISCOVERY_TTL = 60 * 60 * 1000
 let discoveryCache: { issuer: string, doc: OidcDiscovery, fetchedAt: number } | null = null
 let jwksCache: { uri: string, jwks: ReturnType<typeof createRemoteJWKSet> } | null = null
+
+/**
+ * Uncached discovery fetch against an arbitrary issuer - the shared low-level
+ * step used both by the real (cached) login-flow discovery below and by the
+ * admin-facing "Test & Query" action, which must always hit the network live
+ * (an admin testing a just-typed issuer URL should never see a stale/cached
+ * result from a previous, possibly different issuer).
+ */
+export async function discoverOidcIssuer(issuer: string): Promise<OidcDiscovery> {
+  const url = `${issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`
+  const doc = await $fetch<OidcDiscovery>(url, { timeout: 8000 }).catch((err) => {
+    throw createError({ statusCode: 502, statusMessage: `OIDC discovery failed: ${err?.data?.message || err?.message || err}` })
+  })
+  if (!doc.authorization_endpoint || !doc.token_endpoint || !doc.jwks_uri) {
+    throw createError({ statusCode: 502, statusMessage: 'OIDC discovery document is missing required endpoints (authorization_endpoint/token_endpoint/jwks_uri)' })
+  }
+  return doc
+}
 
 export async function oidcDiscover(cfg: OidcSettings): Promise<OidcDiscovery> {
   if (!cfg.enabled) {
@@ -43,14 +64,7 @@ export async function oidcDiscover(cfg: OidcSettings): Promise<OidcDiscovery> {
     return discoveryCache.doc
   }
 
-  const url = `${cfg.issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`
-  const doc = await $fetch<OidcDiscovery>(url, { timeout: 8000 }).catch((err) => {
-    throw createError({ statusCode: 502, statusMessage: `OIDC discovery failed: ${err?.message || err}` })
-  })
-  if (!doc.authorization_endpoint || !doc.token_endpoint || !doc.jwks_uri) {
-    throw createError({ statusCode: 502, statusMessage: 'OIDC discovery document is missing required endpoints' })
-  }
-
+  const doc = await discoverOidcIssuer(cfg.issuer)
   discoveryCache = { issuer: cfg.issuer, doc, fetchedAt: Date.now() }
   return doc
 }

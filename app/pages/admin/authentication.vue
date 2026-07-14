@@ -117,6 +117,38 @@ const oidcForm = reactive({
 const savingProvider = ref<'ldap' | 'oidc' | null>(null)
 const resettingProvider = ref<'ldap' | 'oidc' | null>(null)
 
+interface OidcTestResult {
+  ok: boolean
+  tookMs: number
+  issuer: string
+  endpoints: { authorization: string, token: string, jwks: string, userinfo: string | null }
+  scopesSupported: string[] | null
+  claimsSupported: string[] | null
+  grantTypesSupported: string[] | null
+  scope: string
+}
+const testingOidc = ref(false)
+const oidcTestResult = ref<OidcTestResult | null>(null)
+const oidcTestErrorMsg = ref('')
+
+async function testOidc() {
+  testingOidc.value = true
+  oidcTestErrorMsg.value = ''
+  oidcTestResult.value = null
+  try {
+    oidcTestResult.value = await $fetch<OidcTestResult>('/api/auth/settings/oidc-test', {
+      method: 'POST',
+      body: { issuer: oidcForm.issuer, clientId: oidcForm.clientId }
+    })
+    toast.add({ title: 'OIDC discovery succeeded', description: `Responded in ${oidcTestResult.value.tookMs}ms`, color: 'primary', icon: 'i-lucide-check' })
+  } catch (e: any) {
+    oidcTestErrorMsg.value = e?.data?.statusMessage || e?.message || 'Test failed'
+    toast.add({ title: 'OIDC test failed', description: oidcTestErrorMsg.value, color: 'error' })
+  } finally {
+    testingOidc.value = false
+  }
+}
+
 const authLoadStatus = computed(() => authStatus.value === 'idle' ? 'pending' : authStatus.value)
 
 watch(auth, (value) => {
@@ -296,7 +328,7 @@ async function resetProvider(provider: 'ldap' | 'oidc') {
             <UFormField label="Groups claim">
               <UInput v-model="oidcForm.groupsClaim" class="w-full font-mono" />
             </UFormField>
-            <UFormField label="Realm roles claim" description="Drives per-app access (App & Access page).">
+            <UFormField label="Realm roles claim" description="Drives per-app access (App & Access page). Use realm_access.roles for realm roles, or resource_access.<client-id>.roles for client roles - see the guide on App & Access for which to pick.">
               <UInput v-model="oidcForm.rolesClaim" class="w-full font-mono" placeholder="realm_access.roles" />
             </UFormField>
             <UFormField label="Admin group">
@@ -307,23 +339,79 @@ async function resetProvider(provider: 'ldap' | 'oidc') {
             </UFormField>
           </div>
 
-          <footer class="flex flex-col gap-2 border-t border-hull pt-4 sm:flex-row sm:justify-end">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              label="Use env defaults"
-              icon="i-lucide-rotate-ccw"
-              :disabled="!auth?.oidc.overridden"
-              :loading="resettingProvider === 'oidc'"
-              @click="resetProvider('oidc')"
-            />
-            <UButton
-              color="primary"
-              label="Save OIDC"
-              icon="i-lucide-save"
-              :loading="savingProvider === 'oidc'"
-              @click="saveProvider('oidc')"
-            />
+          <div class="panel-flush flex items-start gap-2 bg-surface-2/50 p-3 text-xs">
+            <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0 text-beacon" />
+            <div class="space-y-1 text-(--color-muted)">
+              <p>
+                <strong class="text-foam">Admin group</strong> and <strong class="text-foam">Operator group</strong> only set the user's
+                <strong class="text-foam">global portal role</strong> - admin gets full portal control (Settings, Users, Audit, and every <span class="font-mono">/admin</span> page
+                including this one); operator gets alert management plus read-only portal access; no match falls back to viewer.
+              </p>
+              <p>
+                Neither one grants access to <strong class="text-foam">Docker, Monitoring, or IP Management</strong> by itself. Per-app access for SSO users
+                is entirely separate and comes from the Realm roles claim above matched against
+                <NuxtLink to="/admin/access" class="text-beacon hover:underline">App &amp; Access</NuxtLink> - a user can be a global Admin here and still see
+                zero apps if their realm roles aren't mapped there.
+              </p>
+            </div>
+          </div>
+
+          <footer class="flex flex-col gap-3 border-t border-hull pt-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <UButton
+                color="neutral"
+                variant="soft"
+                label="Test & query"
+                icon="i-lucide-radar"
+                :loading="testingOidc"
+                :disabled="!oidcForm.issuer || !oidcForm.clientId"
+                @click="testOidc"
+              />
+              <div class="flex gap-2">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  label="Use env defaults"
+                  icon="i-lucide-rotate-ccw"
+                  :disabled="!auth?.oidc.overridden"
+                  :loading="resettingProvider === 'oidc'"
+                  @click="resetProvider('oidc')"
+                />
+                <UButton
+                  color="primary"
+                  label="Save OIDC"
+                  icon="i-lucide-save"
+                  :loading="savingProvider === 'oidc'"
+                  @click="saveProvider('oidc')"
+                />
+              </div>
+            </div>
+
+            <div v-if="oidcTestErrorMsg" class="notice-danger panel-flush flex items-start gap-2 p-3 text-xs">
+              <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" />
+              <span>{{ oidcTestErrorMsg }}</span>
+            </div>
+
+            <div v-else-if="oidcTestResult" class="panel-flush space-y-2 bg-surface-2/50 p-3 text-xs">
+              <p class="flex items-center gap-1.5 font-medium text-emerald-400">
+                <UIcon name="i-lucide-check-circle-2" class="size-3.5" /> Discovery succeeded in {{ oidcTestResult.tookMs }}ms
+              </p>
+              <dl class="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                <div><dt class="text-faint">Authorization endpoint</dt><dd class="truncate font-mono text-foam" :title="oidcTestResult.endpoints.authorization">{{ oidcTestResult.endpoints.authorization }}</dd></div>
+                <div><dt class="text-faint">Token endpoint</dt><dd class="truncate font-mono text-foam" :title="oidcTestResult.endpoints.token">{{ oidcTestResult.endpoints.token }}</dd></div>
+                <div><dt class="text-faint">JWKS endpoint</dt><dd class="truncate font-mono text-foam" :title="oidcTestResult.endpoints.jwks">{{ oidcTestResult.endpoints.jwks }}</dd></div>
+                <div><dt class="text-faint">Userinfo endpoint</dt><dd class="truncate font-mono text-foam" :title="oidcTestResult.endpoints.userinfo || ''">{{ oidcTestResult.endpoints.userinfo || 'not advertised' }}</dd></div>
+              </dl>
+              <div v-if="oidcTestResult.scopesSupported?.length">
+                <dt class="text-faint">Scopes supported</dt>
+                <dd class="font-mono text-foam">{{ oidcTestResult.scopesSupported.join(', ') }}</dd>
+              </div>
+              <div v-if="oidcTestResult.claimsSupported?.length">
+                <dt class="text-faint">Claims supported</dt>
+                <dd class="font-mono text-foam">{{ oidcTestResult.claimsSupported.join(', ') }}</dd>
+              </div>
+              <p class="pt-1 text-faint">{{ oidcTestResult.scope }}</p>
+            </div>
           </footer>
         </section>
 
@@ -408,6 +496,23 @@ async function resetProvider(provider: 'ldap' | 'oidc') {
             <UFormField label="Operator group">
               <UInput v-model="ldapForm.operatorGroup" class="w-full font-mono" />
             </UFormField>
+          </div>
+
+          <div class="panel-flush flex items-start gap-2 bg-surface-2/50 p-3 text-xs">
+            <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0 text-beacon" />
+            <p class="text-(--color-muted)">
+              <strong class="text-foam">Admin group</strong> and <strong class="text-foam">Operator group</strong> only set the user's
+              <strong class="text-foam">global portal role</strong> (same authority split as OIDC, above) - they never grant
+              Docker/Monitoring/IP Management access by themselves.
+            </p>
+          </div>
+          <div class="notice-warning panel-flush flex items-start gap-2 p-3 text-xs">
+            <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" />
+            <p>
+              LDAP logins do not currently carry realm roles, so the
+              <NuxtLink to="/admin/access" class="underline">App &amp; Access</NuxtLink> role map has no effect for LDAP users - they get the
+              global role above and no per-app access at all, unless separately promoted to a local admin account on the Users page.
+            </p>
           </div>
 
           <footer class="flex flex-col gap-2 border-t border-hull pt-4 sm:flex-row sm:justify-end">
