@@ -11,11 +11,12 @@ Date: 2026-07-14 UTC
 
 ## Source
 
-- Commit: `4ae4f79`
+- Commit: `9b63bff`
 - Previous tag: none
 
 ## Changes
 
+- Update (9b63bff)
 - Update (4ae4f79)
 - Add OIDC test/query and clarify Admin/Operator authority scope (ee5a3e6)
 - Add reverse-DNS tooling and module documentation (Phase 13) (51cf4e0)
