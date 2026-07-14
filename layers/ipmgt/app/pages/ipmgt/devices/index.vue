@@ -47,6 +47,27 @@ async function confirmDelete(password: string) {
 function statusClass(s: string) {
   return s === 'active' ? 'text-emerald-400' : s === 'maintenance' ? 'text-amber-400' : 'text-faint'
 }
+
+const testingId = ref<string | null>(null)
+async function testSnmp(d: any) {
+  testingId.value = d.id
+  try {
+    const res = await $fetch<any>(`/api/ipmgt/devices/${d.id}/snmp-test`, { method: 'POST' })
+    toast.add({ title: `SNMP OK: ${res.sysName || d.hostname}`, description: res.sysDescr, color: 'primary', icon: 'i-lucide-check' })
+  } catch (e: any) { toast.add({ title: 'SNMP test failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { testingId.value = null }
+}
+
+const discoveringId = ref<string | null>(null)
+async function discoverSnmp(d: any) {
+  discoveringId.value = d.id
+  try {
+    const res = await $fetch<any>(`/api/ipmgt/devices/${d.id}/snmp-discover`, { method: 'POST' })
+    toast.add({ title: `SNMP discovery: ${res.created} new, ${res.updated} updated`, description: `${res.matched}/${res.entries} ARP entries matched a known subnet`, color: 'primary', icon: 'i-lucide-check' })
+    await refresh()
+  } catch (e: any) { toast.add({ title: 'SNMP discovery failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { discoveringId.value = null }
+}
 </script>
 
 <template>
@@ -106,6 +127,8 @@ function statusClass(s: string) {
                 <td class="px-4 py-3"><span class="text-xs capitalize" :class="statusClass(d.status)">{{ d.status }}</span></td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-1">
+                    <UButton v-if="canUpdate && d.management_ip" size="xs" variant="ghost" icon="i-lucide-plug-zap" aria-label="Test SNMP" :loading="testingId === d.id" @click="testSnmp(d)" />
+                    <UButton v-if="canUpdate && d.management_ip" size="xs" variant="ghost" icon="i-lucide-radar" aria-label="Discover via SNMP" :loading="discoveringId === d.id" @click="discoverSnmp(d)" />
                     <UButton v-if="canUpdate" size="xs" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="openEdit(d)" />
                     <UButton v-if="canDelete" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete" @click="deleteTarget = d" />
                   </div>
