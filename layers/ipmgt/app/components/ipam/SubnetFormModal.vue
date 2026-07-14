@@ -8,10 +8,14 @@ const toast = useToast()
 const { data: sections } = useAsyncData('ipamRefSections', () => $fetch<any[]>('/api/ipmgt/sections'), { server: false, default: () => [] })
 const { data: vlans } = useAsyncData('ipamRefVlans', () => $fetch<any[]>('/api/ipmgt/vlans'), { server: false, default: () => [] })
 const { data: vrfs } = useAsyncData('ipamRefVrfs', () => $fetch<any[]>('/api/ipmgt/vrfs'), { server: false, default: () => [] })
+const { data: locations } = useAsyncData('ipamRefLocations', () => $fetch<any[]>('/api/ipmgt/locations'), { server: false, default: () => [] })
+const { data: customers } = useAsyncData('ipamRefCustomers', () => $fetch<any[]>('/api/ipmgt/customers'), { server: false, default: () => [] })
 
 const sectionItems = computed(() => [{ value: '', label: '— None —' }, ...(sections.value || []).map((s: any) => ({ value: s.id, label: s.name }))])
 const vlanItems = computed(() => [{ value: '', label: '— None —' }, ...(vlans.value || []).map((v: any) => ({ value: v.id, label: `VLAN ${v.vlan_id} · ${v.name}` }))])
 const vrfItems = computed(() => [{ value: '', label: '— None (global) —' }, ...(vrfs.value || []).map((v: any) => ({ value: v.id, label: v.name }))])
+const locationItems = computed(() => [{ value: '', label: '— None —' }, ...(locations.value || []).map((l: any) => ({ value: l.id, label: l.name }))])
+const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(customers.value || []).map((c: any) => ({ value: c.id, label: c.name }))])
 
 const form = reactive<any>({})
 const saving = ref(false)
@@ -23,6 +27,7 @@ function reset() {
     name: s?.name || '', network: s?.network || '', section_id: s?.section_id || props.presetSectionId || '',
     vlan_ref: s?.vlan_ref || '', vrf_id: s?.vrf_id || '', gateway: s?.gateway || '',
     dns_servers: s?.dns_servers || '', location: s?.location || '', owner: s?.owner || '', description: s?.description || '',
+    location_id: s?.location_id || '', customer_id: s?.customer_id || '',
     allow_requests: !!s?.allow_requests, scan_enabled: !!s?.scan_enabled, ping_enabled: !!s?.ping_enabled,
     dns_resolve: !!s?.dns_resolve, dhcp_range: !!s?.dhcp_range
   })
@@ -33,7 +38,11 @@ async function save() {
   if (!form.network.trim()) { toast.add({ title: 'CIDR is required', color: 'error' }); return }
   saving.value = true
   try {
-    const body = { ...form, section_id: form.section_id || null, vlan_ref: form.vlan_ref || null, vrf_id: form.vrf_id || null }
+    const body = {
+      ...form,
+      section_id: form.section_id || null, vlan_ref: form.vlan_ref || null, vrf_id: form.vrf_id || null,
+      location_id: form.location_id || null, customer_id: form.customer_id || null
+    }
     const res = isEdit.value
       ? await $fetch(`/api/ipmgt/subnets/${props.subnet.id}`, { method: 'PUT', body })
       : await $fetch('/api/ipmgt/subnets', { method: 'POST', body })
@@ -83,6 +92,14 @@ async function save() {
           </UFormField>
           <UFormField label="Owner / department">
             <UInput v-model="form.owner" class="w-full" />
+          </UFormField>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <UFormField label="Location record" help="Linked location, if one has been added">
+            <USelect v-model="form.location_id" :items="locationItems" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Customer" help="Linked customer, if one has been added">
+            <USelect v-model="form.customer_id" :items="customerItems" value-key="value" label-key="label" class="w-full" />
           </UFormField>
         </div>
         <UFormField label="Description">

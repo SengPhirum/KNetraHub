@@ -47,6 +47,11 @@ function fmt(n: number | string | undefined): string {
           <StatCard label="Allocated addresses" :value="fmt(data.counts.addresses)" icon="i-lucide-list-ordered" accent />
           <StatCard label="VLANs / VRFs" :value="`${data.counts.vlans} / ${data.counts.vrfs}`" icon="i-lucide-layers" />
         </div>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard label="Devices" :value="data.counts.devices" icon="i-lucide-server" />
+          <StatCard label="Locations" :value="data.counts.locations" icon="i-lucide-map-pin" />
+          <StatCard label="Customers" :value="data.counts.customers" icon="i-lucide-building-2" />
+        </div>
 
         <!-- IPv4 capacity + status breakdown -->
         <div class="grid gap-4 xl:grid-cols-3">

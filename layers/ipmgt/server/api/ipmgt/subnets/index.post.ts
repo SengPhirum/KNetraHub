@@ -21,10 +21,10 @@ export default defineEventHandler(async (event) => {
   await getDb().query(
     `INSERT INTO ipmgt_subnets
       (id, name, network, version, prefix, netmask, vlan, vlan_ref, vrf_id, section_id, parent_id,
-       gateway, dns_servers, location, owner, description,
+       gateway, dns_servers, location, owner, location_id, customer_id, description,
        allow_requests, scan_enabled, ping_enabled, dns_resolve, dhcp_range,
        usage, created_at, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,0,$22,$23)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,0,$24,$25)`,
     [
       id,
       String(body.name || canonical).trim(),
@@ -41,6 +41,8 @@ export default defineEventHandler(async (event) => {
       body.dns_servers || null,
       body.location || null,
       body.owner || null,
+      body.location_id || null,
+      body.customer_id || null,
       body.description || null,
       !!body.allow_requests,
       !!body.scan_enabled,

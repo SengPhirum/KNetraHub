@@ -27,12 +27,16 @@ export default defineEventHandler(async (event) => {
   await db.query(
     `UPDATE ipmgt_ips SET
        ip = $2, hostname = $3, mac = $4, description = $5, owner = $6, device = $7,
-       status = $8, state = $9, dns_name = $10, ptr = $11, nat_to = $12, note = $13,
-       updated_at = $14, updated_by = $15
+       customer_id = $8, device_id = $9,
+       status = $10, state = $11, dns_name = $12, ptr = $13, nat_to = $14, note = $15,
+       updated_at = $16, updated_by = $17
      WHERE id = $1`,
     [
       id, ip, g('hostname', cur.hostname), g('mac', cur.mac), g('description', cur.description),
-      g('owner', cur.owner), g('device', cur.device), status, status,
+      g('owner', cur.owner), g('device', cur.device),
+      body.customer_id === undefined ? cur.customer_id : (body.customer_id || null),
+      body.device_id === undefined ? cur.device_id : (body.device_id || null),
+      status, status,
       g('dns_name', cur.dns_name), g('ptr', cur.ptr), g('nat_to', cur.nat_to), g('note', cur.note),
       new Date().toISOString(), user.username
     ]

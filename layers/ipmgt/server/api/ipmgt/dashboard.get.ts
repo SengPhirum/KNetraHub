@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 
   const threshold = await highUsageThreshold()
 
-  const [subnetsRes, statusRes, sectionsRes, vlansRes, vrfsRes, recentRes] = await Promise.all([
+  const [subnetsRes, statusRes, sectionsRes, vlansRes, vrfsRes, recentRes, locationsRes, customersRes, devicesRes] = await Promise.all([
     db.query('SELECT id, name, network, version, section_id, gateway FROM ipmgt_subnets'),
     db.query(`SELECT lower(coalesce(status, state, 'used')) AS st, count(*)::int AS c FROM ipmgt_ips GROUP BY 1`),
     db.query('SELECT id, name FROM ipmgt_sections'),
@@ -19,7 +19,10 @@ export default defineEventHandler(async (event) => {
     db.query('SELECT count(*)::int AS c FROM ipmgt_vrfs'),
     db.query(`SELECT a.id, a.ip, a.hostname, a.status, a.state, a.created_at, a.updated_at, sub.name AS subnet_name
               FROM ipmgt_ips a LEFT JOIN ipmgt_subnets sub ON sub.id = a.subnet_id
-              ORDER BY coalesce(a.updated_at, a.created_at) DESC NULLS LAST LIMIT 8`)
+              ORDER BY coalesce(a.updated_at, a.created_at) DESC NULLS LAST LIMIT 8`),
+    db.query('SELECT count(*)::int AS c FROM ipmgt_locations'),
+    db.query('SELECT count(*)::int AS c FROM ipmgt_customers'),
+    db.query('SELECT count(*)::int AS c FROM ipmgt_devices')
   ])
 
   // Per-subnet used counts in one grouped query.
@@ -64,7 +67,10 @@ export default defineEventHandler(async (event) => {
       subnets: subnetsRes.rows.length,
       vlans: Number(vlansRes.rows[0].c),
       vrfs: Number(vrfsRes.rows[0].c),
-      addresses: totalUsed
+      addresses: totalUsed,
+      locations: Number(locationsRes.rows[0].c),
+      customers: Number(customersRes.rows[0].c),
+      devices: Number(devicesRes.rows[0].c)
     },
     ipv4: { subnets: v4Subnets, capacity: v4Cap, used: v4Used, free: Math.max(0, v4Cap - v4Used), percent: v4Cap > 0 ? Math.min(100, Math.round((v4Used / v4Cap) * 100)) : 0 },
     ipv6: { subnets: v6Subnets },

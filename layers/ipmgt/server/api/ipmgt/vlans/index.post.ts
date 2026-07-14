@@ -23,9 +23,10 @@ export default defineEventHandler(async (event) => {
 
   const id = nanoid()
   await db.query(
-    `INSERT INTO ipmgt_vlans (id, vlan_id, name, description, l2domain_id, location, active, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    `INSERT INTO ipmgt_vlans (id, vlan_id, name, description, l2domain_id, location, location_id, customer_id, active, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [id, vlanId, name, body.description || null, body.l2domain_id || null, body.location || null,
+      body.location_id || null, body.customer_id || null,
       body.active === undefined ? true : !!body.active, new Date().toISOString()]
   )
   await ipamAudit(user, 'ipmgt.vlan.create', id, { vlan_id: vlanId, name })

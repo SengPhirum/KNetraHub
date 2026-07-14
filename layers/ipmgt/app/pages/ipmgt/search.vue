@@ -17,7 +17,8 @@ async function run() {
 const total = computed(() => {
   const r = results.value
   if (!r) return 0
-  return (r.addresses?.length || 0) + (r.subnets?.length || 0) + (r.containingSubnets?.length || 0) + (r.vlans?.length || 0) + (r.vrfs?.length || 0) + (r.sections?.length || 0)
+  return (r.addresses?.length || 0) + (r.subnets?.length || 0) + (r.containingSubnets?.length || 0) + (r.vlans?.length || 0) + (r.vrfs?.length || 0)
+    + (r.sections?.length || 0) + (r.devices?.length || 0) + (r.locations?.length || 0) + (r.customers?.length || 0)
 })
 </script>
 
@@ -81,6 +82,21 @@ const total = computed(() => {
           <section v-if="results.sections?.length" class="panel p-4">
             <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Sections</h3>
             <NuxtLink v-for="s in results.sections" :key="s.id" :to="`/ipmgt/subnets?section_id=${s.id}`" class="block py-1 text-sm text-foam hover:text-beacon">{{ s.name }}</NuxtLink>
+          </section>
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-3">
+          <section v-if="results.devices?.length" class="panel p-4">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Devices</h3>
+            <NuxtLink v-for="d in results.devices" :key="d.id" to="/ipmgt/devices" class="block py-1 text-sm text-foam hover:text-beacon">{{ d.hostname }} <span v-if="d.management_ip" class="font-mono text-xs text-faint">{{ d.management_ip }}</span></NuxtLink>
+          </section>
+          <section v-if="results.locations?.length" class="panel p-4">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Locations</h3>
+            <NuxtLink v-for="l in results.locations" :key="l.id" to="/ipmgt/locations" class="block py-1 text-sm text-foam hover:text-beacon">{{ l.name }}</NuxtLink>
+          </section>
+          <section v-if="results.customers?.length" class="panel p-4">
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Customers</h3>
+            <NuxtLink v-for="c in results.customers" :key="c.id" to="/ipmgt/customers" class="block py-1 text-sm text-foam hover:text-beacon">{{ c.name }}</NuxtLink>
           </section>
         </div>
 

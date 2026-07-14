@@ -6,7 +6,11 @@ const toast = useToast()
 
 const { data: vlans, status, error, refresh } = useAsyncData('ipamVlans', () => $fetch<any[]>('/api/ipmgt/vlans'), { server: false, default: () => [] })
 const { data: domains } = useAsyncData('ipamL2Domains', () => $fetch<any[]>('/api/ipmgt/l2domains'), { server: false, default: () => [] })
+const { data: locations } = useAsyncData('ipamRefLocations', () => $fetch<any[]>('/api/ipmgt/locations'), { server: false, default: () => [] })
+const { data: customers } = useAsyncData('ipamRefCustomers', () => $fetch<any[]>('/api/ipmgt/customers'), { server: false, default: () => [] })
 const domainItems = computed(() => [{ value: '', label: '— None —' }, ...(domains.value || []).map((d: any) => ({ value: d.id, label: d.name }))])
+const locationItems = computed(() => [{ value: '', label: '— None —' }, ...(locations.value || []).map((l: any) => ({ value: l.id, label: l.name }))])
+const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(customers.value || []).map((c: any) => ({ value: c.id, label: c.name }))])
 
 const q = ref('')
 const filtered = computed(() => {
@@ -16,15 +20,15 @@ const filtered = computed(() => {
 })
 
 const dialog = reactive({ open: false, editing: null as any })
-const form = reactive({ vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', active: true })
+const form = reactive({ vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', location_id: '', customer_id: '', active: true })
 const saving = ref(false)
-function openCreate() { dialog.editing = null; Object.assign(form, { vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', active: true }); dialog.open = true }
-function openEdit(v: any) { dialog.editing = v; Object.assign(form, { vlan_id: v.vlan_id, name: v.name, description: v.description || '', l2domain_id: v.l2domain_id || '', location: v.location || '', active: !!v.active }); dialog.open = true }
+function openCreate() { dialog.editing = null; Object.assign(form, { vlan_id: 1, name: '', description: '', l2domain_id: '', location: '', location_id: '', customer_id: '', active: true }); dialog.open = true }
+function openEdit(v: any) { dialog.editing = v; Object.assign(form, { vlan_id: v.vlan_id, name: v.name, description: v.description || '', l2domain_id: v.l2domain_id || '', location: v.location || '', location_id: v.location_id || '', customer_id: v.customer_id || '', active: !!v.active }); dialog.open = true }
 async function save() {
   if (!form.name.trim()) return
   saving.value = true
   try {
-    const body = { ...form, l2domain_id: form.l2domain_id || null }
+    const body = { ...form, l2domain_id: form.l2domain_id || null, location_id: form.location_id || null, customer_id: form.customer_id || null }
     if (dialog.editing) await $fetch(`/api/ipmgt/vlans/${dialog.editing.id}`, { method: 'PUT', body })
     else await $fetch('/api/ipmgt/vlans', { method: 'POST', body })
     toast.add({ title: dialog.editing ? 'VLAN updated' : 'VLAN created', color: 'primary', icon: 'i-lucide-check' })
@@ -117,6 +121,14 @@ async function confirmDelete() {
           <UFormField label="Location">
             <UInput v-model="form.location" class="w-full" />
           </UFormField>
+          <div class="grid grid-cols-2 gap-4">
+            <UFormField label="Location record" help="Linked location, if one has been added">
+              <USelect v-model="form.location_id" :items="locationItems" value-key="value" label-key="label" class="w-full" />
+            </UFormField>
+            <UFormField label="Customer">
+              <USelect v-model="form.customer_id" :items="customerItems" value-key="value" label-key="label" class="w-full" />
+            </UFormField>
+          </div>
           <UFormField label="Description">
             <UTextarea v-model="form.description" class="w-full" :rows="2" />
           </UFormField>

@@ -19,12 +19,12 @@ export default defineEventHandler(async (event) => {
   const now = new Date().toISOString()
   await getDb().query(
     `INSERT INTO ipmgt_ips
-      (id, subnet_id, ip, hostname, mac, description, owner, device, status, state,
+      (id, subnet_id, ip, hostname, mac, description, owner, device, customer_id, device_id, status, state,
        dns_name, ptr, nat_to, note, created_at, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
     [
       id, body.subnet_id, canonical, body.hostname || null, body.mac || null, body.description || null,
-      body.owner || null, body.device || null, status, status,
+      body.owner || null, body.device || null, body.customer_id || null, body.device_id || null, status, status,
       body.dns_name || null, body.ptr || null, body.nat_to || null, body.note || null, now, user.username
     ]
   )

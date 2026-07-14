@@ -19,9 +19,12 @@ export default defineEventHandler(async (event) => {
 
   const limit = Math.min(Number(q.limit) || 500, 5000)
   const { rows } = await getDb().query(
-    `SELECT a.*, sub.name AS subnet_name, sub.network AS subnet_network
+    `SELECT a.*, sub.name AS subnet_name, sub.network AS subnet_network,
+       cust.name AS customer_name, dev.hostname AS device_hostname
      FROM ipmgt_ips a
      LEFT JOIN ipmgt_subnets sub ON sub.id = a.subnet_id
+     LEFT JOIN ipmgt_customers cust ON cust.id = a.customer_id
+     LEFT JOIN ipmgt_devices dev ON dev.id = a.device_id
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY a.subnet_id, a.ip ASC
      LIMIT ${limit}`,

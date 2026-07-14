@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
   if (!cur.rows.length) throw createError({ statusCode: 404, statusMessage: 'VRF not found' })
   const row = cur.rows[0]
   await db.query(
-    `UPDATE ipmgt_vrfs SET name = $2, rd = $3, description = $4, owner = $5, location = $6, active = $7, updated_at = $8 WHERE id = $1`,
+    `UPDATE ipmgt_vrfs SET name = $2, rd = $3, description = $4, owner = $5, location = $6,
+       location_id = $7, customer_id = $8, active = $9, updated_at = $10 WHERE id = $1`,
     [
       id,
       body.name === undefined ? row.name : String(body.name).trim(),
@@ -18,6 +19,8 @@ export default defineEventHandler(async (event) => {
       body.description === undefined ? row.description : body.description,
       body.owner === undefined ? row.owner : body.owner,
       body.location === undefined ? row.location : body.location,
+      body.location_id === undefined ? row.location_id : (body.location_id || null),
+      body.customer_id === undefined ? row.customer_id : (body.customer_id || null),
       body.active === undefined ? row.active : !!body.active,
       new Date().toISOString()
     ]

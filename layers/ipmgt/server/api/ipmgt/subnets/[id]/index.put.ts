@@ -37,8 +37,9 @@ export default defineEventHandler(async (event) => {
        name = $2, network = $3, version = $4, prefix = $5, netmask = $6,
        vlan = $7, vlan_ref = $8, vrf_id = $9, section_id = $10, parent_id = $11,
        gateway = $12, dns_servers = $13, location = $14, owner = $15, description = $16,
-       allow_requests = $17, scan_enabled = $18, ping_enabled = $19, dns_resolve = $20, dhcp_range = $21,
-       updated_at = $22, updated_by = $23
+       location_id = $17, customer_id = $18,
+       allow_requests = $19, scan_enabled = $20, ping_enabled = $21, dns_resolve = $22, dhcp_range = $23,
+       updated_at = $24, updated_by = $25
      WHERE id = $1`,
     [
       id,
@@ -54,6 +55,8 @@ export default defineEventHandler(async (event) => {
       g('location', cur.location),
       g('owner', cur.owner),
       g('description', cur.description),
+      body.location_id === undefined ? cur.location_id : (body.location_id || null),
+      body.customer_id === undefined ? cur.customer_id : (body.customer_id || null),
       b('allow_requests', cur.allow_requests),
       b('scan_enabled', cur.scan_enabled),
       b('ping_enabled', cur.ping_enabled),

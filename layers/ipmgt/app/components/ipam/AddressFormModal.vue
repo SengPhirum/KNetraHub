@@ -9,6 +9,11 @@ const { statusItems } = useIpam()
 const { data: subnets } = useAsyncData('ipamRefSubnetsForAddr', () => $fetch<any[]>('/api/ipmgt/subnets'), { server: false, default: () => [] })
 const subnetItems = computed(() => (subnets.value || []).map((s: any) => ({ value: s.id, label: `${s.name} · ${s.network}` })))
 
+const { data: customers } = useAsyncData('ipamRefCustomers', () => $fetch<any[]>('/api/ipmgt/customers'), { server: false, default: () => [] })
+const { data: devices } = useAsyncData('ipamRefDevices', () => $fetch<any[]>('/api/ipmgt/devices'), { server: false, default: () => [] })
+const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(customers.value || []).map((c: any) => ({ value: c.id, label: c.name }))])
+const deviceItems = computed(() => [{ value: '', label: '— None —' }, ...(devices.value || []).map((d: any) => ({ value: d.id, label: d.hostname }))])
+
 const form = reactive<any>({})
 const saving = ref(false)
 const isEdit = computed(() => !!props.address)
@@ -20,7 +25,8 @@ function reset() {
     subnet_id: a?.subnet_id || props.subnetId || '',
     ip: a?.ip || props.presetIp || '',
     hostname: a?.hostname || '', status: a?.status || 'used', mac: a?.mac || '', device: a?.device || '',
-    owner: a?.owner || '', description: a?.description || '', dns_name: a?.dns_name || '', ptr: a?.ptr || '', nat_to: a?.nat_to || '', note: a?.note || ''
+    owner: a?.owner || '', description: a?.description || '', dns_name: a?.dns_name || '', ptr: a?.ptr || '', nat_to: a?.nat_to || '', note: a?.note || '',
+    customer_id: a?.customer_id || '', device_id: a?.device_id || ''
   })
 }
 watch(() => props.open, (v) => { if (v) reset() })
@@ -30,9 +36,10 @@ async function save() {
   if (!form.ip.trim()) { toast.add({ title: 'IP is required', color: 'error' }); return }
   saving.value = true
   try {
+    const body = { ...form, customer_id: form.customer_id || null, device_id: form.device_id || null }
     const res = isEdit.value
-      ? await $fetch(`/api/ipmgt/addresses/${props.address.id}`, { method: 'PUT', body: form })
-      : await $fetch('/api/ipmgt/addresses', { method: 'POST', body: form })
+      ? await $fetch(`/api/ipmgt/addresses/${props.address.id}`, { method: 'PUT', body })
+      : await $fetch('/api/ipmgt/addresses', { method: 'POST', body })
     toast.add({ title: isEdit.value ? 'Address updated' : 'Address created', color: 'primary', icon: 'i-lucide-check' })
     emit('saved', res)
     emit('update:open', false)
@@ -76,6 +83,14 @@ async function save() {
           </UFormField>
           <UFormField label="NAT mapping">
             <UInput v-model="form.nat_to" placeholder="External IP" class="w-full font-mono" />
+          </UFormField>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <UFormField label="Customer" help="Linked customer, if one has been added">
+            <USelect v-model="form.customer_id" :items="customerItems" value-key="value" label-key="label" class="w-full" />
+          </UFormField>
+          <UFormField label="Device record" help="Linked device, if one has been added">
+            <USelect v-model="form.device_id" :items="deviceItems" value-key="value" label-key="label" class="w-full" />
           </UFormField>
         </div>
         <div class="grid grid-cols-2 gap-4">

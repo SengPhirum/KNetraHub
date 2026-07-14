@@ -5,18 +5,23 @@ const { canCreate, canUpdate, canDelete } = useIpam()
 const toast = useToast()
 
 const { data: vrfs, status, error, refresh } = useAsyncData('ipamVrfs', () => $fetch<any[]>('/api/ipmgt/vrfs'), { server: false, default: () => [] })
+const { data: locations } = useAsyncData('ipamRefLocations', () => $fetch<any[]>('/api/ipmgt/locations'), { server: false, default: () => [] })
+const { data: customers } = useAsyncData('ipamRefCustomers', () => $fetch<any[]>('/api/ipmgt/customers'), { server: false, default: () => [] })
+const locationItems = computed(() => [{ value: '', label: '— None —' }, ...(locations.value || []).map((l: any) => ({ value: l.id, label: l.name }))])
+const customerItems = computed(() => [{ value: '', label: '— None —' }, ...(customers.value || []).map((c: any) => ({ value: c.id, label: c.name }))])
 
 const dialog = reactive({ open: false, editing: null as any })
-const form = reactive({ name: '', rd: '', description: '', owner: '', location: '', active: true })
+const form = reactive({ name: '', rd: '', description: '', owner: '', location: '', location_id: '', customer_id: '', active: true })
 const saving = ref(false)
-function openCreate() { dialog.editing = null; Object.assign(form, { name: '', rd: '', description: '', owner: '', location: '', active: true }); dialog.open = true }
-function openEdit(v: any) { dialog.editing = v; Object.assign(form, { name: v.name, rd: v.rd || '', description: v.description || '', owner: v.owner || '', location: v.location || '', active: !!v.active }); dialog.open = true }
+function openCreate() { dialog.editing = null; Object.assign(form, { name: '', rd: '', description: '', owner: '', location: '', location_id: '', customer_id: '', active: true }); dialog.open = true }
+function openEdit(v: any) { dialog.editing = v; Object.assign(form, { name: v.name, rd: v.rd || '', description: v.description || '', owner: v.owner || '', location: v.location || '', location_id: v.location_id || '', customer_id: v.customer_id || '', active: !!v.active }); dialog.open = true }
 async function save() {
   if (!form.name.trim()) return
   saving.value = true
   try {
-    if (dialog.editing) await $fetch(`/api/ipmgt/vrfs/${dialog.editing.id}`, { method: 'PUT', body: form })
-    else await $fetch('/api/ipmgt/vrfs', { method: 'POST', body: form })
+    const body = { ...form, location_id: form.location_id || null, customer_id: form.customer_id || null }
+    if (dialog.editing) await $fetch(`/api/ipmgt/vrfs/${dialog.editing.id}`, { method: 'PUT', body })
+    else await $fetch('/api/ipmgt/vrfs', { method: 'POST', body })
     toast.add({ title: dialog.editing ? 'VRF updated' : 'VRF created', color: 'primary', icon: 'i-lucide-check' })
     dialog.open = false
     await refresh()
@@ -104,6 +109,14 @@ async function confirmDelete() {
             </UFormField>
             <UFormField label="Location">
               <UInput v-model="form.location" class="w-full" />
+            </UFormField>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <UFormField label="Location record" help="Linked location, if one has been added">
+              <USelect v-model="form.location_id" :items="locationItems" value-key="value" label-key="label" class="w-full" />
+            </UFormField>
+            <UFormField label="Customer">
+              <USelect v-model="form.customer_id" :items="customerItems" value-key="value" label-key="label" class="w-full" />
             </UFormField>
           </div>
           <UFormField label="Description">

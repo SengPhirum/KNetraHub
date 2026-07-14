@@ -11,11 +11,14 @@ export default defineEventHandler(async (event) => {
   const db = getDb()
 
   const joins = await db.query(
-    `SELECT sec.name AS section_name, v.vlan_id AS vlan_number, v.name AS vlan_name, vrf.name AS vrf_name
+    `SELECT sec.name AS section_name, v.vlan_id AS vlan_number, v.name AS vlan_name, vrf.name AS vrf_name,
+       loc.name AS location_name, cust.name AS customer_name
      FROM ipmgt_subnets sub
      LEFT JOIN ipmgt_sections sec ON sec.id = sub.section_id
      LEFT JOIN ipmgt_vlans v ON v.id = sub.vlan_ref
      LEFT JOIN ipmgt_vrfs vrf ON vrf.id = sub.vrf_id
+     LEFT JOIN ipmgt_locations loc ON loc.id = sub.location_id
+     LEFT JOIN ipmgt_customers cust ON cust.id = sub.customer_id
      WHERE sub.id = $1`,
     [id]
   )

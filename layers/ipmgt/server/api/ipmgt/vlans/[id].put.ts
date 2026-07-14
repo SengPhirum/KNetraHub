@@ -23,13 +23,16 @@ export default defineEventHandler(async (event) => {
   if (dup.rows.length) throw createError({ statusCode: 409, statusMessage: `VLAN ${vlanId} already exists in this L2 domain` })
 
   await db.query(
-    `UPDATE ipmgt_vlans SET vlan_id = $2, name = $3, description = $4, l2domain_id = $5, location = $6, active = $7, updated_at = $8 WHERE id = $1`,
+    `UPDATE ipmgt_vlans SET vlan_id = $2, name = $3, description = $4, l2domain_id = $5, location = $6,
+       location_id = $7, customer_id = $8, active = $9, updated_at = $10 WHERE id = $1`,
     [
       id, vlanId,
       body.name === undefined ? row.name : String(body.name).trim(),
       body.description === undefined ? row.description : body.description,
       l2,
       body.location === undefined ? row.location : body.location,
+      body.location_id === undefined ? row.location_id : (body.location_id || null),
+      body.customer_id === undefined ? row.customer_id : (body.customer_id || null),
       body.active === undefined ? row.active : !!body.active,
       new Date().toISOString()
     ]

@@ -886,6 +886,111 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_ip_history_ipid ON ipmgt_ip_history(ip_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_ip_history_changed ON ipmgt_ip_history(changed_at DESC);
 
+    -- IPAM Module (Phase 1): first-class Location/Customer/Device inventory.
+    -- These replace the free-text location/owner/device columns above with
+    -- real linkable records; the old TEXT columns are kept for backward
+    -- compatibility and as a manual-entry fallback.
+    CREATE TABLE IF NOT EXISTS ipmgt_locations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      postal_code TEXT,
+      country TEXT,
+      latitude REAL,
+      longitude REAL,
+      parent_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      location_type TEXT,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_locations_parent ON ipmgt_locations(parent_id);
+
+    CREATE TABLE IF NOT EXISTS ipmgt_customers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      postal_code TEXT,
+      country TEXT,
+      contact_person TEXT,
+      phone TEXT,
+      email TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+
+    -- SNMP secrets are stored encrypted (secretCrypto.ts AES-256-GCM) in the
+    -- *_enc columns - never plaintext. API responses expose only
+    -- snmp_*_set booleans (see stripDeviceSnmpSecrets in ipamStore.ts).
+    CREATE TABLE IF NOT EXISTS ipmgt_devices (
+      id TEXT PRIMARY KEY,
+      hostname TEXT NOT NULL,
+      display_name TEXT,
+      description TEXT,
+      device_type TEXT,
+      vendor TEXT,
+      model TEXT,
+      serial_number TEXT,
+      asset_number TEXT,
+      management_ip TEXT,
+      location_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      customer_id TEXT REFERENCES ipmgt_customers(id) ON DELETE SET NULL,
+      snmp_version TEXT,
+      snmp_community_enc TEXT,
+      snmp_sec_level TEXT,
+      snmp_auth_user TEXT,
+      snmp_auth_protocol TEXT,
+      snmp_auth_password_enc TEXT,
+      snmp_priv_protocol TEXT,
+      snmp_priv_password_enc TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_devices_location ON ipmgt_devices(location_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_devices_customer ON ipmgt_devices(customer_id);
+
+    -- Additive soft-FK columns on the existing IPAM tables - no REFERENCES
+    -- clause, matching the section_id/vrf_id/vlan_ref precedent above;
+    -- application code owns referential cleanup on delete (see usedByRows
+    -- checks in the locations/customers/devices delete handlers).
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS location_id TEXT;
+    ALTER TABLE ipmgt_subnets ADD COLUMN IF NOT EXISTS customer_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_subnets_location ON ipmgt_subnets(location_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_subnets_customer ON ipmgt_subnets(customer_id);
+
+    ALTER TABLE ipmgt_vlans ADD COLUMN IF NOT EXISTS location_id TEXT;
+    ALTER TABLE ipmgt_vlans ADD COLUMN IF NOT EXISTS customer_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vlans_location ON ipmgt_vlans(location_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vlans_customer ON ipmgt_vlans(customer_id);
+
+    ALTER TABLE ipmgt_vrfs ADD COLUMN IF NOT EXISTS location_id TEXT;
+    ALTER TABLE ipmgt_vrfs ADD COLUMN IF NOT EXISTS customer_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vrfs_location ON ipmgt_vrfs(location_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vrfs_customer ON ipmgt_vrfs(customer_id);
+
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS customer_id TEXT;
+    ALTER TABLE ipmgt_ips ADD COLUMN IF NOT EXISTS device_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_customer ON ipmgt_ips(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_ips_device ON ipmgt_ips(device_id);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

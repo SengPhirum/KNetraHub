@@ -8,11 +8,11 @@ import { isValidCidr, cidrInfo, ipInCidr, isValidIp } from '~~/layers/ipmgt/serv
 export default defineEventHandler(async (event) => {
   await requireIpam(event, 'viewer')
   const term = String(getQuery(event).q || '').trim()
-  if (!term) return { query: '', addresses: [], subnets: [], vlans: [], vrfs: [], sections: [] }
+  if (!term) return { query: '', addresses: [], subnets: [], vlans: [], vrfs: [], sections: [], devices: [], locations: [], customers: [] }
   const like = `%${term.toLowerCase()}%`
   const db = getDb()
 
-  const [addrRes, subnetRes, vlanRes, vrfRes, sectionRes] = await Promise.all([
+  const [addrRes, subnetRes, vlanRes, vrfRes, sectionRes, deviceRes, locationRes, customerRes] = await Promise.all([
     db.query(
       `SELECT a.id, a.ip, a.hostname, a.mac, a.device, a.owner, a.status, a.state, sub.name AS subnet_name, a.subnet_id
        FROM ipmgt_ips a LEFT JOIN ipmgt_subnets sub ON sub.id = a.subnet_id
@@ -30,7 +30,24 @@ export default defineEventHandler(async (event) => {
       [like, `%${term}%`]
     ),
     db.query(`SELECT id, name, rd FROM ipmgt_vrfs WHERE lower(name) LIKE $1 OR lower(coalesce(rd,'')) LIKE $1 LIMIT 50`, [like]),
-    db.query(`SELECT id, name FROM ipmgt_sections WHERE lower(name) LIKE $1 LIMIT 50`, [like])
+    db.query(`SELECT id, name FROM ipmgt_sections WHERE lower(name) LIKE $1 LIMIT 50`, [like]),
+    db.query(
+      `SELECT id, hostname, display_name, device_type, management_ip FROM ipmgt_devices
+       WHERE lower(hostname) LIKE $1 OR lower(coalesce(display_name,'')) LIKE $1 OR lower(coalesce(vendor,'')) LIKE $1
+         OR lower(coalesce(model,'')) LIKE $1 OR lower(coalesce(serial_number,'')) LIKE $1
+         OR lower(coalesce(asset_number,'')) LIKE $1 OR lower(coalesce(management_ip,'')) LIKE $1
+       LIMIT 50`, [like]
+    ),
+    db.query(
+      `SELECT id, name, city, country FROM ipmgt_locations
+       WHERE lower(name) LIKE $1 OR lower(coalesce(city,'')) LIKE $1 OR lower(coalesce(address,'')) LIKE $1
+       LIMIT 50`, [like]
+    ),
+    db.query(
+      `SELECT id, name, contact_person, email FROM ipmgt_customers
+       WHERE lower(name) LIKE $1 OR lower(coalesce(contact_person,'')) LIKE $1 OR lower(coalesce(email,'')) LIKE $1
+       LIMIT 50`, [like]
+    )
   ])
 
   // CIDR / exact-IP lookup: which subnets contain the queried address/range.
@@ -48,6 +65,9 @@ export default defineEventHandler(async (event) => {
     containingSubnets,
     vlans: vlanRes.rows,
     vrfs: vrfRes.rows,
-    sections: sectionRes.rows
+    sections: sectionRes.rows,
+    devices: deviceRes.rows,
+    locations: locationRes.rows,
+    customers: customerRes.rows
   }
 })

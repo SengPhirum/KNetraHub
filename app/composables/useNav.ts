@@ -152,6 +152,14 @@ const IPMGT_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Network Resources',
+    items: [
+      { label: 'Devices',   to: '/ipmgt/devices',   icon: 'i-lucide-server',      permission: 'ipmgt.view' },
+      { label: 'Locations', to: '/ipmgt/locations', icon: 'i-lucide-map-pin',     permission: 'ipmgt.view' },
+      { label: 'Customers', to: '/ipmgt/customers', icon: 'i-lucide-building-2',  permission: 'ipmgt.view' }
+    ]
+  },
+  {
     label: 'Tools',
     items: [
       { label: 'Search',     to: '/ipmgt/search', icon: 'i-lucide-search',     permission: 'ipmgt.view' },
