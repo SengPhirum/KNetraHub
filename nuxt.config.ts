@@ -71,6 +71,18 @@ export default defineNuxtConfig({
       staleAfterMs: Number(process.env.NUXT_AGENT_STALE_MS || 20000)
     },
 
+    // Local accounts are always enabled as recovery access. These are env
+    // defaults; Admin > Authentication can persist database overrides.
+    localAuth: {
+      hideLogin: process.env.NUXT_LOCAL_AUTH_HIDE_LOGIN === 'true',
+      sessionTimeoutMinutes: Number(process.env.NUXT_LOCAL_AUTH_SESSION_TIMEOUT_MINUTES || 720),
+      passwordMinLength: Number(process.env.NUXT_LOCAL_AUTH_PASSWORD_MIN_LENGTH || 8),
+      passwordRequireUppercase: process.env.NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_UPPERCASE === 'true',
+      passwordRequireLowercase: process.env.NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_LOWERCASE === 'true',
+      passwordRequireNumber: process.env.NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_NUMBER === 'true',
+      passwordRequireSpecial: process.env.NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_SPECIAL === 'true'
+    },
+
     // LDAP / Active Directory
     ldap: {
       enabled: process.env.NUXT_LDAP_ENABLED === 'true',

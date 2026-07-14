@@ -42,6 +42,14 @@ services:
       NUXT_DB_USER: "knetrahub"
       NUXT_DB_PASSWORD: "change-me-to-a-long-random-string"
       NUXT_METRICS_RETENTION_DAYS: "30"
+      # Local users are always enabled. Optional UI/session/password defaults:
+      NUXT_LOCAL_AUTH_HIDE_LOGIN: "false"
+      NUXT_LOCAL_AUTH_SESSION_TIMEOUT_MINUTES: "720"
+      NUXT_LOCAL_AUTH_PASSWORD_MIN_LENGTH: "8"
+      NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_UPPERCASE: "false"
+      NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_LOWERCASE: "false"
+      NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_NUMBER: "false"
+      NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_SPECIAL: "false"
       # LDAP (optional)
       NUXT_LDAP_ENABLED: "false"
       # OIDC SSO (optional)

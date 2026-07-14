@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { passwordPolicyErrors, passwordPolicySummary, type PasswordPolicy } from '~~/shared/utils/passwordPolicy'
+
 definePageMeta({ layout: 'auth' })
 
 const { setupRequired } = useSetupStatus()
@@ -11,6 +13,15 @@ const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const { data: passwordPolicy } = useFetch<PasswordPolicy>('/api/auth/password-policy')
+const effectivePasswordPolicy = computed<PasswordPolicy>(() => passwordPolicy.value || {
+  passwordMinLength: 8,
+  passwordRequireUppercase: false,
+  passwordRequireLowercase: false,
+  passwordRequireNumber: false,
+  passwordRequireSpecial: false
+})
+const passwordRuleSummary = computed(() => passwordPolicySummary(effectivePasswordPolicy.value))
 
 async function submit() {
   error.value = ''
@@ -19,8 +30,9 @@ async function submit() {
     error.value = 'Passwords do not match'
     return
   }
-  if (password.value.length < 8) {
-    error.value = 'Password must be at least 8 characters'
+  const policyErrors = passwordPolicyErrors(password.value, effectivePasswordPolicy.value)
+  if (policyErrors.length) {
+    error.value = policyErrors.join('. ')
     return
   }
 
@@ -96,11 +108,12 @@ async function submit() {
             v-model="password"
             type="password"
             icon="i-lucide-lock"
-            placeholder="At least 8 characters"
+            :placeholder="`At least ${effectivePasswordPolicy.passwordMinLength} characters`"
             autocomplete="new-password"
             size="lg"
             class="w-full"
           />
+          <p class="mt-1.5 text-xs text-faint">{{ passwordRuleSummary }}</p>
         </div>
         <div>
           <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Confirm password</label>

@@ -14,7 +14,7 @@ export interface OidcResult {
   realmRoles: string[]
 }
 
-interface OidcDiscovery {
+export interface OidcDiscovery {
   issuer: string
   authorization_endpoint: string
   token_endpoint: string
@@ -25,9 +25,60 @@ interface OidcDiscovery {
   grant_types_supported?: string[]
 }
 
+export interface OidcLoginTestReport {
+  ok: true
+  completedAt: string
+  tookMs: number
+  issuer: string
+  clientId: string
+  redirectUri: string
+  endpoints: {
+    authorization: string
+    token: string
+    jwks: string
+    userinfo: string | null
+  }
+  token: {
+    tookMs: number
+    response: Record<string, unknown>
+  }
+  idToken: {
+    valid: true
+    tookMs: number
+    header: Record<string, unknown>
+    claims: Record<string, unknown>
+  }
+  accessToken: {
+    present: boolean
+    format: 'jwt' | 'opaque' | null
+    valid: boolean | null
+    tookMs: number | null
+    header: Record<string, unknown> | null
+    claims: Record<string, unknown> | null
+    error: string | null
+  }
+  userinfo: {
+    advertised: boolean
+    attempted: boolean
+    ok: boolean | null
+    tookMs: number | null
+    endpoint: string | null
+    response: Record<string, unknown> | null
+    error: string | null
+  }
+  rolesClaim: {
+    path: string
+    found: boolean
+    source: 'id_token' | 'userinfo' | 'access_token' | null
+    value: unknown
+  }
+  mappedUser: OidcResult
+}
+
 // Short-lived cookie that carries the per-login transaction (CSRF state,
 // replay nonce, PKCE verifier) across the redirect round-trip.
 const TXN_COOKIE = 'knetrahub_oidc_txn'
+const TEST_TXN_COOKIE = 'knetrahub_oidc_test_txn'
 
 // Discovery document + JWKS are cached per issuer for an hour.
 const DISCOVERY_TTL = 60 * 60 * 1000
@@ -81,17 +132,13 @@ export function oidcRedirectUri(event: H3Event, cfg: OidcSettings): string {
   return `${getRequestURL(event).origin}/api/auth/oidc/callback`
 }
 
-/** Build the provider authorization URL and stash the transaction in a cookie. */
-export async function oidcBeginLogin(event: H3Event): Promise<string> {
-  const cfg = await getOidcSettings()
-  const doc = await oidcDiscover(cfg)
-
+function oidcAuthorizationUrl(event: H3Event, cfg: OidcSettings, doc: OidcDiscovery, cookieName: string): string {
   const state = randomBytes(24).toString('base64url')
   const nonce = randomBytes(24).toString('base64url')
   const verifier = randomBytes(48).toString('base64url')
   const challenge = createHash('sha256').update(verifier).digest('base64url')
 
-  setCookie(event, TXN_COOKIE, JSON.stringify({ state, nonce, verifier }), {
+  setCookie(event, cookieName, JSON.stringify({ state, nonce, verifier }), {
     httpOnly: true,
     sameSite: 'lax',
     secure: getRequestProtocol(event) === 'https',
@@ -111,14 +158,67 @@ export async function oidcBeginLogin(event: H3Event): Promise<string> {
   return url.toString()
 }
 
-/** Exchange the callback code, validate the ID token, and map groups to a role. */
-export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
+/** Build the provider authorization URL and stash the transaction in a cookie. */
+export async function oidcBeginLogin(event: H3Event): Promise<string> {
   const cfg = await getOidcSettings()
   const doc = await oidcDiscover(cfg)
+  return oidcAuthorizationUrl(event, cfg, doc, TXN_COOKIE)
+}
+
+/**
+ * Start the admin-only interactive login test. It deliberately uses the saved
+ * settings (including the server-side client secret), but does not require the
+ * provider to be enabled. The normal callback URI is reused so providers do
+ * not need a second allow-listed redirect URI just for diagnostics.
+ */
+export async function oidcBeginLoginTest(event: H3Event): Promise<string> {
+  const cfg = await getOidcSettings()
+  if (!cfg.issuer || !cfg.clientId) {
+    throw createError({ statusCode: 400, statusMessage: 'Save an issuer URL and Client ID before testing login' })
+  }
+  const doc = await discoverOidcIssuer(cfg.issuer)
+  return oidcAuthorizationUrl(event, cfg, doc, TEST_TXN_COOKIE)
+}
+
+/** True when the shared OIDC callback belongs to an interactive admin test. */
+export function isOidcLoginTestCallback(event: H3Event): boolean {
+  const testTxn = getCookie(event, TEST_TXN_COOKIE)
+  if (!testTxn) return false
+
+  // If both a normal and a test transaction exist, route by state so an
+  // abandoned popup cannot accidentally capture a later normal sign-in.
+  if (!getCookie(event, TXN_COOKIE)) return true
+  try {
+    return JSON.parse(testTxn)?.state === getQuery(event).state
+  } catch {
+    return false
+  }
+}
+
+interface OidcCompletion {
+  result: OidcResult
+  tokenTookMs: number
+  tokenResponse: Record<string, unknown>
+  idTokenTookMs: number
+  idTokenHeader: Record<string, unknown>
+  idTokenClaims: Record<string, unknown>
+  accessToken: OidcLoginTestReport['accessToken']
+  userinfo: OidcLoginTestReport['userinfo']
+  rolesClaim: OidcLoginTestReport['rolesClaim']
+}
+
+/** Exchange the callback code, validate the ID token, and map groups to a role. */
+async function completeOidc(
+  event: H3Event,
+  cfg: OidcSettings,
+  doc: OidcDiscovery,
+  cookieName: string,
+  alwaysQueryUserinfo: boolean
+): Promise<OidcCompletion> {
   const query = getQuery(event)
 
-  const txnRaw = getCookie(event, TXN_COOKIE)
-  deleteCookie(event, TXN_COOKIE, { path: '/' })
+  const txnRaw = getCookie(event, cookieName)
+  deleteCookie(event, cookieName, { path: '/' })
 
   if (query.error) {
     throw createError({ statusCode: 401, statusMessage: `Provider returned: ${query.error_description || query.error}` })
@@ -137,7 +237,8 @@ export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
   }
 
   // 1. exchange the authorization code for tokens
-  const tokens = await $fetch<{ id_token?: string, access_token?: string }>(doc.token_endpoint, {
+  const tokenStartedAt = Date.now()
+  const tokens = await $fetch<Record<string, unknown> & { id_token?: string, access_token?: string }>(doc.token_endpoint, {
     method: 'POST',
     timeout: 8000,
     body: new URLSearchParams({
@@ -154,9 +255,11 @@ export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
   if (!tokens.id_token) {
     throw createError({ statusCode: 401, statusMessage: 'Provider did not return an ID token' })
   }
+  const tokenTookMs = Date.now() - tokenStartedAt
 
   // 2. validate the ID token signature, issuer, audience, and nonce
-  const { payload } = await jwtVerify(tokens.id_token, jwks(doc.jwks_uri), {
+  const validationStartedAt = Date.now()
+  const { payload, protectedHeader } = await jwtVerify(tokens.id_token, jwks(doc.jwks_uri), {
     issuer: doc.issuer,
     audience: cfg.clientId
   }).catch((err) => {
@@ -165,15 +268,62 @@ export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
   if (payload.nonce !== txn.nonce) {
     throw createError({ statusCode: 401, statusMessage: 'Nonce mismatch' })
   }
+  const idTokenTookMs = Date.now() - validationStartedAt
+
+  // Keycloak normally places resource_access.<client>.roles in its JWT access
+  // token. Verify that JWT before exposing or using any of its claims. Opaque
+  // access tokens remain usable for UserInfo but cannot be decoded here.
+  const accessToken = await inspectAccessToken(tokens.access_token, doc)
 
   // 3. some providers (e.g. Okta) only expose groups via the userinfo endpoint
   let claims: Record<string, unknown> = payload
-  if (claimPath(claims, cfg.groupsClaim) === undefined && doc.userinfo_endpoint && tokens.access_token) {
-    const info = await $fetch<Record<string, unknown>>(doc.userinfo_endpoint, {
-      timeout: 8000,
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
-    }).catch(() => null)
-    if (info) claims = { ...info, ...payload }
+  const needsUserinfoForGroups = firstClaim(cfg.groupsClaim, [
+    { source: 'id_token', claims: payload },
+    { source: 'access_token', claims: accessToken.valid ? accessToken.claims : null }
+  ]).value === undefined
+  const userinfo: OidcLoginTestReport['userinfo'] = {
+    advertised: !!doc.userinfo_endpoint,
+    attempted: false,
+    ok: null,
+    tookMs: null,
+    endpoint: doc.userinfo_endpoint || null,
+    response: null,
+    error: null
+  }
+  if ((alwaysQueryUserinfo || needsUserinfoForGroups) && doc.userinfo_endpoint && tokens.access_token) {
+    userinfo.attempted = true
+    const userinfoStartedAt = Date.now()
+    try {
+      const info = await $fetch<Record<string, unknown>>(doc.userinfo_endpoint, {
+        timeout: 8000,
+        headers: { Authorization: `Bearer ${tokens.access_token}` }
+      })
+      userinfo.tookMs = Date.now() - userinfoStartedAt
+      userinfo.response = info
+
+      // OIDC Core requires UserInfo to identify the same subject as the ID
+      // token. Report a bad response and never use it for role mapping.
+      const idTokenSub = str(payload.sub)
+      const userinfoSub = str(info.sub)
+      if (!userinfoSub) {
+        userinfo.ok = false
+        userinfo.error = 'UserInfo response is missing the required sub claim'
+      } else if (idTokenSub && userinfoSub !== idTokenSub) {
+        userinfo.ok = false
+        userinfo.error = 'UserInfo sub claim does not match the ID token subject'
+      } else {
+        userinfo.ok = true
+        if (needsUserinfoForGroups) claims = { ...info, ...payload }
+      }
+    } catch (err: any) {
+      userinfo.tookMs = Date.now() - userinfoStartedAt
+      userinfo.ok = false
+      userinfo.error = fetchErrorMessage(err)
+    }
+  } else if (alwaysQueryUserinfo && !doc.userinfo_endpoint) {
+    userinfo.error = 'Provider discovery does not advertise a UserInfo endpoint'
+  } else if (alwaysQueryUserinfo && !tokens.access_token) {
+    userinfo.error = 'Provider did not return an access token for the UserInfo request'
   }
 
   const username =
@@ -183,10 +333,164 @@ export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
   }
   const displayName = str(claimPath(claims, cfg.displayNameClaim)) || username
   const email = str(claims.email) || undefined
-  const role = resolveRole(claimPath(claims, cfg.groupsClaim), cfg)
-  const realmRoles = normalizeGroups(claimPath(claims, cfg.rolesClaim))
+  const trustedUserinfo = userinfo.ok ? userinfo.response : null
+  const claimSources: ClaimSource[] = [
+    { source: 'id_token', claims: payload },
+    { source: 'userinfo', claims: trustedUserinfo },
+    { source: 'access_token', claims: accessToken.valid ? accessToken.claims : null }
+  ]
+  const groupsClaim = firstClaim(cfg.groupsClaim, claimSources)
+  const rolesClaim = firstClaim(cfg.rolesClaim, claimSources)
+  const role = resolveRole(groupsClaim.value, cfg)
+  const realmRoles = normalizeGroups(rolesClaim.value)
 
-  return { username, displayName, email, role, realmRoles }
+  return {
+    result: { username, displayName, email, role, realmRoles },
+    tokenTookMs,
+    tokenResponse: redactTokenResponse(tokens),
+    idTokenTookMs,
+    idTokenHeader: protectedHeader as Record<string, unknown>,
+    idTokenClaims: payload,
+    accessToken,
+    userinfo,
+    rolesClaim: {
+      path: cfg.rolesClaim,
+      found: rolesClaim.value !== undefined,
+      source: rolesClaim.source,
+      value: rolesClaim.value ?? null
+    }
+  }
+}
+
+export async function oidcCompleteLogin(event: H3Event): Promise<OidcResult> {
+  const cfg = await getOidcSettings()
+  const doc = await oidcDiscover(cfg)
+  return (await completeOidc(event, cfg, doc, TXN_COOKIE, false)).result
+}
+
+/** Complete a popup login test without creating a KNetraHub user or session. */
+export async function oidcCompleteLoginTest(event: H3Event): Promise<OidcLoginTestReport> {
+  const startedAt = Date.now()
+  const cfg = await getOidcSettings()
+  if (!cfg.issuer || !cfg.clientId) {
+    throw createError({ statusCode: 400, statusMessage: 'Saved OIDC settings are incomplete' })
+  }
+  const doc = await discoverOidcIssuer(cfg.issuer)
+  const completion = await completeOidc(event, cfg, doc, TEST_TXN_COOKIE, true)
+
+  return {
+    ok: true,
+    completedAt: new Date().toISOString(),
+    tookMs: Date.now() - startedAt,
+    issuer: doc.issuer,
+    clientId: cfg.clientId,
+    redirectUri: oidcRedirectUri(event, cfg),
+    endpoints: {
+      authorization: doc.authorization_endpoint,
+      token: doc.token_endpoint,
+      jwks: doc.jwks_uri,
+      userinfo: doc.userinfo_endpoint || null
+    },
+    token: {
+      tookMs: completion.tokenTookMs,
+      response: completion.tokenResponse
+    },
+    idToken: {
+      valid: true,
+      tookMs: completion.idTokenTookMs,
+      header: completion.idTokenHeader,
+      claims: completion.idTokenClaims
+    },
+    accessToken: completion.accessToken,
+    userinfo: completion.userinfo,
+    rolesClaim: completion.rolesClaim,
+    mappedUser: completion.result
+  }
+}
+
+async function inspectAccessToken(accessToken: string | undefined, doc: OidcDiscovery): Promise<OidcLoginTestReport['accessToken']> {
+  if (!accessToken) {
+    return {
+      present: false,
+      format: null,
+      valid: null,
+      tookMs: null,
+      header: null,
+      claims: null,
+      error: 'Provider did not return an access token'
+    }
+  }
+  if (accessToken.split('.').length !== 3) {
+    return {
+      present: true,
+      format: 'opaque',
+      valid: null,
+      tookMs: null,
+      header: null,
+      claims: null,
+      error: 'Access token is opaque and cannot be decoded as JWT claims'
+    }
+  }
+
+  const startedAt = Date.now()
+  try {
+    const { payload, protectedHeader } = await jwtVerify(accessToken, jwks(doc.jwks_uri), {
+      issuer: doc.issuer
+    })
+    return {
+      present: true,
+      format: 'jwt',
+      valid: true,
+      tookMs: Date.now() - startedAt,
+      header: protectedHeader as Record<string, unknown>,
+      claims: payload,
+      error: null
+    }
+  } catch (err: any) {
+    return {
+      present: true,
+      format: 'jwt',
+      valid: false,
+      tookMs: Date.now() - startedAt,
+      header: null,
+      claims: null,
+      error: `Access token validation failed: ${fetchErrorMessage(err)}`
+    }
+  }
+}
+
+interface ClaimSource {
+  source: 'id_token' | 'userinfo' | 'access_token'
+  claims: Record<string, unknown> | null
+}
+
+function firstClaim(path: string, sources: ClaimSource[]): { source: ClaimSource['source'] | null, value: unknown } {
+  for (const candidate of sources) {
+    if (!candidate.claims) continue
+    const value = claimPath(candidate.claims, path)
+    if (value !== undefined) return { source: candidate.source, value }
+  }
+  return { source: null, value: undefined }
+}
+
+function redactTokenResponse(tokens: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(tokens).map(([key, value]) => {
+    if (['access_token', 'id_token', 'refresh_token'].includes(key) && typeof value === 'string') {
+      return [key, `[redacted ${value.length} characters]`]
+    }
+    return [key, value]
+  }))
+}
+
+function fetchErrorMessage(err: any): string {
+  return String(
+    err?.data?.error_description
+      || err?.data?.message
+      || err?.data?.error
+      || err?.statusMessage
+      || err?.message
+      || err
+  )
 }
 
 function resolveRole(groupsClaim: unknown, cfg: OidcSettings): Role {

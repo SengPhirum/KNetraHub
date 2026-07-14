@@ -181,7 +181,7 @@ const configurationSections = [
     id: 'authentication',
     eyebrow: 'Authentication',
     title: 'Authentication and role mapping',
-    summary: 'KNetraHub supports local users, LDAP / Active Directory, and OIDC SSO. LDAP and OIDC can be configured from environment defaults or saved UI overrides.',
+    summary: 'KNetraHub supports always-available local users, LDAP / Active Directory, and OIDC SSO. Authentication defaults can be overridden from the admin UI.',
     guides: [
       {
         id: 'local-auth',
@@ -190,15 +190,21 @@ const configurationSections = [
         summary: 'Local users are stored in the KNetraHub database and are useful for first-run access, break-glass administration, and smaller teams.',
         options: [
           ['First-run admin', 'Created from NUXT_ADMIN_USERNAME and NUXT_ADMIN_PASSWORD only when no users exist.'],
+          ['Availability', 'Local authentication is permanent recovery access and cannot be disabled.'],
+          ['Hidden login', 'Hide the local form on the normal login page; /login?local=1 always reveals it.'],
+          ['Password policy', 'Configure minimum length plus uppercase, lowercase, number, and special-character requirements.'],
+          ['Session timeout', 'Sets the absolute lifetime of newly issued browser sessions for every provider.'],
           ['Roles', 'Viewer can read, operator can control workloads, admin can manage users/settings/integrations.'],
           ['Fallback access', 'Keep one tested local admin while rolling out LDAP or OIDC.']
         ],
         steps: [
           'Set the first-run admin credentials before bootstrapping production.',
+          'Configure password and session rules under Admin > Authentication > Local users.',
           'Create named local users from Users when needed.',
+          'If the local form is hidden, securely retain the /login?local=1 recovery URL.',
           'Use a local admin to recover access if external identity providers are down.'
         ],
-        env: ['NUXT_ADMIN_USERNAME', 'NUXT_ADMIN_PASSWORD', 'NUXT_JWT_SECRET']
+        env: ['NUXT_ADMIN_USERNAME', 'NUXT_ADMIN_PASSWORD', 'NUXT_JWT_SECRET', 'NUXT_LOCAL_AUTH_HIDE_LOGIN', 'NUXT_LOCAL_AUTH_SESSION_TIMEOUT_MINUTES', 'NUXT_LOCAL_AUTH_PASSWORD_MIN_LENGTH', 'NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_UPPERCASE', 'NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_LOWERCASE', 'NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_NUMBER', 'NUXT_LOCAL_AUTH_PASSWORD_REQUIRE_SPECIAL']
       },
       {
         id: 'oidc-config',

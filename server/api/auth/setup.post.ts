@@ -1,5 +1,6 @@
 import { adminExists, createLocalUser, audit } from '~~/server/utils/store'
 import { getLdapSettings, getOidcSettings } from '~~/server/utils/authSettings'
+import { enforcePasswordPolicy } from '~~/server/utils/passwordPolicy'
 
 /** Unauthenticated: creates the first admin account for the first-run setup
  *  wizard. Re-checks server-side (not just trusting the client's earlier
@@ -21,9 +22,7 @@ export default defineEventHandler(async (event) => {
   if (!username || username.length < 3) {
     throw createError({ statusCode: 400, statusMessage: 'Username must be at least 3 characters' })
   }
-  if (password.length < 8) {
-    throw createError({ statusCode: 400, statusMessage: 'Password must be at least 8 characters' })
-  }
+  await enforcePasswordPolicy(password)
 
   const user = await createLocalUser({
     username,

@@ -1,9 +1,20 @@
 <script setup lang="ts">
+import { passwordPolicyErrors, passwordPolicySummary, type PasswordPolicy } from '~~/shared/utils/passwordPolicy'
+
 definePageMeta({ middleware: 'admin' })
 
 const { user: me } = useAuth()
 const { relative } = useFormat()
 const toast = useToast()
+const { data: passwordPolicy } = useFetch<PasswordPolicy>('/api/auth/password-policy')
+const effectivePasswordPolicy = computed<PasswordPolicy>(() => passwordPolicy.value || {
+  passwordMinLength: 8,
+  passwordRequireUppercase: false,
+  passwordRequireLowercase: false,
+  passwordRequireNumber: false,
+  passwordRequireSpecial: false
+})
+const passwordRuleSummary = computed(() => passwordPolicySummary(effectivePasswordPolicy.value))
 
 const { data, status, error, refreshing, refresh } = useApiCache('users', () => $fetch<any[]>('/api/users'))
 onMounted(refresh)
@@ -82,6 +93,8 @@ const form = reactive({ username: '', displayName: '', email: '', role: 'viewer'
 function openCreate() { Object.assign(form, { username: '', displayName: '', email: '', role: 'viewer', password: '', appAccess: emptyAppAccess() }); open.value = true }
 async function create() {
   if (!form.username || !form.password) { toast.add({ title: 'Username and password required', color: 'warning' }); return }
+  const policyErrors = passwordPolicyErrors(form.password, effectivePasswordPolicy.value)
+  if (policyErrors.length) { toast.add({ title: 'Password does not meet policy', description: policyErrors.join('. '), color: 'warning' }); return }
   try {
     const newUser = await $fetch<any>('/api/users', { method: 'POST', body: { ...form, appAccess: toAppAccessPayload(form.appAccess) } })
     // Optimistic add
@@ -103,6 +116,10 @@ function openEdit(u: any) {
   editOpen.value = true
 }
 async function saveEdit() {
+  if (editForm.password) {
+    const policyErrors = passwordPolicyErrors(editForm.password, effectivePasswordPolicy.value)
+    if (policyErrors.length) { toast.add({ title: 'Password does not meet policy', description: policyErrors.join('. '), color: 'warning' }); return }
+  }
   try {
     const body: any = { role: editForm.role }
     if (editForm.password) body.password = editForm.password
@@ -212,7 +229,7 @@ async function confirmDelete() {
             <USelect v-model="form.role" :items="ROLES" class="w-full" />
             <template #hint><p class="text-xs text-faint mt-1">{{ ROLE_META[form.role]?.description }}</p></template>
           </UFormField>
-          <UFormField label="Password" required><UInput v-model="form.password" type="password" class="w-full" /></UFormField>
+          <UFormField label="Password" required :description="passwordRuleSummary"><UInput v-model="form.password" type="password" class="w-full" /></UFormField>
 
           <div class="border-t border-hull-soft pt-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted) mb-2">App access</p>
@@ -241,7 +258,7 @@ async function confirmDelete() {
             <USelect v-model="editForm.role" :items="ROLES" class="w-full" />
             <template #hint><p class="text-xs text-faint mt-1">{{ ROLE_META[editForm.role]?.description }}</p></template>
           </UFormField>
-          <UFormField v-if="editTarget?.source === 'local'" label="New password" hint="Leave blank to keep current">
+          <UFormField v-if="editTarget?.source === 'local'" label="New password" :description="`Leave blank to keep current. ${passwordRuleSummary}`">
             <UInput v-model="editForm.password" type="password" class="w-full" />
           </UFormField>
           <p v-else class="text-xs text-faint">{{ (editTarget?.source || 'external').toUpperCase() }} user — password is managed by your identity provider.</p>

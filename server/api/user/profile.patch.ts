@@ -1,5 +1,6 @@
 import { requireUser } from '~~/server/utils/auth'
 import { updateUser, audit } from '~~/server/utils/store'
+import { enforcePasswordPolicy } from '~~/server/utils/passwordPolicy'
 
 /**
  * Self-service profile update for the signed-in user. Unlike the admin-only
@@ -20,6 +21,8 @@ export default defineEventHandler(async (event) => {
   if (!patch.displayName && !patch.password) {
     throw createError({ statusCode: 400, statusMessage: 'Nothing to update' })
   }
+
+  if (patch.password) await enforcePasswordPolicy(patch.password)
 
   const u = await updateUser(me.id, patch)
   await audit({ actor: me.username, action: 'user.self_update', target: u.username })

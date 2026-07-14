@@ -7,8 +7,8 @@ export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'admin')
   const provider = getQuery(event).provider
 
-  if (provider !== 'ldap' && provider !== 'oidc') {
-    throw createError({ statusCode: 400, statusMessage: 'Expected ?provider=ldap or ?provider=oidc' })
+  if (provider !== 'local' && provider !== 'ldap' && provider !== 'oidc') {
+    throw createError({ statusCode: 400, statusMessage: 'Expected ?provider=local, ldap, or oidc' })
   }
 
   await resetAuthSettings(provider)

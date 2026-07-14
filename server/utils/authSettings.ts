@@ -1,5 +1,6 @@
 import { getAppSetting, setAppSetting, deleteAppSetting } from './store'
 import { encryptSecret, decryptSecret } from './secretCrypto'
+import type { PasswordPolicy } from '../../shared/utils/passwordPolicy'
 
 /**
  * Authentication provider settings.
@@ -23,6 +24,14 @@ export interface LdapSettings {
   operatorGroup: string
 }
 
+export interface LocalAuthSettings extends PasswordPolicy {
+  /** Local authentication is permanent recovery access and cannot be disabled. */
+  enabled: true
+  hideLogin: boolean
+  /** Absolute lifetime of newly issued browser sessions. */
+  sessionTimeoutMinutes: number
+}
+
 export interface OidcSettings {
   enabled: boolean
   issuer: string
@@ -40,9 +49,23 @@ export interface OidcSettings {
   providerName: string
 }
 
-export type AuthProvider = 'ldap' | 'oidc'
+export type AuthProvider = 'local' | 'ldap' | 'oidc'
 
-const KEYS: Record<AuthProvider, string> = { ldap: 'auth.ldap', oidc: 'auth.oidc' }
+const KEYS: Record<AuthProvider, string> = { local: 'auth.local', ldap: 'auth.ldap', oidc: 'auth.oidc' }
+
+function envLocal(): LocalAuthSettings {
+  const c = useRuntimeConfig().localAuth
+  return normalizeLocalSettings({
+    enabled: true,
+    hideLogin: c.hideLogin,
+    sessionTimeoutMinutes: c.sessionTimeoutMinutes,
+    passwordMinLength: c.passwordMinLength,
+    passwordRequireUppercase: c.passwordRequireUppercase,
+    passwordRequireLowercase: c.passwordRequireLowercase,
+    passwordRequireNumber: c.passwordRequireNumber,
+    passwordRequireSpecial: c.passwordRequireSpecial
+  })
+}
 
 function envLdap(): LdapSettings {
   const c = useRuntimeConfig().ldap
@@ -82,7 +105,7 @@ function envOidc(): OidcSettings {
 // Which field holds the secret for each provider - decrypted on read (only
 // the DB override, never the env-sourced plaintext defaults) and encrypted
 // on write, right at the storage boundary.
-const SECRET_FIELD: Record<AuthProvider, 'bindCredentials' | 'clientSecret'> = {
+const SECRET_FIELD: Partial<Record<AuthProvider, 'bindCredentials' | 'clientSecret'>> = {
   ldap: 'bindCredentials',
   oidc: 'clientSecret'
 }
@@ -93,7 +116,7 @@ async function readOverrides<T>(provider: AuthProvider): Promise<Partial<T> | nu
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const secretField = SECRET_FIELD[provider]
-    if (typeof parsed[secretField] === 'string') {
+    if (secretField && typeof parsed[secretField] === 'string') {
       parsed[secretField] = decryptSecret(parsed[secretField] as string)
     }
     return parsed as Partial<T>
@@ -102,12 +125,23 @@ async function readOverrides<T>(provider: AuthProvider): Promise<Partial<T> | nu
   }
 }
 
+export async function getLocalAuthSettings(): Promise<LocalAuthSettings> {
+  return normalizeLocalSettings({ ...envLocal(), ...(await readOverrides<LocalAuthSettings>('local')), enabled: true })
+}
+
 export async function getLdapSettings(): Promise<LdapSettings> {
   return { ...envLdap(), ...(await readOverrides<LdapSettings>('ldap')) }
 }
 
 export async function getOidcSettings(): Promise<OidcSettings> {
   return { ...envOidc(), ...(await readOverrides<OidcSettings>('oidc')) }
+}
+
+export async function saveLocalAuthSettings(patch: Partial<LocalAuthSettings>, actor: string): Promise<LocalAuthSettings> {
+  const current = await getLocalAuthSettings()
+  const next = normalizeLocalSettings({ ...current, ...patch, enabled: true })
+  await setAppSetting(KEYS.local, JSON.stringify(next), actor)
+  return next
 }
 
 export async function hasAuthOverride(provider: AuthProvider): Promise<boolean> {
@@ -136,4 +170,25 @@ export async function saveOidcSettings(patch: Partial<OidcSettings>, actor: stri
 /** Drop the DB override so the provider follows the environment again. */
 export async function resetAuthSettings(provider: AuthProvider): Promise<void> {
   await deleteAppSetting(KEYS[provider])
+}
+
+function normalizeLocalSettings(input: LocalAuthSettings): LocalAuthSettings {
+  const sessionTimeoutMinutes = finiteInteger(input.sessionTimeoutMinutes, 720, 5, 43_200)
+  const passwordMinLength = finiteInteger(input.passwordMinLength, 8, 8, 128)
+  return {
+    enabled: true,
+    hideLogin: input.hideLogin === true,
+    sessionTimeoutMinutes,
+    passwordMinLength,
+    passwordRequireUppercase: input.passwordRequireUppercase === true,
+    passwordRequireLowercase: input.passwordRequireLowercase === true,
+    passwordRequireNumber: input.passwordRequireNumber === true,
+    passwordRequireSpecial: input.passwordRequireSpecial === true
+  }
+}
+
+function finiteInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.round(parsed)))
 }

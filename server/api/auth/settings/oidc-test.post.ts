@@ -7,9 +7,9 @@ import { audit } from '~~/server/utils/store'
  * "Test & Query" for the OIDC settings form: live-fetches the provider's
  * `.well-known/openid-configuration` document for the (possibly unsaved)
  * issuer URL and reports what it found. This validates issuer reachability
- * and discovery-document shape - it does *not* exchange a code or verify the
- * client secret, since that requires a real user consent redirect (see the
- * `scope` field in the response, which spells this out for the admin).
+ * and discovery-document shape. The UI can then launch the separate popup
+ * login test, which performs the real authorization-code flow against saved
+ * settings without replacing the admin's current session.
  *
  * Accepts issuer/clientId overrides so an admin can test values they've
  * typed but not yet saved; blank fields fall back to the currently stored
@@ -47,6 +47,7 @@ export default defineEventHandler(async (event) => {
     scopesSupported: doc.scopes_supported || null,
     claimsSupported: doc.claims_supported || null,
     grantTypesSupported: doc.grant_types_supported || null,
-    scope: 'Verified: issuer is reachable and published a valid discovery document with the required endpoints. Not verified: Client ID/Client Secret validity - that can only be confirmed by an actual sign-in, since it requires a real user consent redirect.'
+    discovery: doc,
+    scope: 'Discovery verified the issuer and required endpoints. Use the popup login test to verify the saved Client ID/Client Secret, authorization redirect, token exchange, ID token claims, role mapping, and UserInfo response.'
   }
 })

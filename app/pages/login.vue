@@ -8,6 +8,15 @@ const route = useRoute()
 
 // Provider availability is runtime state (env defaults + DB overrides)
 const { data: providers } = useFetch('/api/auth/providers')
+const localRecoveryRequested = computed(() => {
+  const value = route.query.local
+  return value === '1' || value === 'true' || value === 'show'
+})
+const showPasswordLogin = computed(() =>
+  providers.value?.ldapEnabled === true
+  || providers.value?.localLoginHidden !== true
+  || localRecoveryRequested.value
+)
 
 const username = ref('')
 const password = ref('')
@@ -51,7 +60,11 @@ async function submit() {
         </div>
       </div>
 
-      <div class="space-y-4">
+      <p v-if="localRecoveryRequested && providers?.localLoginHidden" class="flex items-center gap-2 rounded-lg border border-beacon/30 bg-beacon/5 px-3 py-2 text-xs text-(--color-muted)">
+        <UIcon name="i-lucide-shield-check" class="size-3.5 text-beacon" /> Local recovery sign-in
+      </p>
+
+      <div v-if="showPasswordLogin" class="space-y-4">
         <div>
           <label class="block text-xs font-medium text-(--color-muted) mb-1.5">Username</label>
           <UInput
@@ -82,6 +95,7 @@ async function submit() {
       </p>
 
       <UButton
+        v-if="showPasswordLogin"
         type="submit"
         block
         size="lg"
@@ -92,7 +106,7 @@ async function submit() {
       />
 
       <template v-if="providers?.oidcEnabled">
-        <div class="flex items-center gap-3 text-xs text-faint">
+        <div v-if="showPasswordLogin" class="flex items-center gap-3 text-xs text-faint">
           <span class="h-px flex-1 bg-border" /> or <span class="h-px flex-1 bg-border" />
         </div>
         <UButton
@@ -111,8 +125,11 @@ async function submit() {
         <template v-if="providers?.ldapEnabled">
           <UIcon name="i-lucide-shield-check" class="size-3 inline" /> LDAP enabled · local accounts also accepted
         </template>
-        <template v-else>
+        <template v-else-if="showPasswordLogin">
           <UIcon name="i-lucide-shield-check" class="size-3 inline" /> SSO enabled · local accounts also accepted
+        </template>
+        <template v-else>
+          <UIcon name="i-lucide-shield-check" class="size-3 inline" /> Single sign-on enabled
         </template>
       </p>
     </form>

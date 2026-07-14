@@ -14,6 +14,7 @@ import {
 } from '../../shared/utils/entitlements'
 import { getAppRoleMap } from './appRoles'
 import { logSystem } from './moduleLogs'
+import { getLocalAuthSettings } from './authSettings'
 
 export interface SessionUser {
   id: string
@@ -39,11 +40,11 @@ function secret() {
   return new TextEncoder().encode(useRuntimeConfig().jwtSecret)
 }
 
-export async function issueToken(user: SessionUser, sid?: string): Promise<string> {
+export async function issueToken(user: SessionUser, sid?: string, expiresInSeconds = 60 * 60 * 12): Promise<string> {
   return await new SignJWT({ ...user, ...(sid ? { sid } : {}) })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('12h')
+    .setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds)
     .sign(secret())
 }
 
@@ -78,6 +79,8 @@ export async function resolveUserEntitlements(user: SessionUser): Promise<AppEnt
 }
 
 export async function setSession(event: H3Event, user: SessionUser) {
+  const localAuth = await getLocalAuthSettings()
+  const sessionMaxAge = localAuth.sessionTimeoutMinutes * 60
   // Record the session so it can be listed/revoked, and bind the token to it.
   const userAgent = getRequestHeader(event, 'user-agent') ?? null
   const forwarded = getRequestHeader(event, 'x-forwarded-for')
@@ -94,7 +97,7 @@ export async function setSession(event: H3Event, user: SessionUser) {
     await logSystem('portal', 'warning', 'auth.session.degraded',
       `Could not create session row for ${user.username}; issued an un-revocable token instead: ${err?.message || err}`)
   }
-  const token = await issueToken(user, sid)
+  const token = await issueToken(user, sid, sessionMaxAge)
   setCookie(event, COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -104,7 +107,7 @@ export async function setSession(event: H3Event, user: SessionUser) {
     // every subsequent authenticated request with a 401.
     secure: getRequestProtocol(event) === 'https',
     path: '/',
-    maxAge: 60 * 60 * 12
+    maxAge: sessionMaxAge
   })
 }
 
