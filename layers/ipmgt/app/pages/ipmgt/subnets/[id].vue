@@ -4,8 +4,9 @@
 // free.
 const route = useRoute()
 const toast = useToast()
-const { hasApp } = useAuth()
+const { hasApp, hasPermission } = useAuth()
 const { canCreate, canUpdate, canDelete, canAssign, ipStatusMeta: statusMeta } = useIpam()
+const canScan = computed(() => hasPermission('ipmgt.scan'))
 const id = computed(() => route.params.id as string)
 
 const { data: subnet, status, error, refresh: refreshSubnet } = useAsyncData(
@@ -58,6 +59,20 @@ async function reserveFirstFree() {
   } catch (e: any) { toast.add({ title: 'Reserve failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
 
+// ── Scanning ─────────────────────────────────────────────────────────────
+const scanning = ref(false)
+const { data: scanHistory, refresh: refreshScans } = useAsyncData(
+  'ipamSubnetScans', () => $fetch<any[]>('/api/ipmgt/scans', { query: { subnet_id: id.value, limit: 5 } }), { server: false, default: () => [], watch: [id] })
+async function runScan() {
+  scanning.value = true
+  try {
+    const report = await $fetch<any>(`/api/ipmgt/subnets/${id.value}/scan`, { method: 'POST' })
+    toast.add({ title: `Scan complete: ${report.hostsUp}/${report.hostsScanned} up, ${report.newHosts} new`, color: 'primary', icon: 'i-lucide-check' })
+    await Promise.all([refreshAll(), refreshScans()])
+  } catch (e: any) { toast.add({ title: 'Scan failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { scanning.value = false }
+}
+
 // ── Release address ─────────────────────────────────────────────────────────
 const releaseTarget = ref<any>(null)
 const releasing = ref(false)
@@ -108,6 +123,7 @@ const facts = computed(() => {
         <div class="flex flex-wrap items-center gap-2">
           <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-search-check" @click="findFirstFree">Find free</UButton>
           <UButton v-if="canAssign" size="sm" color="neutral" variant="soft" icon="i-lucide-bookmark" @click="reserveFirstFree">Reserve free</UButton>
+          <UButton v-if="canScan && (subnet.ping_enabled || subnet.scan_enabled)" size="sm" color="neutral" variant="soft" icon="i-lucide-radar" :loading="scanning" @click="runScan">Run scan</UButton>
           <UButton v-if="canCreate" size="sm" icon="i-lucide-plus" @click="addAddress()">Add address</UButton>
           <UButton v-if="canUpdate" size="sm" variant="ghost" icon="i-lucide-pencil" aria-label="Edit subnet" @click="subnetFormOpen = true" />
           <UButton v-if="canDelete" size="sm" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete subnet" @click="deleteOpen = true" />
@@ -150,6 +166,33 @@ const facts = computed(() => {
             </div>
           </section>
         </div>
+
+        <section v-if="subnet.ping_enabled || subnet.scan_enabled || scanHistory.length" class="panel p-5">
+          <h2 class="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Recent scans</h2>
+          <p v-if="!scanHistory.length" class="text-sm text-faint">No scans run yet.</p>
+          <table v-else class="w-full text-left text-sm">
+            <thead class="text-xs uppercase text-faint">
+              <tr>
+                <th class="px-2 py-2 font-medium">Started</th>
+                <th class="px-2 py-2 font-medium">Trigger</th>
+                <th class="px-2 py-2 font-medium">Scanned</th>
+                <th class="px-2 py-2 font-medium">Up</th>
+                <th class="px-2 py-2 font-medium">New</th>
+                <th class="px-2 py-2 font-medium">Result</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-surface">
+              <tr v-for="h in scanHistory" :key="h.id">
+                <td class="px-2 py-2 text-xs text-faint">{{ (h.started_at || '').slice(0, 16).replace('T', ' ') }}</td>
+                <td class="px-2 py-2 text-(--color-muted) capitalize">{{ h.trigger }}</td>
+                <td class="px-2 py-2 text-(--color-muted)">{{ h.hosts_scanned }}</td>
+                <td class="px-2 py-2 text-(--color-muted)">{{ h.hosts_up }}</td>
+                <td class="px-2 py-2 text-(--color-muted)">{{ h.new_hosts }}</td>
+                <td class="px-2 py-2"><span :class="h.error ? 'text-rose-400' : 'text-emerald-400'">{{ h.error ? 'Failed' : (h.finished_at ? 'OK' : 'Running…') }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
         <!-- Visual grid -->
         <section class="panel p-5">

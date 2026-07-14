@@ -1062,6 +1062,23 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_requests_status ON ipmgt_requests(status);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_requests_requester ON ipmgt_requests(requester);
 
+    -- IPAM Module (Phase 5): host-status scanning + new-host discovery run
+    -- history (layers/ipmgt/server/utils/ipamScan.ts, plugins/ipamScanner.ts).
+    CREATE TABLE IF NOT EXISTS ipmgt_scan_history (
+      id TEXT PRIMARY KEY,
+      subnet_id TEXT,
+      trigger TEXT NOT NULL DEFAULT 'scheduled',
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      hosts_scanned INTEGER NOT NULL DEFAULT 0,
+      hosts_up INTEGER NOT NULL DEFAULT 0,
+      new_hosts INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      actor TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_scan_history_subnet ON ipmgt_scan_history(subnet_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_scan_history_started ON ipmgt_scan_history(started_at DESC);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

@@ -204,6 +204,17 @@ export default defineNuxtConfig({
       trapBindAddress: process.env.NUXT_SERVER_TRAP_BIND_ADDRESS || '0.0.0.0'
     },
 
+    // IPAM module: subnet host-status scanning (ICMP) and new-host discovery.
+    // Only subnets with ping_enabled/scan_enabled run; disable the scheduled
+    // cycle entirely with NUXT_IPMGT_SCAN_ENABLED=false (manual "Run scan now"
+    // still works either way).
+    ipmgt: {
+      scanEnabled: process.env.NUXT_IPMGT_SCAN_ENABLED !== 'false',
+      scanIntervalSeconds: Number(process.env.NUXT_IPMGT_SCAN_INTERVAL_SECONDS || 300),
+      scanConcurrency: Number(process.env.NUXT_IPMGT_SCAN_CONCURRENCY || 16),
+      pingTimeoutSeconds: Number(process.env.NUXT_IPMGT_PING_TIMEOUT_SECONDS || 2)
+    },
+
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',

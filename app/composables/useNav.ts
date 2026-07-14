@@ -160,6 +160,12 @@ const IPMGT_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Discovery',
+    items: [
+      { label: 'Scan History', to: '/ipmgt/scans', icon: 'i-lucide-radar', permission: 'ipmgt.view' }
+    ]
+  },
+  {
     label: 'Tools',
     items: [
       { label: 'Search',     to: '/ipmgt/search', icon: 'i-lucide-search',     permission: 'ipmgt.view' },
