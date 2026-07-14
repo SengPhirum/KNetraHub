@@ -1,5 +1,6 @@
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { cidrInfo, isValidCidr, parseCidr, bigIntToIp } from '~~/layers/ipmgt/server/utils/ipam'
+import { reverseZonesForCidr } from '~~/layers/ipmgt/server/utils/ipamDns'
 
 // IPv4/IPv6 subnet calculator. ?cidr=192.168.1.0/24 returns full block facts;
 // optional &split=26 lists the child subnets of that new prefix (capped at 256).
@@ -20,7 +21,8 @@ export default defineEventHandler(async (event) => {
     firstUsable: info.firstUsable,
     lastUsable: info.lastUsable,
     total: info.total,
-    usable: info.usable
+    usable: info.usable,
+    reverseZones: reverseZonesForCidr(cidr, 16)
   }
 
   if (q.split !== undefined) {

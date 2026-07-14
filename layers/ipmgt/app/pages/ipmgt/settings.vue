@@ -80,7 +80,7 @@ async function save() {
 
         <section class="panel p-5">
           <h2 class="mb-1 font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">DNS integration</h2>
-          <p class="mb-4 text-xs text-faint">Provider hooks are wired but external DNS updates stay disabled until configured (placeholder).</p>
+          <p class="mb-4 text-xs text-faint">Reverse-zone calculation and the DNS consistency checker (Tools page) work locally without any external server. Pushing records to an external provider (PowerDNS, etc.) is wired here but stays disabled until a real connection is configured - that part remains a placeholder.</p>
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="DNS provider">
               <USelect v-model="form.dnsProvider" :items="dnsItems" value-key="value" label-key="label" class="w-full" />

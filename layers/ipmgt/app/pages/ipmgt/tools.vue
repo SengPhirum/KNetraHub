@@ -33,6 +33,15 @@ const facts = computed(() => {
 })
 
 onMounted(calc)
+
+// ── DNS consistency checker ─────────────────────────────────────────────
+const dnsCheck = ref<any>(null)
+const dnsChecking = ref(false)
+async function runDnsCheck() {
+  dnsChecking.value = true
+  try { dnsCheck.value = await $fetch<any>('/api/ipmgt/tools/dns-check') }
+  finally { dnsChecking.value = false }
+}
 </script>
 
 <template>
@@ -70,6 +79,11 @@ onMounted(calc)
               <dd class="font-mono text-sm text-foam break-all">{{ v }}</dd>
             </div>
           </dl>
+          <div v-if="result.reverseZones?.zones?.length" class="mt-4 border-t border-surface pt-3">
+            <p class="mb-1 text-xs text-faint">Reverse DNS zone{{ result.reverseZones.zones.length > 1 ? 's' : '' }}</p>
+            <p v-if="result.reverseZones.truncated" class="mb-1 text-xs text-amber-400">Showing first {{ result.reverseZones.zones.length }} zones.</p>
+            <p v-for="z in result.reverseZones.zones" :key="z" class="font-mono text-xs text-beacon">{{ z }}</p>
+          </div>
         </section>
 
         <section v-if="result.split" class="panel p-5">
@@ -82,6 +96,38 @@ onMounted(calc)
           </div>
         </section>
       </div>
+
+      <section class="panel p-5">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">DNS consistency checker</h2>
+          <UButton size="sm" variant="soft" icon="i-lucide-shield-check" :loading="dnsChecking" @click="runDnsCheck">Run check</UButton>
+        </div>
+        <p class="mb-3 text-xs text-(--color-muted)">Flags hostname-bearing addresses whose recorded PTR doesn't match the reverse-DNS name the IP actually resolves to (computed, not fetched from a live DNS server).</p>
+        <div v-if="dnsCheck">
+          <p class="mb-2 text-xs text-faint">{{ dnsCheck.checked }} address(es) checked · {{ dnsCheck.issues.length }} issue(s)</p>
+          <div v-if="!dnsCheck.issues.length" class="py-4 text-center text-sm text-emerald-400">No inconsistencies found. 🎉</div>
+          <table v-else class="w-full text-left text-sm">
+            <thead class="text-xs uppercase text-faint">
+              <tr>
+                <th class="px-2 py-2 font-medium">IP</th>
+                <th class="px-2 py-2 font-medium">Hostname</th>
+                <th class="px-2 py-2 font-medium">Recorded PTR</th>
+                <th class="px-2 py-2 font-medium">Expected PTR</th>
+                <th class="px-2 py-2 font-medium">Issue</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-surface">
+              <tr v-for="i in dnsCheck.issues" :key="i.ip">
+                <td class="px-2 py-2 font-mono text-foam">{{ i.ip }}</td>
+                <td class="px-2 py-2 text-(--color-muted)">{{ i.hostname }}</td>
+                <td class="px-2 py-2 font-mono text-xs text-(--color-muted)">{{ i.recordedPtr || '—' }}</td>
+                <td class="px-2 py-2 font-mono text-xs text-beacon">{{ i.expectedPtr }}</td>
+                <td class="px-2 py-2 text-xs text-amber-400">{{ i.issue === 'missing_ptr' ? 'Missing PTR' : 'Mismatch' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </div>
 </template>

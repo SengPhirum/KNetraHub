@@ -88,7 +88,7 @@ search palette (<kbd>Ctrl</kbd> <kbd>K</kbd>) over every guide, env var, API end
 | ![Stacks](public/screenshots/stacks.png) | ![Services](public/screenshots/services.png) |
 | **Service detail** — replicas, tasks, logs & usage history | **Nodes** — fleet availability and resources |
 | ![Service detail](public/screenshots/service-detail.png) | ![Nodes](public/screenshots/nodes.png) |
-| **Monitoring** — unified network and server health | **IP Management** — subnets, addresses, VLANs and VRFs |
+| **Monitoring** — unified network and server health | **IP Management** — subnets, addresses, VLANs, VRFs, devices, racks, circuits, requests, and vault ([details](layers/ipmgt/README.md)) |
 | ![Monitoring](public/screenshots/monitoring-dashboard.png) | ![IP Management](public/screenshots/ipmgt-dashboard.png) |
 | **Documentation** — animated overview, guides, config & API reference | **Smart Q&A** — curated answers, deep-linked to the right guide |
 | ![Documentation](public/screenshots/docs-overview.png) | ![Smart Q&A](public/screenshots/docs-qa.png) |
@@ -147,7 +147,7 @@ layers/
 │                                   containers, networks, volumes, secrets, configs, registries)
 ├── monitoring/                  <- network devices (/monitoring/network, /api/net) and
 │                                   server hosts (/monitoring/server, /api/server) + pollers
-└── ipmgt/                       <- IP address management (/ipmgt, /api/ipmgt)
+└── ipmgt/                       <- IP address management (/ipmgt, /api/ipmgt) - see layers/ipmgt/README.md
 ```
 
 Each layer is a [Nuxt layer](https://nuxt.com/docs/getting-started/layers) auto-registered from the `layers/` directory, mirroring the root structure (`app/pages`, `app/components`, `app/composables`, `app/utils`, `server/api`, `server/utils`, `server/plugins`). Everything merges into one build with unchanged URLs and component names — a module's code just lives in one folder now.
