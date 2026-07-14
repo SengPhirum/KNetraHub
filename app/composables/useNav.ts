@@ -179,7 +179,8 @@ const IPMGT_GROUPS: NavGroup[] = [
     label: 'Operations',
     items: [
       { label: 'IP Requests',     to: '/ipmgt/requests',     icon: 'i-lucide-inbox',           permission: 'ipmgt.view' },
-      { label: 'Import / Export', to: '/ipmgt/importexport', icon: 'i-lucide-arrow-left-right', permission: 'ipmgt.view' }
+      { label: 'Import / Export', to: '/ipmgt/importexport', icon: 'i-lucide-arrow-left-right', permission: 'ipmgt.view' },
+      { label: 'Vault',           to: '/ipmgt/vault',        icon: 'i-lucide-shield-check',     permission: 'ipmgt.view' }
     ]
   },
   {

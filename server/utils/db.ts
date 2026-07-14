@@ -1183,6 +1183,41 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_nat_source_subnet ON ipmgt_nat_rules(source_subnet_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_nat_device ON ipmgt_nat_rules(device_id);
 
+    -- IPAM Module (Phase 10): encrypted vault for infrastructure secrets
+    -- (passwords, API credentials, certificates, notes). value_enc is
+    -- AES-256-GCM ciphertext (secretCrypto.ts) - list/detail responses never
+    -- include it; only the dedicated reveal endpoint decrypts, and every
+    -- reveal is logged to ipmgt_vault_access_log.
+    CREATE TABLE IF NOT EXISTS ipmgt_vault_items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      item_type TEXT NOT NULL DEFAULT 'password',
+      value_enc TEXT NOT NULL,
+      username TEXT,
+      url TEXT,
+      expiry_date TEXT,
+      owner TEXT,
+      related_device_id TEXT REFERENCES ipmgt_devices(id) ON DELETE SET NULL,
+      related_location_id TEXT REFERENCES ipmgt_locations(id) ON DELETE SET NULL,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      created_by TEXT,
+      updated_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_items_device ON ipmgt_vault_items(related_device_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_items_expiry ON ipmgt_vault_items(expiry_date);
+
+    CREATE TABLE IF NOT EXISTS ipmgt_vault_access_log (
+      id TEXT PRIMARY KEY,
+      vault_item_id TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      action TEXT NOT NULL,
+      accessed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_access_item ON ipmgt_vault_access_log(vault_item_id);
+    CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_access_at ON ipmgt_vault_access_log(accessed_at DESC);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).
