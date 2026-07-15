@@ -22,6 +22,7 @@
   "dependencies": {
     "@nuxt/icon": "^1.10.3",
     "@nuxt/ui": "^4.8.2",
+    "@resvg/resvg-js": "^2.6.2",
     "@vite-pwa/nuxt": "^1.1.1",
     "@vueuse/nuxt": "^13.1.0",
     "bcryptjs": "^3.0.2",
@@ -40,9 +41,9 @@
     "yaml": "^2.7.1"
   },
   "devDependencies": {
-    "playwright": "^1.61.1",
     "@iconify-json/lucide": "^1.2.111",
     "@types/dockerode": "^4.0.1",
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "playwright": "^1.61.1"
   }
 }

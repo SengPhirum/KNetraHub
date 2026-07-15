@@ -1,5 +1,4 @@
-import { getAppearanceSettings, DEFAULT_PRIMARY_COLOR } from '~~/server/utils/appearanceSettings'
-import { generateBrandIconSvg, svgToDataUrl } from '~~/shared/utils/brandIcon'
+import { getAppearanceSettings } from '~~/server/utils/appearanceSettings'
 
 // Default PWA icon set, baked into public/icons/ at build time. Used whenever
 // no admin-uploaded PWA icon override is set.
@@ -28,13 +27,10 @@ function mimeFromDataUrl(url: string): string {
  */
 export default defineEventHandler(async (event) => {
   const appearance = await getAppearanceSettings()
+  // A customized primary color without an uploaded icon is auto-tinted and
+  // stored as a real PNG server-side (see appearanceSettings.ts), so pwaIconUrl
+  // is already the right thing to serve either way - no separate branch needed.
   const icon = appearance.pwaIconUrl
-  // When no icon is uploaded but the primary color is customized, auto-tint
-  // the built-in mark instead of silently keeping the default-blue icons -
-  // SVG only (no rasterization dependency), so no "maskable" variant here.
-  const autoTinted = !icon && appearance.primaryColor !== DEFAULT_PRIMARY_COLOR
-    ? svgToDataUrl(generateBrandIconSvg(appearance.primaryColor))
-    : null
 
   setResponseHeader(event, 'content-type', 'application/manifest+json')
 
@@ -55,8 +51,6 @@ export default defineEventHandler(async (event) => {
           { src: icon, sizes: '512x512', type: mimeFromDataUrl(icon), purpose: 'any' },
           { src: icon, sizes: '512x512', type: mimeFromDataUrl(icon), purpose: 'maskable' }
         ]
-      : autoTinted
-        ? [{ src: autoTinted, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
-        : DEFAULT_ICONS
+      : DEFAULT_ICONS
   }
 })

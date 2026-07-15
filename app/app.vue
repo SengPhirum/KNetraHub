@@ -19,39 +19,25 @@ function mimeFromDataUrl(url: string): string | undefined {
   return match?.[1]
 }
 
-// When an admin customizes the primary color but hasn't uploaded their own
-// favicon/PWA icon, auto-tint the built-in mark to that color instead of
-// silently keeping the default-blue static files (see shared/utils/brandIcon.ts).
-// SVG only - no server-side rasterization dependency - so this covers the
-// browser tab icon and Android's "Add to Home Screen" icon; iOS Safari doesn't
-// support SVG apple-touch-icons and falls back to its own default there.
-const autoTintedIcon = computed(() => {
-  if (appearance.value.primaryColor === DEFAULT_PRIMARY_COLOR) return null
-  return svgToDataUrl(generateBrandIconSvg(appearance.value.primaryColor))
-})
-
 // Custom favicon/PWA icon override the built-in static files. A data: URL
-// (uploaded image) or http(s) URL works directly as a <link> href - no
+// (uploaded image, or a color-tinted PNG server-generated when an admin
+// customizes the primary color without uploading their own - see
+// server/utils/appearanceSettings.ts) works directly as a <link> href - no
 // dedicated image-serving route needed, same as the logo overrides.
 const faviconLinks = computed(() => {
   const favicon = appearance.value.faviconUrl
   const appIcon = appearance.value.pwaIconUrl
-  const auto = autoTintedIcon.value
   const links: any[] = favicon
     ? [{ rel: 'icon', href: favicon, sizes: 'any', type: mimeFromDataUrl(favicon) }]
-    : auto
-      ? [{ rel: 'icon', href: auto, sizes: 'any', type: 'image/svg+xml' }]
-      : [
-          { rel: 'icon', href: asset('/favicon.ico'), sizes: 'any' },
-          { rel: 'icon', type: 'image/png', sizes: '32x32', href: asset('/favicon-32x32.png') },
-          { rel: 'icon', type: 'image/png', sizes: '16x16', href: asset('/favicon-16x16.png') }
-        ]
+    : [
+        { rel: 'icon', href: asset('/favicon.ico'), sizes: 'any' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: asset('/favicon-32x32.png') },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: asset('/favicon-16x16.png') }
+      ]
   links.push(
     appIcon
       ? { rel: 'apple-touch-icon', href: appIcon, type: mimeFromDataUrl(appIcon) }
-      : auto
-        ? { rel: 'apple-touch-icon', href: auto, type: 'image/svg+xml' }
-        : { rel: 'apple-touch-icon', sizes: '180x180', href: asset('/apple-touch-icon.png') }
+      : { rel: 'apple-touch-icon', sizes: '180x180', href: asset('/apple-touch-icon.png') }
   )
   // Manifest content (including icons) is generated per-request by
   // server/routes/manifest.webmanifest.get.ts, reading the same appearance
