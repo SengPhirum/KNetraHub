@@ -11,11 +11,13 @@ Date: 2026-07-15 UTC
 
 ## Source
 
-- Commit: `c9f114d`
+- Commit: `0571274`
 - Previous tag: none
 
 ## Changes
 
+- feat: Implement auto-generated favicon and PWA icon based on primary color customization (0571274)
+- feat: Implement auto-generated favicon and PWA icon based on primary color customization (c7ae3aa)
 - feat: Implement dynamic favicon and PWA icon tinting based on primary color customization (c9f114d)
 - feat: Enhance OIDC authentication with provider icon support and role management (979b06a)
 - Update (6d5080b)
