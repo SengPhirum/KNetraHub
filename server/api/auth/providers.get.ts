@@ -8,6 +8,7 @@ export default defineEventHandler(async () => {
     localLoginHidden: local.hideLogin,
     ldapEnabled: ldap.enabled,
     oidcEnabled: oidc.enabled,
-    oidcProviderName: oidc.providerName
+    oidcProviderName: oidc.providerName,
+    oidcProviderIconUrl: oidc.iconUrl
   }
 })

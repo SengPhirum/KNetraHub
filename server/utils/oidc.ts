@@ -10,6 +10,10 @@ export interface OidcResult {
   displayName: string
   email?: string
   role: Role
+  /** True when adminGroup/managerGroup/operatorGroup actually matched a claimed
+   *  group - false means role fell back to the 'viewer' default. Used to gate
+   *  access alongside per-app entitlements (see server/api/auth/oidc/callback.get.ts). */
+  groupMatched: boolean
   /** Keycloak realm roles (from cfg.rolesClaim), used for per-app access. */
   realmRoles: string[]
 }
@@ -341,11 +345,12 @@ async function completeOidc(
   ]
   const groupsClaim = firstClaim(cfg.groupsClaim, claimSources)
   const rolesClaim = firstClaim(cfg.rolesClaim, claimSources)
-  const role = resolveRole(groupsClaim.value, cfg)
+  const matchedRole = resolveRole(groupsClaim.value, cfg)
+  const role = matchedRole ?? 'viewer'
   const realmRoles = normalizeGroups(rolesClaim.value)
 
   return {
-    result: { username, displayName, email, role, realmRoles },
+    result: { username, displayName, email, role, groupMatched: matchedRole !== null, realmRoles },
     tokenTookMs,
     tokenResponse: redactTokenResponse(tokens),
     idTokenTookMs,
@@ -493,18 +498,22 @@ function fetchErrorMessage(err: any): string {
   )
 }
 
-function resolveRole(groupsClaim: unknown, cfg: OidcSettings): Role {
+/** Returns null when none of adminGroup/managerGroup/operatorGroup matched -
+ *  callers decide the viewer fallback themselves so they can tell a real
+ *  operator-group match apart from "no group configured/matched at all". */
+function resolveRole(groupsClaim: unknown, cfg: OidcSettings): Role | null {
   const groups = normalizeGroups(groupsClaim).map((g) => g.toLowerCase())
   const admin = cfg.adminGroup?.toLowerCase()
+  const manager = cfg.managerGroup?.toLowerCase()
   const operator = cfg.operatorGroup?.toLowerCase()
 
   // Match plain names and full paths ("/swarm-admins" from Keycloak)
   const has = (wanted: string) => groups.some((g) => g === wanted || g.replace(/^\//, '') === wanted)
   if (admin && has(admin)) return 'admin'
+  if (manager && has(manager)) return 'manager'
   if (operator && has(operator)) return 'operator'
 
-  // Default for authenticated OIDC users without a matched group
-  return 'viewer'
+  return null
 }
 
 function normalizeGroups(v: unknown): string[] {

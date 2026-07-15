@@ -21,6 +21,7 @@ export interface LdapSettings {
   groupSearchBase: string
   groupSearchFilter: string
   adminGroup: string
+  managerGroup: string
   operatorGroup: string
 }
 
@@ -45,8 +46,13 @@ export interface OidcSettings {
   /** Claim holding Keycloak realm roles, used for per-app access. */
   rolesClaim: string
   adminGroup: string
+  managerGroup: string
   operatorGroup: string
   providerName: string
+  /** Icon shown on the login page's "Continue with ..." button. Empty string
+   *  means "use the built-in key icon". Stored inline as a base64 data URI
+   *  (or an http(s) URL), same as the appearance logos in appearanceSettings.ts. */
+  iconUrl: string
 }
 
 export type AuthProvider = 'local' | 'ldap' | 'oidc'
@@ -79,6 +85,7 @@ function envLdap(): LdapSettings {
     groupSearchBase: c.groupSearchBase,
     groupSearchFilter: c.groupSearchFilter,
     adminGroup: c.adminGroup,
+    managerGroup: c.managerGroup,
     operatorGroup: c.operatorGroup
   }
 }
@@ -97,8 +104,10 @@ function envOidc(): OidcSettings {
     groupsClaim: c.groupsClaim,
     rolesClaim: c.rolesClaim,
     adminGroup: c.adminGroup,
+    managerGroup: c.managerGroup,
     operatorGroup: c.operatorGroup,
-    providerName: c.providerName
+    providerName: c.providerName,
+    iconUrl: c.iconUrl
   }
 }
 

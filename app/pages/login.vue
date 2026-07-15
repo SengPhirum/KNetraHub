@@ -114,11 +114,15 @@ async function submit() {
           size="lg"
           color="neutral"
           variant="outline"
-          icon="i-lucide-key-round"
           :label="`Continue with ${providers.oidcProviderName}`"
           to="/api/auth/oidc/login"
           external
-        />
+        >
+          <template #leading>
+            <img v-if="providers.oidcProviderIconUrl" :src="providers.oidcProviderIconUrl" alt="" class="size-5 shrink-0 rounded-sm object-contain">
+            <UIcon v-else name="i-lucide-key-round" class="size-5 shrink-0" />
+          </template>
+        </UButton>
       </template>
 
       <p v-if="providers?.ldapEnabled || providers?.oidcEnabled" class="text-center text-xs text-faint">

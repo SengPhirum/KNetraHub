@@ -13,6 +13,9 @@ export interface User {
   displayName: string
   email?: string
   role: Role
+  /** True once an admin has manually set this user's role - blocks OIDC/LDAP
+   *  group-mapped logins from silently overwriting it (see upsertExternalUser). */
+  roleLocked?: boolean
   source: UserSource
   passwordHash?: string
   createdAt: string
@@ -91,6 +94,7 @@ function rowToUser(row: any): User {
     displayName: row.display_name,
     email: row.email ?? undefined,
     role: row.role as Role,
+    roleLocked: row.role_locked === true,
     source: row.source as UserSource,
     passwordHash: row.password_hash ?? undefined,
     createdAt: row.created_at,
@@ -210,10 +214,20 @@ export async function upsertExternalUser(input: {
   const realmRolesJson = input.realmRoles ? JSON.stringify(input.realmRoles) : null
 
   if (existing) {
-    await db.query(
-      'UPDATE users SET display_name = $1, email = $2, role = $3, source = $4, realm_roles = COALESCE($5, realm_roles) WHERE id = $6',
-      [input.displayName, input.email ?? null, input.role, input.source, realmRolesJson, existing.id]
-    )
+    // A manually-set role (admin edited it on the Users page) survives future
+    // logins; the group-mapped role only re-applies once an admin clicks
+    // "reset role" (resetUserRole), which clears role_locked.
+    if (existing.role_locked) {
+      await db.query(
+        'UPDATE users SET display_name = $1, email = $2, source = $3, realm_roles = COALESCE($4, realm_roles) WHERE id = $5',
+        [input.displayName, input.email ?? null, input.source, realmRolesJson, existing.id]
+      )
+    } else {
+      await db.query(
+        'UPDATE users SET display_name = $1, email = $2, role = $3, source = $4, realm_roles = COALESCE($5, realm_roles) WHERE id = $6',
+        [input.displayName, input.email ?? null, input.role, input.source, realmRolesJson, existing.id]
+      )
+    }
   } else {
     const id = nanoid()
     await db.query(
@@ -273,7 +287,12 @@ export async function updateUser(
   const fields: string[] = []
   const vals: any[] = []
 
-  if (patch.role !== undefined) { fields.push(`role = $${fields.length + 1}`); vals.push(patch.role) }
+  if (patch.role !== undefined) {
+    // An admin explicitly setting a role here locks it against being
+    // silently overwritten by a future OIDC/LDAP group-mapped login.
+    fields.push(`role = $${fields.length + 1}`); vals.push(patch.role)
+    fields.push(`role_locked = $${fields.length + 1}`); vals.push(true)
+  }
   if (patch.displayName !== undefined) { fields.push(`display_name = $${fields.length + 1}`); vals.push(patch.displayName) }
   if (patch.email !== undefined) { fields.push(`email = $${fields.length + 1}`); vals.push(patch.email) }
   if (patch.password && row.source === 'local') {
@@ -295,6 +314,18 @@ export async function updateUser(
 
   const { rows: updatedRows } = await db.query('SELECT * FROM users WHERE id = $1', [id])
   const user = rowToUser(updatedRows[0])
+  delete user.passwordHash
+  return user
+}
+
+/** Clears the manual-role lock so the next OIDC/LDAP login re-applies the
+ *  provider's group-mapped role. Local accounts have no group mapping to
+ *  fall back to, so this is a no-op for them beyond clearing the flag. */
+export async function resetUserRole(id: string): Promise<User> {
+  const db = getDb()
+  const { rows } = await db.query('UPDATE users SET role_locked = false WHERE id = $1 RETURNING *', [id])
+  if (!rows[0]) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  const user = rowToUser(rows[0])
   delete user.passwordHash
   return user
 }
@@ -579,7 +610,17 @@ export async function deleteRegistry(id: string): Promise<void> {
 
 // ─── app settings ─────────────────────────────────────────────────────────────
 
+// app_settings backs appearance/auth-provider/log-housekeeping config and is
+// read on essentially every request (including by unauthenticated visitors -
+// login-screen branding, auth-provider config), so a short TTL cache here
+// removes a DB round trip from the hot path for all of those readers at once.
+// Invalidated immediately on write, so an admin's save is never stale.
+const APP_SETTING_CACHE_TTL_MS = 5000
+const appSettingCache = new Map<string, { value: string | null; expiresAt: number }>()
+
 export async function getAppSetting(key: string): Promise<string | null> {
+  const cached = appSettingCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
   // Defensive: app_settings is read by unauthenticated visitors (login-screen
   // branding via appearanceSettings, auth-provider config) which can land in
   // the first moment after a fresh deploy, before server/plugins/db.ts's
@@ -587,7 +628,9 @@ export async function getAppSetting(key: string): Promise<string | null> {
   // does not exist". migrate() is memoized, so this is a no-op once done.
   await migrate()
   const { rows } = await getDb().query('SELECT value FROM app_settings WHERE key = $1', [key])
-  return rows[0]?.value ?? null
+  const value = rows[0]?.value ?? null
+  appSettingCache.set(key, { value, expiresAt: Date.now() + APP_SETTING_CACHE_TTL_MS })
+  return value
 }
 
 export async function setAppSetting(key: string, value: string, actor: string): Promise<void> {
@@ -596,10 +639,12 @@ export async function setAppSetting(key: string, value: string, actor: string): 
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
     [key, value, new Date().toISOString(), actor]
   )
+  appSettingCache.delete(key)
 }
 
 export async function deleteAppSetting(key: string): Promise<void> {
   await getDb().query('DELETE FROM app_settings WHERE key = $1', [key])
+  appSettingCache.delete(key)
 }
 
 // ─── api tokens ───────────────────────────────────────────────────────────────

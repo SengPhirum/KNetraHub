@@ -26,6 +26,7 @@ interface LdapSettings {
   groupSearchBase: string
   groupSearchFilter: string
   adminGroup: string
+  managerGroup: string
   operatorGroup: string
   overridden: boolean
 }
@@ -44,8 +45,10 @@ interface OidcSettings {
   groupsClaim: string
   rolesClaim: string
   adminGroup: string
+  managerGroup: string
   operatorGroup: string
   providerName: string
+  iconUrl: string
   overridden: boolean
 }
 
@@ -70,14 +73,14 @@ const oidcGuide = {
     'Register the effective callback URL as an allowed redirect URI.',
     'Copy the issuer, client ID, and client secret into KNetraHub.',
     'Include scopes that expose profile, email, and group claims.',
-    'Map the admin and operator groups, save, then use Test & query to verify popup login and UserInfo.'
+    'Map the admin, manager, and operator groups, save, then use Test & query to verify popup login and UserInfo.'
   ],
   fields: [
     { name: 'Issuer URL', detail: 'Use the exact issuer from provider discovery, without the /.well-known/openid-configuration suffix.' },
     { name: 'Redirect URI', detail: 'Leave blank to use the shown effective URL, or set a public URL when KNetraHub is behind a proxy.' },
     { name: 'Scope', detail: 'Keep openid. Add profile, email, and groups when your provider requires scopes for those claims.' },
     { name: 'Claims', detail: 'Username, display name, and groups can use plain claim names or dot paths such as realm_access.roles.' },
-    { name: 'Groups', detail: 'OIDC group values are matched to KNetraHub roles. Users without a match become viewers.' }
+    { name: 'Groups', detail: 'OIDC group values are matched to KNetraHub roles (admin > manager > operator). Users without a match become viewers.' }
   ]
 }
 
@@ -121,7 +124,7 @@ const ldapGuide = {
     'Use an LDAP or LDAPS URL reachable from the KNetraHub server.',
     'Enter a bind DN that can search users, or leave it blank for anonymous bind if allowed.',
     'Set the user search base and a filter that includes {{username}}.',
-    'Map the directory groups that should become KNetraHub admins or operators.',
+    'Map the directory groups that should become KNetraHub admins, managers, or operators.',
     'Save, then test with a directory user before relying on LDAP broadly.'
   ],
   fields: [
@@ -129,7 +132,7 @@ const ldapGuide = {
     { name: 'Bind DN', detail: 'Use a service account DN, for example cn=knetrahub,ou=service,dc=example,dc=com.' },
     { name: 'Search base', detail: 'Point this at the subtree containing user accounts, not the whole directory when you can avoid it.' },
     { name: 'Search filter', detail: 'Active Directory often uses (sAMAccountName={{username}}); OpenLDAP commonly uses (uid={{username}}).' },
-    { name: 'Groups', detail: 'KNetraHub checks the user memberOf values against the admin and operator group fields.' }
+    { name: 'Groups', detail: 'KNetraHub checks the user memberOf values against the admin, manager, and operator group fields (admin > manager > operator).' }
   ]
 }
 
@@ -143,6 +146,7 @@ const ldapForm = reactive({
   groupSearchBase: '',
   groupSearchFilter: '',
   adminGroup: '',
+  managerGroup: '',
   operatorGroup: ''
 })
 
@@ -168,13 +172,45 @@ const oidcForm = reactive({
   groupsClaim: '',
   rolesClaim: '',
   adminGroup: '',
+  managerGroup: '',
   operatorGroup: '',
-  providerName: ''
+  providerName: '',
+  iconUrl: ''
 })
 
 type SettingsProvider = 'local' | 'ldap' | 'oidc'
 const savingProvider = ref<SettingsProvider | null>(null)
 const resettingProvider = ref<SettingsProvider | null>(null)
+
+const MAX_OIDC_ICON_BYTES = 1.5 * 1024 * 1024
+const oidcIconInput = ref<HTMLInputElement | null>(null)
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onOidcIconFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.add({ title: 'Invalid file', description: 'Please choose an image file.', color: 'error' })
+  } else if (file.size > MAX_OIDC_ICON_BYTES) {
+    toast.add({ title: 'Image too large', description: 'Please choose an image under 1.5 MB.', color: 'error' })
+  } else {
+    oidcForm.iconUrl = await readFileAsDataUrl(file)
+  }
+  input.value = ''
+}
+
+function clearOidcIcon() {
+  oidcForm.iconUrl = ''
+}
 
 interface OidcTestResult {
   ok: boolean
@@ -279,7 +315,7 @@ const oidcLoginHasUnsavedChanges = computed(() => {
   if (oidcForm.clientSecret) return true
   const fields: (keyof typeof oidcForm)[] = [
     'issuer', 'clientId', 'redirectUri', 'scope', 'usernameClaim',
-    'displayNameClaim', 'groupsClaim', 'rolesClaim', 'adminGroup', 'operatorGroup'
+    'displayNameClaim', 'groupsClaim', 'rolesClaim', 'adminGroup', 'managerGroup', 'operatorGroup'
   ]
   return fields.some(field => String(oidcForm[field] ?? '').trim() !== String(saved[field] ?? '').trim())
 })
@@ -383,6 +419,7 @@ watch(auth, (value) => {
     groupSearchBase: value.ldap.groupSearchBase,
     groupSearchFilter: value.ldap.groupSearchFilter,
     adminGroup: value.ldap.adminGroup,
+    managerGroup: value.ldap.managerGroup,
     operatorGroup: value.ldap.operatorGroup
   })
   Object.assign(oidcForm, {
@@ -397,8 +434,10 @@ watch(auth, (value) => {
     groupsClaim: value.oidc.groupsClaim,
     rolesClaim: value.oidc.rolesClaim,
     adminGroup: value.oidc.adminGroup,
+    managerGroup: value.oidc.managerGroup,
     operatorGroup: value.oidc.operatorGroup,
-    providerName: value.oidc.providerName
+    providerName: value.oidc.providerName,
+    iconUrl: value.oidc.iconUrl
   })
 }, { immediate: true })
 
@@ -606,6 +645,19 @@ async function copyLocalRecoveryUrl() {
             <UFormField label="Provider label">
               <UInput v-model="oidcForm.providerName" class="w-full" placeholder="SSO" />
             </UFormField>
+            <UFormField label="Login button icon" description="Shown on the login page's Continue with... button.">
+              <div class="flex items-center gap-3 rounded-lg border border-dashed border-hull p-3">
+                <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded bg-surface-2">
+                  <img v-if="oidcForm.iconUrl" :src="oidcForm.iconUrl" alt="" class="max-h-full max-w-full object-contain">
+                  <UIcon v-else name="i-lucide-key-round" class="size-5 text-(--color-muted)" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-upload" label="Upload" @click="oidcIconInput?.click()" />
+                  <UButton v-if="oidcForm.iconUrl" size="xs" color="neutral" variant="ghost" icon="i-lucide-x" label="Use default" @click="clearOidcIcon" />
+                </div>
+                <input ref="oidcIconInput" type="file" accept="image/*" class="hidden" @change="onOidcIconFileChange">
+              </div>
+            </UFormField>
             <UFormField label="Issuer URL">
               <UInput v-model="oidcForm.issuer" class="w-full font-mono" placeholder="https://idp.example.com/realms/main" />
             </UFormField>
@@ -647,6 +699,9 @@ async function copyLocalRecoveryUrl() {
             <UFormField label="Admin group">
               <UInput v-model="oidcForm.adminGroup" class="w-full font-mono" />
             </UFormField>
+            <UFormField label="Manager group">
+              <UInput v-model="oidcForm.managerGroup" class="w-full font-mono" />
+            </UFormField>
             <UFormField label="Operator group">
               <UInput v-model="oidcForm.operatorGroup" class="w-full font-mono" />
             </UFormField>
@@ -656,9 +711,10 @@ async function copyLocalRecoveryUrl() {
             <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0 text-beacon" />
             <div class="space-y-1 text-(--color-muted)">
               <p>
-                <strong class="text-foam">Admin group</strong> and <strong class="text-foam">Operator group</strong> only set the user's
+                <strong class="text-foam">Admin group</strong>, <strong class="text-foam">Manager group</strong>, and <strong class="text-foam">Operator group</strong> only set the user's
                 <strong class="text-foam">global portal role</strong> - admin gets full portal control (Settings, Users, Audit, and every <span class="font-mono">/admin</span> page
-                including this one); operator gets alert management plus read-only portal access; no match falls back to viewer.
+                including this one); manager gets approval/oversight plus audit and report access; operator gets alert management plus read-only portal access; no match falls back to viewer.
+                Precedence when a user belongs to more than one group: admin &gt; manager &gt; operator.
               </p>
               <p>
                 Neither one grants access to <strong class="text-foam">Docker, Monitoring, or IP Management</strong> by itself. Per-app access for SSO users
@@ -785,6 +841,9 @@ async function copyLocalRecoveryUrl() {
             <UFormField label="Admin group">
               <UInput v-model="ldapForm.adminGroup" class="w-full font-mono" />
             </UFormField>
+            <UFormField label="Manager group">
+              <UInput v-model="ldapForm.managerGroup" class="w-full font-mono" />
+            </UFormField>
             <UFormField label="Operator group">
               <UInput v-model="ldapForm.operatorGroup" class="w-full font-mono" />
             </UFormField>
@@ -793,7 +852,7 @@ async function copyLocalRecoveryUrl() {
           <div class="panel-flush flex items-start gap-2 bg-surface-2/50 p-3 text-xs">
             <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0 text-beacon" />
             <p class="text-(--color-muted)">
-              <strong class="text-foam">Admin group</strong> and <strong class="text-foam">Operator group</strong> only set the user's
+              <strong class="text-foam">Admin group</strong>, <strong class="text-foam">Manager group</strong>, and <strong class="text-foam">Operator group</strong> only set the user's
               <strong class="text-foam">global portal role</strong> (same authority split as OIDC, above) - they never grant
               Docker/Monitoring/IP Management access by themselves.
             </p>

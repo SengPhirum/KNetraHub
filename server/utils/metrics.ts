@@ -213,9 +213,29 @@ async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<vo
     )
   }
 
-  // Future (not implemented now - needs real query patterns first):
-  // ALTER TABLE node_metrics SET (timescaledb.compress, timescaledb.compress_segmentby = 'node_id', timescaledb.compress_orderby = 'time DESC');
-  // SELECT add_compression_policy('node_metrics', INTERVAL '7 days');
+  // Compression: shrink the on-disk/page-cache footprint of the highest-volume
+  // hypertables once their chunks age past the "recent dashboard" window (the
+  // agent reports every 5s per node, so these grow fastest - see recordMetrics).
+  // Segmented by the column each table's hot queries already filter/group by
+  // (see the indexes above), so compressed chunks still scan cheaply. Best
+  // effort and isolated per table - if the Timescale edition/version here
+  // doesn't support compression, ingestion must keep working uncompressed
+  // rather than failing migrateMetrics() entirely.
+  const compressionTargets: { table: string; segmentBy: string }[] = [
+    { table: 'node_metrics', segmentBy: 'node_id' },
+    { table: 'container_metrics', segmentBy: 'service_id' },
+    { table: 'network_usage', segmentBy: 'service_id' }
+  ]
+  for (const { table, segmentBy } of compressionTargets) {
+    try {
+      await db.query(
+        `ALTER TABLE ${table} SET (timescaledb.compress, timescaledb.compress_segmentby = '${segmentBy}', timescaledb.compress_orderby = 'time DESC');`
+      )
+      await db.query(`SELECT add_compression_policy('${table}', INTERVAL '3 days', if_not_exists => TRUE);`)
+    } catch (err) {
+      console.error(`[metrics] failed to enable compression for ${table}`, err)
+    }
+  }
 }
 
 /** Best-effort: never throws. A Postgres hiccup must never break
@@ -252,17 +272,34 @@ export async function recordMetrics(report: AgentReportForMetrics): Promise<void
       [now, report.nodeId, report.hostname ?? null]
     )
 
-    for (const c of report.containers.list ?? []) {
+    // Batched as two multi-row inserts (not one query per container) - the
+    // agent reports every 5s per node, so N containers previously meant 2N
+    // sequential round trips here on top of the 3 above, every cycle.
+    const containers = report.containers.list ?? []
+    if (containers.length) {
+      const cmParams: unknown[] = []
+      const cmValues = containers.map((c, i) => {
+        const b = i * 10
+        cmParams.push(now, report.nodeId, c.id, c.name ?? null, c.taskId ?? null, c.serviceId ?? null,
+          c.cpuPercent, c.memoryUsedBytes, c.memoryLimitBytes, c.state)
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10})`
+      })
       await db.query(
         `INSERT INTO container_metrics (time, node_id, container_id, container_name, task_id, service_id, cpu_percent, memory_used, memory_limit, state)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [now, report.nodeId, c.id, c.name ?? null, c.taskId ?? null, c.serviceId ?? null,
-          c.cpuPercent, c.memoryUsedBytes, c.memoryLimitBytes, c.state]
+         VALUES ${cmValues.join(',')}`,
+        cmParams
       )
+
+      const nuParams: unknown[] = []
+      const nuValues = containers.map((c, i) => {
+        const b = i * 8
+        nuParams.push(now, report.nodeId, c.id, c.name ?? null, c.taskId ?? null, c.serviceId ?? null, c.networkRxBytes, c.networkTxBytes)
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8})`
+      })
       await db.query(
         `INSERT INTO network_usage (time, node_id, container_id, container_name, task_id, service_id, rx_bytes, tx_bytes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [now, report.nodeId, c.id, c.name ?? null, c.taskId ?? null, c.serviceId ?? null, c.networkRxBytes, c.networkTxBytes]
+         VALUES ${nuValues.join(',')}`,
+        nuParams
       )
     }
   } catch (err) {
@@ -302,12 +339,16 @@ export async function recordSensorReadings(
     const db = getDb()
     await migrateMetrics(db, useRuntimeConfig().metrics.retentionDays)
     const now = new Date()
-    for (const c of rows) {
-      await db.query(
-        `INSERT INTO net_sensor_readings (time, sensor_id, channel, value) VALUES ($1, $2, $3, $4)`,
-        [now, sensorId, c.channel, c.value]
-      )
-    }
+    const params: unknown[] = []
+    const values = rows.map((c, i) => {
+      const b = i * 4
+      params.push(now, sensorId, c.channel, c.value)
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4})`
+    })
+    await db.query(
+      `INSERT INTO net_sensor_readings (time, sensor_id, channel, value) VALUES ${values.join(',')}`,
+      params
+    )
   } catch (err) {
     console.error('[metrics] failed to record sensor readings', err)
   }

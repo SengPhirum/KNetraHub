@@ -83,9 +83,11 @@ function resolveRole(entry: any, cfg: LdapSettings): Role {
   // Use memberOf attribute when present (typical for AD)
   const memberOf = ([] as string[]).concat(entry.memberOf || []).map((g: string) => g.toLowerCase())
   const admin = cfg.adminGroup?.toLowerCase()
+  const manager = cfg.managerGroup?.toLowerCase()
   const operator = cfg.operatorGroup?.toLowerCase()
 
   if (admin && memberOf.some((g) => g.includes(admin))) return 'admin'
+  if (manager && memberOf.some((g) => g.includes(manager))) return 'manager'
   if (operator && memberOf.some((g) => g.includes(operator))) return 'operator'
 
   // Default for authenticated LDAP users without a matched group

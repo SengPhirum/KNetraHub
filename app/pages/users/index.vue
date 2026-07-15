@@ -125,11 +125,28 @@ async function saveEdit() {
     if (editForm.password) body.password = editForm.password
     if (editTarget.value.source === 'local') body.appAccess = toAppAccessPayload(editForm.appAccess)
     await $fetch(`/api/users/${editTarget.value.id}`, { method: 'PATCH', body })
-    // Optimistic update in list
-    data.value = (data.value ?? []).map((u) => u.id === editTarget.value.id ? { ...u, role: editForm.role, ...(body.appAccess ? { appAccess: body.appAccess } : {}) } : u)
+    // Optimistic update in list. Setting a role here locks it server-side so
+    // a future OIDC/LDAP login won't silently overwrite it (see resetRole).
+    data.value = (data.value ?? []).map((u) => u.id === editTarget.value.id ? { ...u, role: editForm.role, roleLocked: true, ...(body.appAccess ? { appAccess: body.appAccess } : {}) } : u)
     toast.add({ title: `Updated ${editTarget.value.username}`, color: 'primary' })
     editOpen.value = false
   } catch (e: any) { toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' }) }
+}
+
+const resettingRole = ref(false)
+async function resetRole() {
+  if (!editTarget.value) return
+  resettingRole.value = true
+  try {
+    const updated = await $fetch<any>(`/api/users/${editTarget.value.id}/reset-role`, { method: 'POST' })
+    data.value = (data.value ?? []).map((u) => u.id === updated.id ? { ...u, roleLocked: updated.roleLocked } : u)
+    editTarget.value = { ...editTarget.value, roleLocked: updated.roleLocked }
+    toast.add({ title: `Role unlocked for ${editTarget.value.username}`, description: 'Their next SSO/LDAP login will re-apply the group-mapped role.', color: 'primary', icon: 'i-lucide-rotate-ccw' })
+  } catch (e: any) {
+    toast.add({ title: 'Reset failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally {
+    resettingRole.value = false
+  }
 }
 
 const deleteTarget = ref<any>(null)
@@ -258,6 +275,28 @@ async function confirmDelete() {
             <USelect v-model="editForm.role" :items="ROLES" class="w-full" />
             <template #hint><p class="text-xs text-faint mt-1">{{ ROLE_META[editForm.role]?.description }}</p></template>
           </UFormField>
+          <div v-if="editTarget?.source !== 'local'" class="panel-flush flex items-center justify-between gap-3 p-3 text-xs">
+            <div class="min-w-0">
+              <p class="font-medium text-foam">
+                {{ editTarget?.roleLocked ? 'Role manually set' : 'Role follows group mapping' }}
+              </p>
+              <p class="mt-1 text-faint">
+                {{ editTarget?.roleLocked
+                  ? 'This role stays fixed on future logins. Reset it to let the SSO/LDAP group mapping apply again.'
+                  : 'This role is re-applied from the SSO/LDAP group mapping on every login.' }}
+              </p>
+            </div>
+            <UButton
+              v-if="editTarget?.roleLocked"
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-rotate-ccw"
+              label="Reset role"
+              :loading="resettingRole"
+              @click="resetRole"
+            />
+          </div>
           <UFormField v-if="editTarget?.source === 'local'" label="New password" :description="`Leave blank to keep current. ${passwordRuleSummary}`">
             <UInput v-model="editForm.password" type="password" class="w-full" />
           </UFormField>

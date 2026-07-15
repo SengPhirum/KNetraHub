@@ -5,7 +5,7 @@ import { audit } from '~~/server/utils/store'
 
 const LDAP_FIELDS: (keyof LdapSettings)[] = [
   'enabled', 'url', 'bindDN', 'bindCredentials', 'searchBase', 'searchFilter',
-  'groupSearchBase', 'groupSearchFilter', 'adminGroup', 'operatorGroup'
+  'groupSearchBase', 'groupSearchFilter', 'adminGroup', 'managerGroup', 'operatorGroup'
 ]
 const LOCAL_FIELDS: (keyof LocalAuthSettings)[] = [
   'hideLogin', 'sessionTimeoutMinutes', 'passwordMinLength',
@@ -14,8 +14,18 @@ const LOCAL_FIELDS: (keyof LocalAuthSettings)[] = [
 ]
 const OIDC_FIELDS: (keyof OidcSettings)[] = [
   'enabled', 'issuer', 'clientId', 'clientSecret', 'redirectUri', 'scope',
-  'usernameClaim', 'displayNameClaim', 'groupsClaim', 'rolesClaim', 'adminGroup', 'operatorGroup', 'providerName'
+  'usernameClaim', 'displayNameClaim', 'groupsClaim', 'rolesClaim', 'adminGroup', 'managerGroup', 'operatorGroup', 'providerName', 'iconUrl'
 ]
+
+// data: URLs (uploaded icons) or plain http(s) URLs only - stored inline as
+// base64 in the JSON blob (see appearanceSettings.ts's isValidLogoValue),
+// so cap well under the column's practical limit.
+const MAX_ICON_LENGTH = 2_000_000
+function isValidIconValue(v: string): boolean {
+  if (!v) return true
+  if (v.length > MAX_ICON_LENGTH) return false
+  return v.startsWith('data:image/') || v.startsWith('http://') || v.startsWith('https://')
+}
 
 // Only known fields are accepted; booleans and numbers retain their type.
 function pick<T>(input: Record<string, unknown>, fields: (keyof T)[]): Partial<T> {
@@ -69,6 +79,9 @@ export default defineEventHandler(async (event) => {
     }
     if (patch.enabled && 'issuer' in patch && !patch.issuer) {
       throw createError({ statusCode: 400, statusMessage: 'Issuer is required when OIDC is enabled' })
+    }
+    if (patch.iconUrl !== undefined && !isValidIconValue(patch.iconUrl)) {
+      throw createError({ statusCode: 400, statusMessage: 'Login icon must be an http(s) URL or an uploaded image' })
     }
     await saveOidcSettings(patch, user.username)
   }

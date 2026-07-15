@@ -27,6 +27,11 @@ export const DOCKER_ROUTE_PREFIXES = [
 export const MONITORING_ROUTE_PREFIXES = ['/monitoring']
 export const IPMGT_ROUTE_PREFIXES = ['/ipmgt']
 
+// The portal-admin area (Users, Audit, Admin > ...) - not an AppKey/module
+// (it has no per-app permission tier), but the layout still treats it like
+// one for the "Exit ..." header affordance. See useNav.ts's ADMIN_GROUPS.
+export const ADMIN_ROUTE_PREFIXES = ['/admin', '/users', '/audit']
+
 function matches(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix + '/')
 }
@@ -37,4 +42,9 @@ export function appKeyForRoute(path: string): AppKey | null {
   if (MONITORING_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'monitoring'
   if (IPMGT_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'ipmgt'
   return null
+}
+
+/** True for the portal-admin route subtree (Users, Audit, everything under /admin). */
+export function isAdminRoute(path: string): boolean {
+  return ADMIN_ROUTE_PREFIXES.some((p) => matches(path, p))
 }

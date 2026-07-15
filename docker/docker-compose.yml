@@ -172,6 +172,30 @@ services:
       # NUXT_DB_PASSWORD_FILE comment above; this image already supports
       # POSTGRES_PASSWORD_FILE natively).
       POSTGRES_PASSWORD: "change-me-to-a-long-random-string"
+    # Sized for the 4096M limit below (25% shared_buffers is the standard
+    # rule of thumb). Without this, Postgres runs on the image's stock
+    # defaults (~128MB shared_buffers) and leaves memory sizing entirely to
+    # the OS page cache, which is harder to reason about under load and risks
+    # a cgroup OOM kill on a burst instead of Postgres evicting buffers
+    # gracefully. max_connections=60 gives headroom above the app's pool
+    # (NUXT_DB_POOL_MAX, default 40 - see nuxt.config.ts) for admin/psql/
+    # backup connections; work_mem is sized so max_connections concurrent
+    # sorts/hashes can't exceed shared_buffers even in the worst case
+    # (60 * 16MB = 960MB). Re-tune if NUXT_DB_POOL_MAX or the memory limit
+    # changes. Applying this requires redeploying this service (a brief
+    # restart) - it will not take effect on a running container.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "effective_cache_size=3GB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "max_connections=60"
     volumes:
       - timescale-data:/var/lib/postgresql/data
     deploy:

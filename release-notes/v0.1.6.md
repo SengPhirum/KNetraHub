@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-14 UTC
+Date: 2026-07-15 UTC
 
 ## Docker Images
 
@@ -11,11 +11,13 @@ Date: 2026-07-14 UTC
 
 ## Source
 
-- Commit: `9b63bff`
+- Commit: `6d5080b`
 - Previous tag: none
 
 ## Changes
 
+- Update (6d5080b)
+- Enhance authentication settings and OIDC testing (cfa980d)
 - Update (9b63bff)
 - Update (4ae4f79)
 - Add OIDC test/query and clarify Admin/Operator authority scope (ee5a3e6)

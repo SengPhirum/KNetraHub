@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN net_alert_rules r ON a.rule_id = r.id
     LEFT JOIN net_devices d ON a.device_id = d.id
     ORDER BY a.timestamp DESC
+    LIMIT 500
   `)
   return res.rows
 })

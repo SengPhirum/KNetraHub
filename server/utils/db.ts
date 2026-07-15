@@ -104,6 +104,12 @@ async function runMigrations(): Promise<void> {
     -- replaces SQLite's COLLATE NOCASE: case-insensitive uniqueness + lookup
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));
 
+    -- When true, an admin has manually set this user's role (Users page), so
+    -- OIDC/LDAP group-mapped logins must NOT overwrite it on every sign-in -
+    -- only an explicit "reset role" action clears the lock and lets the
+    -- group mapping apply again on the next login.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role_locked BOOLEAN NOT NULL DEFAULT false;
+
     CREATE TABLE IF NOT EXISTS user_preferences (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       theme TEXT NOT NULL DEFAULT 'system',
@@ -137,6 +143,9 @@ async function runMigrations(): Promise<void> {
     );
 
     CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit (ts DESC);
+    -- Backs the "recent login" lookup polled every 10s per logged-in tab
+    -- (server/api/user/notifications.get.ts: actor + action = 'auth.login' + ts range).
+    CREATE INDEX IF NOT EXISTS idx_audit_actor_action_ts ON audit (actor, action, ts);
 
     -- Per-module user activity trail (who did what, from which module's UI).
     -- Written automatically for every authenticated state-changing API call
@@ -523,6 +532,13 @@ async function runMigrations(): Promise<void> {
     ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS ack_at TEXT;
     ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS comment TEXT;
     ALTER TABLE server_problems ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT false;
+
+    -- Backs the per-host problem_count subquery (server/api/server/hosts
+    -- index.get.ts) and the per-trigger "already open?" lookup the poller
+    -- runs every cycle (serverPoller.ts's evaluateTriggers) - both filter on
+    -- status = 'problem' with no index previously, forcing a full table scan.
+    CREATE INDEX IF NOT EXISTS idx_server_problems_host_status ON server_problems (host_id, status);
+    CREATE INDEX IF NOT EXISTS idx_server_problems_trigger_status ON server_problems (trigger_id, status);
 
     -- Host groups (logical org, like Zabbix host groups) + membership.
     CREATE TABLE IF NOT EXISTS server_host_groups (

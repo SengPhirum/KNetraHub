@@ -2,6 +2,10 @@ import { requireRole, setSession } from '~~/server/utils/auth'
 import { isOidcLoginTestCallback, oidcCompleteLogin, oidcCompleteLoginTest } from '~~/server/utils/oidc'
 import { OIDC_TEST_MESSAGE, sendOidcTestPopup } from '~~/server/utils/oidcTestPopup'
 import { upsertExternalUser, touchLogin, audit } from '~~/server/utils/store'
+import { getAppRoleMap } from '~~/server/utils/appRoles'
+import { resolveEntitlements } from '~~/shared/utils/entitlements'
+
+const ACCESS_DENIED_MESSAGE = 'Access denied. Contact an administrator.'
 
 export default defineEventHandler(async (event) => {
   if (isOidcLoginTestCallback(event)) {
@@ -34,6 +38,19 @@ export default defineEventHandler(async (event) => {
     await audit({ actor: 'unknown', action: 'auth.login.failed', detail: `via oidc: ${reason}` }).catch(() => {})
     // Land back on the login page with a readable error instead of a JSON 401
     return sendRedirect(event, `/login?error=${encodeURIComponent(reason)}`, 302)
+  }
+
+  // Only let the user in if they're either explicitly in a mapped portal
+  // role group, or have at least one per-app tier from their realm roles -
+  // otherwise nothing is ever created for them (no "phantom viewer" account).
+  if (!result.groupMatched) {
+    const roleMap = await getAppRoleMap()
+    const entitlements = resolveEntitlements({ role: result.role, source: 'oidc' }, result.realmRoles, roleMap)
+    const hasAppAccess = Object.values(entitlements).some((tier) => tier !== null)
+    if (!hasAppAccess) {
+      await audit({ actor: result.username, action: 'auth.login.denied', detail: 'oidc: no group or app-role match' }).catch(() => {})
+      return sendRedirect(event, `/login?error=${encodeURIComponent(ACCESS_DENIED_MESSAGE)}`, 302)
+    }
   }
 
   const stored = await upsertExternalUser({ ...result, source: 'oidc' })

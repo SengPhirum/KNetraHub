@@ -96,6 +96,7 @@ export default defineNuxtConfig({
       groupSearchBase: process.env.NUXT_LDAP_GROUP_SEARCH_BASE || process.env.NUXT_LDAP_GROUP_BASE || '',
       groupSearchFilter: process.env.NUXT_LDAP_GROUP_SEARCH_FILTER || process.env.NUXT_LDAP_GROUP_FILTER || '(member={{dn}})',
       adminGroup: process.env.NUXT_LDAP_ADMIN_GROUP || '',
+      managerGroup: process.env.NUXT_LDAP_MANAGER_GROUP || '',
       operatorGroup: process.env.NUXT_LDAP_OPERATOR_GROUP || ''
     },
 
@@ -119,9 +120,12 @@ export default defineNuxtConfig({
       rolesClaim: process.env.NUXT_OIDC_ROLES_CLAIM || 'realm_access.roles',
       // group -> KNetraHub role mapping; unmatched users become viewers
       adminGroup: process.env.NUXT_OIDC_ADMIN_GROUP || '',
+      managerGroup: process.env.NUXT_OIDC_MANAGER_GROUP || '',
       operatorGroup: process.env.NUXT_OIDC_OPERATOR_GROUP || '',
       // Label shown on the login button
-      providerName: process.env.NUXT_OIDC_PROVIDER_NAME || 'SSO'
+      providerName: process.env.NUXT_OIDC_PROVIDER_NAME || 'SSO',
+      // Icon shown on the login button; empty falls back to the built-in key icon
+      iconUrl: process.env.NUXT_OIDC_ICON_URL || ''
     },
 
     // GitLab - used to version stack compose files

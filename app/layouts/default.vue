@@ -10,13 +10,19 @@ const mobileOpen = ref(false)
 // experience from the home page's Admin button (-> /admin).
 const isHome = computed(() => route.path === '/')
 
-// Whether we're inside one of the apps (Dock/Net/Server/IPMgt). Used to surface
-// a clear "leave this app, back to the portal launcher" button in the header.
-const inApp = computed(() => appKeyForRoute(route.path) !== null)
+// Whether we're inside the portal-admin area (Users, Audit, Admin > ...) -
+// not an app/module, but it gets the same "Exit" header affordance.
+const inAdminArea = computed(() => isAdminRoute(route.path))
 
-// Current app's display name (Docker / Monitoring / IP Management), used for
-// the "Exit {App}" header button.
+// Whether we're inside one of the apps (Dock/Net/Server/IPMgt) or the admin
+// area. Used to surface a clear "leave this section, back to the portal
+// launcher" button in the header.
+const inApp = computed(() => appKeyForRoute(route.path) !== null || inAdminArea.value)
+
+// Current section's display name (Docker / Monitoring / IP Management / Admin),
+// used for the "Exit {App}" header button.
 const currentAppName = computed(() => {
+  if (inAdminArea.value) return 'Admin'
   const key = appKeyForRoute(route.path)
   return key ? getModuleRegistry().find((m) => m.key === key)?.name : undefined
 })
