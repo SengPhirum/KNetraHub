@@ -11,11 +11,12 @@ Date: 2026-07-15 UTC
 
 ## Source
 
-- Commit: `6d5080b`
+- Commit: `979b06a`
 - Previous tag: none
 
 ## Changes
 
+- feat: Enhance OIDC authentication with provider icon support and role management (979b06a)
 - Update (6d5080b)
 - Enhance authentication settings and OIDC testing (cfa980d)
 - Update (9b63bff)

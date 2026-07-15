@@ -7,7 +7,7 @@ export interface AppearanceSettings {
   pwaIconUrl: string
 }
 
-const DEFAULT_PRIMARY_COLOR = '#2496ED'
+export const DEFAULT_PRIMARY_COLOR = '#2496ED'
 
 function defaults(): AppearanceSettings {
   return {
