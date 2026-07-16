@@ -44,6 +44,7 @@
     "@iconify-json/lucide": "^1.2.111",
     "@types/dockerode": "^4.0.1",
     "@types/pg": "^8.11.10",
-    "playwright": "^1.61.1"
+    "playwright": "^1.61.1",
+    "vitest": "^4.1.10"
   }
 }
