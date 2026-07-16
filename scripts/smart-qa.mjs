@@ -156,17 +156,16 @@ if (authenticated) {
     serviceLinks = await page.locator('a[href^="/services/"]').evaluateAll((nodes) => nodes.map((n) => n.getAttribute('href')).filter(Boolean))
     await visit(page, 'Nodes inventory', '/nodes', 'nodes.png')
   }
-  await visit(page, 'Monitoring dashboard', '/monitoring')
-  await visit(page, 'Network device inventory', '/monitoring/network/devices', 'monitoring-dashboard.png')
-  await visit(page, 'Server host inventory', '/monitoring/server/hosts')
+  await visit(page, 'Monitoring overview', '/monitoring')
+  await visit(page, 'Monitoring device inventory', '/monitoring/devices', 'monitoring-dashboard.png')
+  await visit(page, 'Monitoring active alerts', '/monitoring/alerts')
   await visit(page, 'IP Management dashboard', '/ipmgt', 'ipmgt-dashboard.png')
   await visit(page, 'IPAM subnet inventory', '/ipmgt/subnets')
 
   if (options.scope === 'full') {
     if (dockerAvailable && serviceLinks[0]) await visit(page, 'Service detail', serviceLinks[0], 'service-detail.png')
     else record('Service detail', true, dockerAvailable ? 'Skipped: no services available' : 'Skipped: Docker engine is not an active swarm')
-    await visit(page, 'QA network device detail', '/monitoring/network/devices/qa-net-device')
-    await visit(page, 'QA server host detail', '/monitoring/server/hosts/qa-server-host')
+    await visit(page, 'Monitoring data collection coverage', '/monitoring/data-collection')
     await visit(page, 'QA IPAM subnet detail', '/ipmgt/subnets/qa-ipam-subnet')
   }
 } else if (options.scope !== 'smoke') {

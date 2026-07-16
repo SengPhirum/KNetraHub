@@ -1,7 +1,7 @@
-// Small browser file I/O helpers shared by every Export/Import button in the
-// Monitoring app (Devices, Hosts, Groups, Templates, Sensors) - triggering a
-// download and opening a file picker are the same two lines everywhere, so
-// they live here once rather than being copy-pasted per page.
+// Small browser file I/O helpers shared by every Export/Import button
+// (Monitoring devices, IPAM inventories, ...) - triggering a download and
+// opening a file picker are the same two lines everywhere, so they live here
+// once rather than being copy-pasted per page.
 
 /** Trigger a browser download of a Blob (e.g. a server-generated .xlsx). */
 export function downloadBlob(filename: string, blob: Blob): void {
@@ -24,8 +24,8 @@ export function downloadJson(filename: string, data: unknown): void {
   downloadText(filename, JSON.stringify(data, null, 2), 'application/json')
 }
 
-/** Serialize rows to CSV for the Export-as-CSV buttons (Devices, Hosts). Mirrors
- *  layers/monitoring/server/utils/importExport.ts's toCsv - duplicated rather than
+/** Serialize rows to CSV for the Export-as-CSV buttons (e.g. Devices).
+ *  Client-side twin of the server-side CSV writers - duplicated rather than
  *  shared because server/utils isn't part of the client bundle. */
 export function toCsv(rows: Record<string, any>[], columns: string[]): string {
   const esc = (v: any) => {

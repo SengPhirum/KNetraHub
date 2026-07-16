@@ -54,16 +54,11 @@ const DOCK_GROUPS: NavGroup[] = [
   }
 ]
 
-// The Monitoring app's navigation. Network (PRTG-style) and Server (Zabbix-style)
-// are NOT separate sections — the sidebar is one unified tree organised by
-// FUNCTION, interleaving network + server items under shared headers. Features
-// that exist in both domains are single unified pages, not duplicated per
-// domain: the dashboard (/monitoring, a customizable widget canvas with widget
-// types for both domains), Problems (/monitoring/problems), Discovery
-// (/monitoring/discovery), Maps (/monitoring/maps), Groups (/monitoring/groups),
-// and Settings (/monitoring/settings) each show a `type`/domain tag per
-// row/node/section instead of living on separate routes. Data still lives
-// under /api/net and /api/server underneath.
+// The Monitoring app's navigation (LibreNMS-equivalent). One unified device
+// model — there is no network/server split: routers, switches, firewalls,
+// servers, printers, UPSes and every other SNMP/ICMP target are all "devices"
+// whose capabilities were discovered, and the sidebar is organised by function
+// exactly like LibreNMS's menu. Data lives under /api/monitoring/v1.
 const MONITORING_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
@@ -72,61 +67,68 @@ const MONITORING_GROUPS: NavGroup[] = [
     ]
   },
   {
-    label: 'Monitoring',
+    label: 'Devices',
     items: [
-      { label: 'Problems',    to: '/monitoring/problems',          icon: 'i-lucide-triangle-alert', permission: 'monitoring.view' },
-      { label: 'Sensors',     to: '/monitoring/network/sensors',   icon: 'i-lucide-gauge',          permission: 'monitoring.view' },
-      { label: 'Latest data', to: '/monitoring/server/latestdata', icon: 'i-lucide-list',           permission: 'monitoring.view' }
+      { label: 'All Devices',   to: '/monitoring/devices',           icon: 'i-lucide-router',      permission: 'monitoring.view' },
+      { label: 'Device Groups', to: '/monitoring/device-groups',     icon: 'i-lucide-folder-tree', permission: 'monitoring.view' },
+      { label: 'Locations',     to: '/monitoring/locations',         icon: 'i-lucide-map-pin',     permission: 'monitoring.view' },
+      { label: 'Discovery',     to: '/monitoring/discovery',         icon: 'i-lucide-scan-line',   permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Assets',
+    label: 'Health & Inventory',
     items: [
-      { label: 'Devices',   to: '/monitoring/network/devices', icon: 'i-lucide-router',    permission: 'monitoring.view' },
-      { label: 'Hosts',     to: '/monitoring/server/hosts',     icon: 'i-lucide-server',    permission: 'monitoring.view' },
-      { label: 'Discovery', to: '/monitoring/discovery',        icon: 'i-lucide-scan-line', permission: 'monitoring.view' }
+      { label: 'Ports',      to: '/monitoring/ports',      icon: 'i-lucide-ethernet-port', permission: 'monitoring.view' },
+      { label: 'Sensors',    to: '/monitoring/health',     icon: 'i-lucide-gauge',         permission: 'monitoring.view' },
+      { label: 'Processors', to: '/monitoring/processors', icon: 'i-lucide-cpu',           permission: 'monitoring.view' },
+      { label: 'Memory',     to: '/monitoring/memory',     icon: 'i-lucide-memory-stick',  permission: 'monitoring.view' },
+      { label: 'Storage',    to: '/monitoring/storage',    icon: 'i-lucide-hard-drive',    permission: 'monitoring.view' },
+      { label: 'Inventory',  to: '/monitoring/inventory',  icon: 'i-lucide-package',       permission: 'monitoring.view' },
+      { label: 'Wireless',   to: '/monitoring/wireless',   icon: 'i-lucide-wifi',          permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Maps & Topology',
+    label: 'Network',
     items: [
-      { label: 'Maps',   to: '/monitoring/maps',           icon: 'i-lucide-map',         permission: 'monitoring.view' },
-      { label: 'Probes', to: '/monitoring/network/probes', icon: 'i-lucide-radio-tower', permission: 'monitoring.view' }
+      { label: 'Routing (BGP/OSPF)', to: '/monitoring/routing',   icon: 'i-lucide-route',            permission: 'monitoring.view' },
+      { label: 'Switching (VLAN/FDB/ARP)', to: '/monitoring/switching', icon: 'i-lucide-arrow-left-right', permission: 'monitoring.view' },
+      { label: 'Maps',               to: '/monitoring/maps',      icon: 'i-lucide-map',              permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Traffic & Logs',
+    label: 'Services & Apps',
     items: [
-      { label: 'NetFlow',    to: '/monitoring/network/flows',  icon: 'i-lucide-arrow-left-right', permission: 'monitoring.view' },
-      { label: 'Syslog',     to: '/monitoring/network/syslog', icon: 'i-lucide-scroll-text',      permission: 'monitoring.view' },
-      { label: 'SNMP Traps', to: '/monitoring/server/traps',   icon: 'i-lucide-radio',            permission: 'monitoring.view' }
+      { label: 'Services',     to: '/monitoring/services',     icon: 'i-lucide-gauge-circle', permission: 'monitoring.view' },
+      { label: 'Applications', to: '/monitoring/applications', icon: 'i-lucide-app-window',   permission: 'monitoring.view' },
+      { label: 'Billing',      to: '/monitoring/billing',      icon: 'i-lucide-receipt',      permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Insights',
+    label: 'Alerts',
     items: [
-      { label: 'Reports',     to: '/monitoring/network/reports', icon: 'i-lucide-file-text',    permission: 'monitoring.view' },
-      { label: 'AI Insights', to: '/monitoring/network/ai',      icon: 'i-lucide-sparkles',     permission: 'monitoring.view' },
-      { label: 'Services',    to: '/monitoring/server/services', icon: 'i-lucide-gauge-circle', permission: 'monitoring.view' },
-      { label: 'Web',         to: '/monitoring/server/web',      icon: 'i-lucide-globe',        permission: 'monitoring.view' }
+      { label: 'Active Alerts',    to: '/monitoring/alerts',            icon: 'i-lucide-triangle-alert',  permission: 'monitoring.view' },
+      { label: 'Alert Rules',      to: '/monitoring/alerts/rules',      icon: 'i-lucide-bell-ring',       permission: 'monitoring.view' },
+      { label: 'Alert Transports', to: '/monitoring/alerts/transports', icon: 'i-lucide-send',            permission: 'monitoring.view' },
+      { label: 'Alert Templates',  to: '/monitoring/alerts/templates',  icon: 'i-lucide-layout-template', permission: 'monitoring.view' },
+      { label: 'Maintenance',      to: '/monitoring/maintenance',       icon: 'i-lucide-wrench',          permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Configuration',
+    label: 'Logs',
     items: [
-      { label: 'Groups',       to: '/monitoring/groups',              icon: 'i-lucide-folder-tree',     permission: 'monitoring.view' },
-      { label: 'Templates',    to: '/monitoring/server/templates',    icon: 'i-lucide-layout-template', permission: 'monitoring.view' },
-      { label: 'Triggers',     to: '/monitoring/server/triggers',     icon: 'i-lucide-zap',             permission: 'monitoring.view' },
-      { label: 'Alert rules',  to: '/monitoring/network/alerts',      icon: 'i-lucide-bell-ring',       permission: 'monitoring.view' },
-      { label: 'Maintenance',  to: '/monitoring/server/maintenance',  icon: 'i-lucide-wrench',          permission: 'monitoring.view' },
-      { label: 'Actions',      to: '/monitoring/server/actions',      icon: 'i-lucide-bell-plus',       permission: 'monitoring.view' }
+      { label: 'Event Log',  to: '/monitoring/logs/events', icon: 'i-lucide-list',        permission: 'monitoring.view' },
+      { label: 'Syslog',     to: '/monitoring/logs/syslog', icon: 'i-lucide-scroll-text', permission: 'monitoring.view' },
+      { label: 'SNMP Traps', to: '/monitoring/logs/traps',  icon: 'i-lucide-radio',       permission: 'monitoring.view' },
+      { label: 'Alert Log',  to: '/monitoring/logs/alerts', icon: 'i-lucide-bell',        permission: 'monitoring.view' }
     ]
   },
   {
-    label: 'Administration',
+    label: 'System',
     items: [
-      { label: 'Settings',   to: '/monitoring/settings',   icon: 'i-lucide-settings',    permission: 'monitoring.manage' },
-      { label: 'Logs',       to: '/monitoring/logs',       icon: 'i-lucide-scroll-text', permission: 'monitoring.scan' }
+      { label: 'Pollers',         to: '/monitoring/pollers',         icon: 'i-lucide-radio-tower',   permission: 'monitoring.view' },
+      { label: 'Data Collection', to: '/monitoring/data-collection', icon: 'i-lucide-database-zap',  permission: 'monitoring.view' },
+      { label: 'Settings',        to: '/monitoring/settings',        icon: 'i-lucide-settings',      permission: 'monitoring.manage' },
+      { label: 'Logs',            to: '/monitoring/logs',            icon: 'i-lucide-file-terminal', permission: 'monitoring.scan' }
     ]
   }
 ]

@@ -13,10 +13,12 @@ import type { AppKey } from '../../shared/utils/entitlements'
  * Enforcement differs per app because of handler history:
  *  - docker routes: handlers all call requireUser/requireRole themselves, so an
  *    unauthenticated request falls through for the handler to 401 cleanly.
- *  - monitoring routes (/api/net, /api/server): this middleware IS the
+ *  - monitoring routes (/api/monitoring): this middleware IS the
  *    authentication boundary - unauthenticated requests are rejected here, and
  *    read access requires at least a viewer tier. Mutation endpoints
- *    additionally call requireMonitoring(...) for their operator/manager tier.
+ *    additionally call requireMonitoring(...) for their operator/admin tier.
+ *    Poller-node worker auth (signed requests) is handled inside the
+ *    monitoring layer, not here.
  *
  * IPMgt guards itself per-handler (requireIpam). Routes not matched here
  * (auth, user prefs, settings, portal audit) keep their original guards.
@@ -26,8 +28,7 @@ import type { AppKey } from '../../shared/utils/entitlements'
 // must precede /api/sse (the docker events stream).
 const APP_PREFIXES: [string, AppKey][] = [
   ['/api/sse/monitoring', 'monitoring'],
-  ['/api/net', 'monitoring'],
-  ['/api/server', 'monitoring'],
+  ['/api/monitoring', 'monitoring'],
   ['/api/services', 'docker'],
   ['/api/stacks', 'docker'],
   ['/api/nodes', 'docker'],

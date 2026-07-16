@@ -25,7 +25,7 @@ export function getModuleRegistry(): ModuleDefinition[] {
     {
       key: 'monitoring',
       name: 'Monitoring',
-      description: 'Unified infrastructure monitoring - network devices (ping/SNMP) and server hosts (CPU/memory/disk), with sensors, alerts, and problems.',
+      description: 'Full-stack network monitoring - SNMP discovery and polling of routers, switches, firewalls, servers and more, with health sensors, alerting, traps, syslog, and topology.',
       routePath: '/monitoring',
       icon: 'i-lucide-activity',
       permission: 'monitoring.view',

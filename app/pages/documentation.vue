@@ -317,20 +317,12 @@ const modules = [
     points: ['Stacks & GitLab versioning', 'Services, tasks & nodes', 'Networks, volumes, secrets, configs']
   },
   {
-    id: 'net',
-    name: 'Network',
-    icon: 'i-lucide-network',
-    tagline: 'PRTG-style network monitoring',
-    desc: 'Monitor devices and sensors, auto-discover ranges, visualise a distributed site map, collect via probes, run reports, and surface anomalies with AI insights.',
-    points: ['Devices, sensors & maps', 'Auto-discovery & probes', 'Reports, alerts & AI insights']
-  },
-  {
-    id: 'server',
-    name: 'Server',
-    icon: 'i-lucide-server-cog',
-    tagline: 'Zabbix-style host monitoring',
-    desc: 'Track host inventory, CPU / memory / disk metrics, agent status, and active problems and triggers across your server estate.',
-    points: ['Host inventory & metrics', 'Agent status', 'Problems & triggers']
+    id: 'monitoring',
+    name: 'Monitoring',
+    icon: 'i-lucide-activity',
+    tagline: 'Full-stack network monitoring',
+    desc: 'SNMP/ICMP discovery and polling of routers, switches, firewalls, servers, printers, UPSes and more — one unified device model with ports, health sensors, alert rules, traps, syslog, and data-collection auditing.',
+    points: ['Unified devices, ports & sensors', 'Modular discovery & polling', 'Alerting, traps, syslog & coverage']
   },
   {
     id: 'ipmgt',
@@ -342,232 +334,125 @@ const modules = [
   }
 ]
 
-// ── User Manual: Network module guides ────────────────────────────────────────
-const netGuides = [
+// ── User Manual: Monitoring module guides ────────────────────────────────────
+const monitoringGuides = [
   {
-    id: 'net-overview',
-    title: 'Network Overview',
+    id: 'mon-overview',
+    title: 'Monitoring Overview',
     icon: 'i-lucide-radar',
-    summary: 'Start at the Network dashboard for device availability, active alerts, and top traffic talkers at a glance.',
+    summary: 'One unified device model: routers, switches, firewalls, servers, printers, UPSes and every other SNMP/ICMP target are "devices" whose capabilities are discovered automatically. The overview shows device status, active alerts, and collection health.',
     steps: [
-      'Check the Up/Down device counters before drilling into an issue.',
-      'Use Recent Alerts to jump straight to the affected device.',
-      'Scan the Availability map for any red (down) tiles.',
-      'Open Top Talkers to spot unusual NetFlow volume.'
+      'Check the Up / Down / Degraded device counters before drilling into an issue.',
+      'Use Active Alerts to jump straight to the affected device and entity.',
+      'Watch the Data Collection tile — it flags devices with incomplete or stale collection.',
+      'Open a device for its tabbed detail page: overview, graphs, ports, health, inventory, logs, and settings.'
     ],
     shot: {
-      label: 'Network dashboard', status: 'Live',
-      metrics: [['Devices', '11'], ['Up', '10'], ['Down', '1'], ['Active alerts', '2']] as [string, string][],
-      rows: [['Core-Switch-01', '10.0.0.1', 'Up'], ['Firewall-FW1', '10.0.0.254', 'Down'], ['Synology-NAS-01', '10.0.0.50', 'Up']] as [string, string, string][]
+      label: 'Monitoring overview', status: 'Live',
+      metrics: [['Devices', '12'], ['Up', '10'], ['Down', '1'], ['Alerts', '2']] as [string, string][],
+      rows: [['core-sw-01', 'Cisco IOS', 'Up'], ['fw-edge-01', 'FortiOS', 'Down'], ['db-prod-01', 'Linux', 'Up']] as [string, string, string][]
     }
   },
   {
-    id: 'net-devices',
+    id: 'mon-devices',
     title: 'Devices',
     icon: 'i-lucide-router',
-    summary: 'Maintain the inventory of monitored assets, add devices, and open a device for ports, sensors, and config backups.',
+    summary: 'Add devices by hostname or IP with SNMP v1/v2c/v3 credentials (or ICMP-only), assign locations, groups and poller groups, and let discovery detect the OS and capabilities. Bulk add via CIDR or CSV is supported.',
     steps: [
-      'Filter by category or search by hostname/IP to find a device.',
-      'Use Add Device to register a host — optionally apply a saved template to prefill SNMP/category defaults.',
-      'Pause monitoring during maintenance, then Resume it (paused devices are skipped by the poller).',
-      'Open a device for Ports, Sensors, Backups, a live latency graph, and per-device Settings.'
+      'Add Device with hostname/IP; pick a credential profile or enter SNMP settings (v3 auth/priv supported).',
+      'Force-add skips the reachability preflight; ICMP-only devices skip SNMP entirely.',
+      'Run discovery (operator tier) to detect OS, ports, sensors, processors, memory, storage and inventory.',
+      'Disable or set a device to maintenance to pause polling/alerting; dependencies suppress downstream alerts.'
     ],
     shot: {
       label: 'Device inventory', status: 'SNMP',
-      metrics: [['Total', '11'], ['Network', '6'], ['Servers', '2'], ['IoT', '1']] as [string, string][],
-      rows: [['Core-Switch-01', 'Cisco IOS-XE', 'Up'], ['Router-B', 'Juniper Junos', 'Up'], ['HP-Printer-Floor1', 'Ping only', 'Up']] as [string, string, string][]
+      metrics: [['Total', '12'], ['SNMP', '10'], ['ICMP-only', '2'], ['Pending', '1']] as [string, string][],
+      rows: [['core-sw-01', 'Cisco IOS', 'Up'], ['ups-rack-1', 'UPS-MIB', 'Up'], ['printer-f1', 'Ping only', 'Up']] as [string, string, string][]
     }
   },
   {
-    id: 'net-groups',
-    title: 'Groups & templates',
-    icon: 'i-lucide-folder-tree',
-    summary: 'Organize devices into logical groups, and save onboarding templates so new devices are a single pick.',
-    steps: [
-      'Create a group (by site, role, or owner) and use Manage to add/remove member devices.',
-      'In Network → Settings → Device Templates, save a template with the SNMP/category defaults you reuse.',
-      'On Add Device, pick a template to prefill everything except hostname and IP.',
-      'Categories are shared between the Add Device and Settings forms — see Settings → Categories.'
-    ],
-    shot: {
-      label: 'Device groups', status: 'Organized',
-      metrics: [['Groups', '3'], ['Templates', '2'], ['Categories', '5'], ['Devices', '11']] as [string, string][],
-      rows: [['Core Switches', '4 devices', 'Group'], ['Branch Sites', '5 devices', 'Group'], ['Core Switch — SNMPv3', 'network', 'Template']] as [string, string, string][]
-    }
-  },
-  {
-    id: 'net-sensors',
-    title: 'Sensors',
+    id: 'mon-health',
+    title: 'Ports & Health',
     icon: 'i-lucide-gauge',
-    summary: 'Review every monitored measurement fleet-wide; state (Up / Warning / Down / Paused) is derived from each sensor\'s high/low limits. Open a sensor for its historical graph.',
+    summary: 'Every interface, sensor, processor, memory pool and storage entity found by discovery is polled — never just a primary interface or first sensor. Counters handle 32/64-bit rollover and device reboots.',
     steps: [
-      'Use the Up / Warning / Down / Paused summary to gauge overall health.',
-      'Filter by sensor type (ping, traffic, temperature, fan…) to focus.',
-      'Watch the load bar to see how close a reading is to its limit.',
-      'Click a sensor to open its detail page: a history graph over 1h–7d with its limit thresholds, plus channels (e.g. a traffic sensor\'s In/Out), coverage, and last-scan interval.'
+      'Ports lists every interface with status, speed, traffic, errors and discards; open one for its graphs.',
+      'Health shows temperature, voltage, fan, power and 30+ other sensor classes with thresholds.',
+      'Processors / Memory / Storage list every instance with utilisation history.',
+      'Inventory shows the ENTITY-MIB hardware tree: chassis, modules, PSUs, fans, transceivers.'
     ],
     shot: {
-      label: 'Sensors', status: 'Monitored',
-      metrics: [['Sensors', '7'], ['OK', '5'], ['Warning', '1'], ['Down', '1']] as [string, string][],
-      rows: [['System Board Temp', '35.5 C', 'OK'], ['Rack Humidity', '45 %', 'OK'], ['Disk 1 Temp', '58 C', 'Warning']] as [string, string, string][]
+      label: 'Health sensors', status: 'Monitored',
+      metrics: [['Sensors', '48'], ['OK', '46'], ['Warning', '1'], ['Critical', '1']] as [string, string][],
+      rows: [['Chassis Temp', '35.5 °C', 'OK'], ['PSU 1 Voltage', '12.1 V', 'OK'], ['Fan 2', '0 rpm', 'Critical']] as [string, string, string][]
     }
   },
   {
-    id: 'net-maps',
-    title: 'Maps',
-    icon: 'i-lucide-map',
-    summary: 'See probe sites on a world map and a live status wallboard of every device.',
-    steps: [
-      'Read the world map markers: green connected, orange has down devices, red disconnected.',
-      'Hover a site marker for its up/down/sensor counts.',
-      'Use the wallboard grid as a NOC screen of device status.',
-      'Click a wallboard tile to open that device.'
-    ],
-    shot: {
-      label: 'Distributed map', status: 'Wallboard',
-      metrics: [['Sites', '4'], ['Connected', '3'], ['Devices up', '10'], ['Devices down', '1']] as [string, string][],
-      rows: [['New York (HQ)', 'Local', 'Connected'], ['London', 'Remote', 'Connected'], ['Singapore', 'Multi-platform', 'Disconnected']] as [string, string, string][]
-    }
-  },
-  {
-    id: 'net-alerts',
-    title: 'Alerts & rules',
+    id: 'mon-alerts',
+    title: 'Alerts',
     icon: 'i-lucide-bell-ring',
-    summary: 'Review notification triggers (alert rules) and the active/historical alert stream. Delivery channels are configured portal-wide.',
+    summary: 'Structured alert rules (visual builder, AND/OR groups, duration conditions) evaluate against devices, ports, sensors and services. Alerts have a full lifecycle: open, acknowledged, recovered — with transports, templates, escalation and maintenance suppression.',
     steps: [
-      'Check the Notification Triggers cards for the rules and thresholds in force.',
-      'Scan Alert History for active vs. recovered events.',
-      'Acknowledge an active alert so the team knows it is owned (it still auto-recovers).',
-      'Open the device on any alert row, or configure delivery channels in portal Settings.'
+      'Create rules under Alerts > Alert Rules; preview matching devices before saving.',
+      'Assign transports (email, webhook, Telegram, Teams, Slack…) and templates per rule.',
+      'Acknowledge active alerts with a note so the team knows they are owned.',
+      'Schedule maintenance windows to suppress alerts during planned work.'
     ],
     shot: {
-      label: 'Alerts', status: 'Triggers',
-      metrics: [['Rules', '4'], ['Active', '1'], ['Critical', '1'], ['Warning', '1']] as [string, string][],
-      rows: [['Device Down', 'status = down', 'Critical'], ['High Temperature', 'temperature > 70', 'Warning'], ['High CPU Load', 'cpu > 90', 'Critical']] as [string, string, string][]
+      label: 'Active alerts', status: 'Triage',
+      metrics: [['Active', '2'], ['Critical', '1'], ['Warning', '1'], ['Acked', '1']] as [string, string][],
+      rows: [['fw-edge-01', 'Device down', 'Critical'], ['core-sw-01', 'Port Gi0/2 down', 'Warning']] as [string, string, string][]
     }
   },
   {
-    id: 'net-discovery',
+    id: 'mon-discovery',
     title: 'Auto-Discovery',
     icon: 'i-lucide-scan-line',
-    summary: 'Scan an IP range to create devices and a recommended sensor set automatically, then review scan history.',
+    summary: 'Discover devices by CIDR scan with credential-profile ordering, allowed/excluded CIDR safety lists, and duplicate detection (sysName, serial, management IP). Per-device discovery re-runs modular discovery jobs on a 6-hour schedule.',
     steps: [
-      'Enter a CIDR (e.g. 10.0.5.0/24) and choose Ping/SNMP method.',
-      'Start the scan (requires the Network operator tier).',
-      'Review how many addresses were scanned and devices added.',
-      'Open the inventory to tune the newly discovered devices.'
+      'Enter a CIDR and pick credential profiles to try, in order.',
+      'Allowed/excluded CIDR lists prevent scanning unauthorized networks.',
+      'Responders are added as devices and queued for full module discovery.',
+      'Review the discovery log to see why each entity was added, updated or marked stale.'
     ],
     shot: {
       label: 'Discovery scan', status: 'Completed',
-      metrics: [['Scanned', '254'], ['Found', '4'], ['Added', '4'], ['Method', 'Ping+SNMP']] as [string, string][],
-      rows: [['Cisco-118', '10.0.5.118', 'Added'], ['QNAP-64', '10.0.5.64', 'Added'], ['Aruba-201', '10.0.5.201', 'Added']] as [string, string, string][]
+      metrics: [['Scanned', '254'], ['Found', '4'], ['Added', '4'], ['Duplicates', '1']] as [string, string][],
+      rows: [['10.0.5.118', 'cisco-118', 'Added'], ['10.0.5.64', 'qnap-64', 'Added'], ['10.0.5.201', 'aruba-201', 'Added']] as [string, string, string][]
     }
   },
   {
-    id: 'net-probes',
-    title: 'Probes',
-    icon: 'i-lucide-radio-tower',
-    summary: 'Distributed data collectors (local, remote, multi-platform) and the device/sensor load each one carries.',
+    id: 'mon-logs',
+    title: 'Logs: Events, Syslog & Traps',
+    icon: 'i-lucide-scroll-text',
+    summary: 'Every state change lands in the event log. The syslog receiver ingests RFC 3164/5424 messages; the trap receiver ingests SNMP v1/v2c traps with varbind parsing and handler registry. Both are searchable and can drive alert rules.',
     steps: [
-      'Confirm each probe is Connected before trusting its data.',
-      'Read the device and sensor counts per probe to balance load.',
-      'Use remote probes for branch sites separated by firewalls.',
-      'Open Maps to see the same probes geographically.'
+      'Event Log records device/port/sensor state transitions with the reason.',
+      'Point device syslog at the portal (UDP/TCP, port 1514 by default) and search by device/severity.',
+      'Point SNMP traps at the portal (UDP 1162 by default; forward 162 in production).',
+      'Unknown traps are logged, never silently dropped; handlers can be tested and replayed.'
     ],
     shot: {
-      label: 'Probes', status: 'Connected',
-      metrics: [['Probes', '4'], ['Connected', '3'], ['Devices', '11'], ['Sensors', '7']] as [string, string][],
-      rows: [['Local Probe', 'New York (HQ)', 'Connected'], ['Remote · London', 'London, UK', 'Connected'], ['Multi · Singapore', 'Singapore', 'Disconnected']] as [string, string, string][]
+      label: 'Syslog', status: 'Ingesting',
+      metrics: [['Msgs/min', '120'], ['Devices', '9'], ['Errors', '3'], ['Parse fails', '0']] as [string, string][],
+      rows: [['core-sw-01', '%LINK-3-UPDOWN Gi0/2', 'err'], ['db-prod-01', 'sshd: accepted', 'info']] as [string, string, string][]
     }
   },
   {
-    id: 'net-reports',
-    title: 'Reports',
-    icon: 'i-lucide-file-text',
-    summary: 'Generate availability, traffic, sensor-health, or inventory reports that snapshot live data, then preview them.',
+    id: 'mon-data-collection',
+    title: 'Data Collection',
+    icon: 'i-lucide-database-zap',
+    summary: 'The no-silent-loss rule: every planned collection item ends in a recorded final state — persisted, unsupported, intentionally skipped, or failed with a visible error. The coverage page shows completeness per device, module, and metric.',
     steps: [
-      'Pick a report type and a period.',
-      'Click Generate to snapshot current data into a saved report.',
-      'Select any report from the list to preview its headline and rows.',
-      'Re-generate periodically to capture trends over time.'
+      'Coverage shows fully / partially collected and stale devices with completion %.',
+      'Drill down device > module > attempt to see each OID and its outcome.',
+      'Failures lists timeouts, auth failures and parse errors with retry state.',
+      'Dead-letter jobs can be inspected and replayed from Pollers > Failed Jobs.'
     ],
     shot: {
-      label: 'Report preview', status: 'Generated',
-      metrics: [['Devices', '11'], ['Availability', '90.9%'], ['Down', '1'], ['Period', 'Last 30d']] as [string, string][],
-      rows: [['Availability summary', 'Generated', 'HTML'], ['Traffic summary', 'Top talkers', 'HTML'], ['Sensor health', 'OK/Warn/Crit', 'HTML']] as [string, string, string][]
-    }
-  },
-  {
-    id: 'net-ai',
-    title: 'AI Insights',
-    icon: 'i-lucide-sparkles',
-    summary: 'Use text search to find anomalies, similar-sensor matches, and smart recommendations so triage stays focused on purpose.',
-    steps: [
-      'Review Anomaly Detection for out-of-range sensors and down devices.',
-      'Use text search to quickly find entries by device, metric, or intent.',
-      'Review Similar Sensors list items to compare pairs and their % match score.',
-      'Apply Smart Recommendations list items (add sensors, enable SNMP, group devices).',
-      'Re-check after acting — counts update as the data changes.'
-    ],
-    shot: {
-      label: 'AI insights', status: 'Analysing',
-      metrics: [['Anomalies', '3'], ['Similar pairs', '2'], ['Recommendations', '6'], ['Model', 'Heuristic']] as [string, string][],
-      rows: [['Core-Switch-01', 'CPU vs Memory · 94% match', 'Similar'], ['Firewall-FW1', 'Unreachable', 'Critical'], ['HP-Printer', 'Enable SNMP', 'Recommendation']] as [string, string, string][]
-    }
-  }
-]
-
-// ── User Manual: Server module guides ─────────────────────────────────────────
-const serverGuides = [
-  {
-    id: 'server-overview',
-    title: 'Server Overview',
-    icon: 'i-lucide-radar',
-    summary: 'A real Zabbix-style monitor: hosts are polled over ICMP + SNMP for availability and CPU/memory/disk/uptime, triggers raise 6-severity problems, and templates provision items in one click. The dashboard shows availability and problems-by-severity.',
-    steps: [
-      'Check Available vs. Unavailable hosts and the open-problem count.',
-      'Read the problems-by-severity breakdown (Not classified → Disaster).',
-      'Jump to Problems to acknowledge or close, or into a host for its graphs.',
-      'Add hosts via Hosts or Discovery; link the "Linux by SNMP" template to collect data.'
-    ],
-    shot: {
-      label: 'Server overview', status: 'Live',
-      metrics: [['Hosts', '4'], ['Available', '3'], ['Offline', '1'], ['Problems', '2']] as [string, string][],
-      rows: [['web-front-01', 'Ubuntu 22.04', 'Available'], ['db-prod-01', 'RHEL 9', 'Available'], ['win-util-01', 'Win 2022', 'Offline']] as [string, string, string][]
-    }
-  },
-  {
-    id: 'server-hosts',
-    title: 'Hosts',
-    icon: 'i-lucide-server',
-    summary: 'Create hosts with an ICMP or SNMP interface, put them in host groups, and link templates to auto-provision items + triggers. Availability, items and problem counts come from the real poller. Configuration areas: Host groups, Templates, Triggers, Discovery, Web, Maintenance, Actions.',
-    steps: [
-      'Create a host (Poll method = SNMP for CPU/memory/disk) or run Discovery to sweep a CIDR.',
-      'Link the "Linux by SNMP" template — its items + triggers appear on the host.',
-      'Open a host for Latest data and per-item history graphs.',
-      'Pause a host to stop polling; a Maintenance window suppresses its problems.'
-    ],
-    shot: {
-      label: 'Hosts', status: 'Agents',
-      metrics: [['Hosts', '4'], ['Agents up', '3'], ['Avg CPU', '37%'], ['Avg mem', '72%']] as [string, string][],
-      rows: [['web-front-01', '45% CPU', 'Available'], ['db-prod-01', '90% mem', 'Available'], ['win-util-01', '— / —', 'Offline']] as [string, string, string][]
-    }
-  },
-  {
-    id: 'server-problems',
-    title: 'Problems',
-    icon: 'i-lucide-triangle-alert',
-    summary: 'Triage active triggers by severity and acknowledge what is being worked on.',
-    steps: [
-      'Sort attention by severity (High, Average, Warning).',
-      'Read the trigger text to understand the condition.',
-      'Acknowledge a problem once someone owns it.',
-      'Use duration to see how long a problem has persisted.'
-    ],
-    shot: {
-      label: 'Problems', status: 'Triage',
-      metrics: [['Active', '2'], ['High', '1'], ['Average', '1'], ['Acked', '1']] as [string, string][],
-      rows: [['db-prod-01', 'Low disk on /var', 'High'], ['web-front-02', 'High CPU 5m', 'Average']] as [string, string, string][]
+      label: 'Collection coverage', status: 'Audited',
+      metrics: [['Complete', '10'], ['Partial', '1'], ['Stale', '1'], ['Coverage', '97%']] as [string, string][],
+      rows: [['core-sw-01', '312/312 metrics', 'Complete'], ['fw-edge-01', 'SNMP timeout', 'Partial'], ['old-ap-3', 'Last poll 2h ago', 'Stale']] as [string, string, string][]
     }
   }
 ]
@@ -649,20 +534,12 @@ const manualGroups = [
     guides: featureGuides.filter((g) => !GENERAL_MANUAL_IDS.includes(g.id))
   },
   {
-    id: 'manual-net',
-    eyebrow: 'Network module',
-    label: 'Network monitoring',
-    icon: 'i-lucide-network',
-    summary: 'Monitor devices and sensors, discover ranges, map distributed sites, and act on alerts and AI insights.',
-    guides: netGuides
-  },
-  {
-    id: 'manual-server',
-    eyebrow: 'Server module',
-    label: 'Server monitoring',
-    icon: 'i-lucide-server-cog',
-    summary: 'Track host availability, resource metrics, and active problems across the server estate.',
-    guides: serverGuides
+    id: 'manual-monitoring',
+    eyebrow: 'Monitoring module',
+    label: 'Infrastructure monitoring',
+    icon: 'i-lucide-activity',
+    summary: 'Discover and poll every SNMP/ICMP-capable device — ports, sensors, processors, memory, storage, inventory — with alerting, traps, syslog, and collection auditing.',
+    guides: monitoringGuides
   },
   {
     id: 'manual-ipmgt',
@@ -1003,69 +880,48 @@ const configurationSections = [
 ]
 
 // ── Configuration: per-module guides ──────────────────────────────────────────
-// The Network module performs REAL monitoring: a background poller pings every
-// device (ICMP) and reads SNMP v1/v2c system + interface data each cycle.
-const netConfigGuides = [
+// The Monitoring module performs REAL monitoring: a durable DB-backed job queue
+// schedules per-device discovery (6h) and polling (5m) jobs which workers claim
+// with leases; every SNMP-capable entity found by discovery is polled.
+const monitoringConfigGuides = [
   {
-    id: 'net-monitoring-config',
-    title: 'Polling & SNMP',
-    icon: 'i-lucide-network',
-    summary: 'Devices are monitored for real. The poller ICMP-pings every device each cycle (status + latency) and, for SNMP devices, reads system info and the interface table (up/down, speed, bit-rate from counter deltas). SNMP version/community are stored per device.',
+    id: 'monitoring-config',
+    title: 'Dispatcher, polling & SNMP',
+    icon: 'i-lucide-activity',
+    summary: 'Devices are polled for real on a 5-minute default schedule by a durable job queue (no fire-and-forget timers): jobs are leased, retried with backoff, and dead-lettered on repeated failure. SNMP v1/v2c/v3 (auth/priv) credentials are encrypted at rest and never returned to the browser.',
     options: [
-      ['Poll method', 'Per device: Ping (ICMP reachability + latency) or SNMP (also system info + interfaces).'],
-      ['SNMP version', 'v1 or v2c per device. SNMPv3 (auth/priv) is not supported yet — v3 devices are pinged only.'],
-      ['SNMP community', 'Stored per device (shown masked). Falls back to NUXT_NET_SNMP_COMMUNITY when unset.'],
-      ['Poll interval', 'NUXT_NET_POLL_INTERVAL_SECONDS (default 60). The first interface poll seeds counters; bit-rates appear from the second poll on.'],
-      ['Enable / disable', 'NUXT_NET_POLLING_ENABLED=false stops all polling. Requires a working ping binary + UDP/161 reachability to devices.']
+      ['Dispatcher', 'NUXT_MONITORING_DISPATCHER_ENABLED=false stops this node from scheduling or claiming jobs (UI/API stay up).'],
+      ['Poll interval', 'NUXT_MONITORING_POLL_INTERVAL_SECONDS (default 300). Per-device overrides in device Settings.'],
+      ['Rediscovery', 'NUXT_MONITORING_DISCOVERY_INTERVAL_SECONDS (default 21600 = 6h) re-runs all discovery modules.'],
+      ['SNMP', 'v1, v2c, and v3 (noAuthNoPriv / authNoPriv / authPriv; MD5/SHA-family auth, DES/AES-family priv). Timeout/retries per device or via NUXT_MONITORING_SNMP_TIMEOUT_MS / _SNMP_RETRIES.'],
+      ['Workers', 'NUXT_MONITORING_WORKER_CONCURRENCY (default 16) caps concurrent jobs per node; multiple app instances cooperate through the shared queue.']
     ] as [string, string][],
     steps: [
       'Ensure the server can reach devices: ICMP allowed, and UDP/161 open for SNMP.',
-      'Add a device (Devices > Add Device) with its IP and poll method.',
-      'For SNMP, set the version (v1/v2c) and community in the device Settings tab.',
-      'Wait one poll interval, then open the device — status, latency, and ports populate.'
+      'Add a device (Devices > Add) with its credentials, or create a credential profile first.',
+      'Discovery runs automatically; watch Data Collection > Coverage fill in.',
+      'Tune per-device module toggles in the device Settings tab (device override > group > OS > global).'
     ],
-    env: ['NUXT_NET_POLLING_ENABLED', 'NUXT_NET_POLL_INTERVAL_SECONDS', 'NUXT_NET_POLL_CONCURRENCY', 'NUXT_NET_SNMP_COMMUNITY', 'NUXT_NET_SNMP_VERSION', 'NUXT_NET_SNMP_TIMEOUT_MS', 'NUXT_NET_PING_TIMEOUT_SECONDS']
+    env: ['NUXT_MONITORING_DISPATCHER_ENABLED', 'NUXT_MONITORING_POLL_INTERVAL_SECONDS', 'NUXT_MONITORING_DISCOVERY_INTERVAL_SECONDS', 'NUXT_MONITORING_WORKER_CONCURRENCY', 'NUXT_MONITORING_SNMP_TIMEOUT_MS', 'NUXT_MONITORING_SNMP_RETRIES', 'NUXT_MONITORING_PING_TIMEOUT_SECONDS']
   },
   {
-    id: 'net-discovery-config',
-    title: 'Auto-discovery, probes & alerts',
-    icon: 'i-lucide-scan-line',
-    summary: 'Auto-discovery runs a real ICMP/SNMP sweep of a CIDR and creates a device (plus an ICMP-latency sensor) for each responder; the poller then fills in interfaces. A device going unreachable raises a critical alert; recovery clears it.',
+    id: 'monitoring-receivers-config',
+    title: 'Traps, syslog & retention',
+    icon: 'i-lucide-radio',
+    summary: 'Opt-in SNMP trap and syslog receivers associate inbound messages with known devices, parse them (trap varbinds; RFC 3164/5424 syslog), store them searchably, and can raise alerts. TimescaleDB retention policies trim high-volume history.',
     options: [
-      ['Scan input', 'A CIDR (≤ 1024 hosts/scan) + method: Ping, SNMP, or Ping+SNMP, with an optional SNMP community. Scanning needs the Monitoring operator tier (monitoring.scan).'],
-      ['Identification', 'SNMP responders are named from sysName and tagged with vendor/OS from sysObjectID/sysDescr; ping-only responders are added as Host.'],
-      ['Probes', 'A single Local Probe (this server) collects data; new devices attach to it. Remote/distributed probes are a deployment concern, not fabricated.'],
-      ['Alerts & delivery', 'Up/down transitions raise and clear alerts automatically. Delivery channels (Telegram/Teams/Webhook) are portal-wide — see General · System.']
+      ['SNMP traps', 'NUXT_MONITORING_TRAP_ENABLED=true opens UDP :1162 (forward 162→1162 in production; <1024 needs root).'],
+      ['Syslog', 'NUXT_MONITORING_SYSLOG_ENABLED=true opens UDP/TCP :1514 (forward 514→1514 in production).'],
+      ['Retention', 'Metrics NUXT_MONITORING_METRIC_RETENTION_DAYS (30), events (90), syslog/traps (30), job-run detail (7).'],
+      ['Alert cadence', 'Alert rules are evaluated every NUXT_MONITORING_ALERT_INTERVAL_SECONDS (60); down devices are re-pinged every NUXT_MONITORING_DOWN_RETRY_SECONDS (60).']
     ] as [string, string][],
     steps: [
-      'Open Network > Discovery, enter a subnet (e.g. 192.168.1.0/24) and community.',
-      'Run the scan; responders are added and appear under Devices within a poll cycle.',
-      'Remove anything unwanted with the delete action on the Devices list.',
-      'Tune thresholds on the Alerts page; configure delivery once in Settings > Alerts.'
+      'Enable the receivers with the env vars, then point device trap/syslog targets at the portal.',
+      'Confirm ingestion under Logs > SNMP Traps and Logs > Syslog.',
+      'Create alert rules that match on trap OIDs or syslog severity/pattern.',
+      'Review retention in Settings before long-term deployment.'
     ],
-    env: ['NUXT_NET_DISCOVERY_CONCURRENCY', 'NUXT_NET_SNMP_COMMUNITY', 'NUXT_NET_SNMP_VERSION']
-  }
-]
-
-const serverConfigGuides = [
-  {
-    id: 'server-config',
-    title: 'Agents & metrics',
-    icon: 'i-lucide-server-cog',
-    summary: 'Hosts report OS, agent status, and CPU/memory/disk metrics; problems are raised by triggers. MVP host and problem data is seeded and simulated.',
-    options: [
-      ['Agent', 'Each host records its monitoring agent (e.g. Zabbix agent) and availability state.'],
-      ['Metrics', 'CPU, memory, and uptime per host drive overview and capacity views.'],
-      ['Problems', 'Triggers raise problems with severity (High/Average/Warning) and an ack flag.'],
-      ['Access', 'Gated by the Monitoring app tier; admin settings require monitoring.manage.']
-    ] as [string, string][],
-    steps: [
-      'Open Monitoring > Server and confirm hosts report as Available.',
-      'Review CPU/memory pressure on the overview.',
-      'Triage and acknowledge problems by severity.',
-      'Use Server > Settings (admin) for app-level options.'
-    ],
-    env: [] as string[]
+    env: ['NUXT_MONITORING_TRAP_ENABLED', 'NUXT_MONITORING_TRAP_PORT', 'NUXT_MONITORING_SYSLOG_ENABLED', 'NUXT_MONITORING_SYSLOG_PORT', 'NUXT_MONITORING_METRIC_RETENTION_DAYS', 'NUXT_MONITORING_ALERT_INTERVAL_SECONDS']
   }
 ]
 
@@ -1114,15 +970,13 @@ const CONFIG_MODULE_OF: Record<string, string> = {
 const configModuleGroups = [
   { id: 'general-system', eyebrow: 'General · System', title: 'System & main configuration', summary: 'Runtime, branding, and alert-delivery options that apply to the whole portal regardless of which app you use.' },
   { id: 'docker', eyebrow: 'Docker module', title: 'Docker engine & stack versioning', summary: 'Connect to the Swarm manager and store compose files in GitLab for history and rollback.' },
-  { id: 'net', eyebrow: 'Network module', title: 'Network monitoring configuration', summary: 'Polling/SNMP per device, auto-discovery, probes, and alert rules in the Monitoring app.' },
-  { id: 'server', eyebrow: 'Server module', title: 'Server monitoring configuration', summary: 'Agents, host metrics, and problem triggers in the Monitoring app.' },
+  { id: 'monitoring', eyebrow: 'Monitoring module', title: 'Monitoring configuration', summary: 'Dispatcher scheduling, SNMP polling, trap/syslog receivers, and retention for the Monitoring app.' },
   { id: 'ipmgt', eyebrow: 'IP Management module', title: 'IPAM configuration', summary: 'Subnets, VLANs, and address assignment for the IP Management app.' },
   { id: 'general-auth', eyebrow: 'General · Authentication', title: 'Authentication & role mapping', summary: 'Local accounts, OIDC SSO, and LDAP/AD — portal-wide identity that applies across every app.' }
 ]
 
 function configGuidesFor(moduleId: string) {
-  if (moduleId === 'net') return netConfigGuides
-  if (moduleId === 'server') return serverConfigGuides
+  if (moduleId === 'monitoring') return monitoringConfigGuides
   if (moduleId === 'ipmgt') return ipmgtConfigGuides
   return configurationSections.flatMap((s) => s.guides).filter((g) => CONFIG_MODULE_OF[g.id] === moduleId)
 }
@@ -1161,30 +1015,21 @@ const apiGroups = [
     ] as [string, string, string][]
   },
   {
-    id: 'api-net',
-    label: 'Network module',
-    icon: 'i-lucide-network',
-    desc: 'Devices, sensors, probes, discovery, reports, alerts, and AI insights in the Monitoring app.',
+    id: 'api-monitoring',
+    label: 'Monitoring module',
+    icon: 'i-lucide-activity',
+    desc: 'Versioned REST API (/api/monitoring/v1) for devices, ports, health, alerts, logs, pollers, and data quality.',
     endpoints: [
-      ['GET', '/net/devices', 'List devices'],
-      ['POST', '/net/devices', 'Add a device'],
-      ['GET', '/net/sensors', 'All sensors with derived state'],
-      ['GET', '/net/probes', 'Probes with device/sensor load'],
-      ['POST', '/net/discovery', 'Run a discovery scan'],
-      ['POST', '/net/reports', 'Generate a report'],
-      ['GET', '/net/ai', 'Anomalies, similar sensors, recommendations'],
-      ['GET', '/net/alerts · /net/rules', 'Alerts and rules']
-    ] as [string, string, string][]
-  },
-  {
-    id: 'api-server',
-    label: 'Server module',
-    icon: 'i-lucide-server-cog',
-    desc: 'Host inventory and active problems in the Monitoring app.',
-    endpoints: [
-      ['GET', '/server/hosts', 'List hosts'],
-      ['GET', '/server/hosts/{id}', 'Host detail and metrics'],
-      ['GET', '/server/problems', 'Active problems and triggers']
+      ['GET', '/monitoring/v1/devices', 'List devices (paginated, filterable)'],
+      ['POST', '/monitoring/v1/devices', 'Add a device'],
+      ['GET', '/monitoring/v1/devices/{id}', 'Device detail with capabilities'],
+      ['GET', '/monitoring/v1/devices/{id}/ports', 'Every discovered interface'],
+      ['GET', '/monitoring/v1/sensors', 'Health sensors fleet-wide'],
+      ['GET', '/monitoring/v1/alerts', 'Active alerts'],
+      ['POST', '/monitoring/v1/alerts/{id}/ack', 'Acknowledge an alert'],
+      ['GET', '/monitoring/v1/logs/syslog · /logs/traps · /logs/events', 'Log streams'],
+      ['GET', '/monitoring/v1/data-quality/coverage', 'Collection completeness'],
+      ['GET', '/monitoring/v1/pollers', 'Poller nodes and queue health']
     ] as [string, string, string][]
   },
   {
@@ -1329,11 +1174,9 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
       { heading: true, label: 'Docker' },
       { id: 'docker-config',     label: 'Docker Engine',     icon: 'i-lucide-container' },
       { id: 'gitlab-config',     label: 'GitLab Versioning', icon: 'i-lucide-git-branch' },
-      { heading: true, label: 'Network' },
-      { id: 'net-monitoring-config', label: 'Polling & SNMP', icon: 'i-lucide-network' },
-      { id: 'net-discovery-config',  label: 'Discovery & Rules', icon: 'i-lucide-scan-line' },
-      { heading: true, label: 'Server' },
-      { id: 'server-config',     label: 'Agents & Metrics',  icon: 'i-lucide-server-cog' },
+      { heading: true, label: 'Monitoring' },
+      { id: 'monitoring-config', label: 'Dispatcher & SNMP', icon: 'i-lucide-activity' },
+      { id: 'monitoring-receivers-config', label: 'Traps, Syslog & Retention', icon: 'i-lucide-radio' },
       { heading: true, label: 'IP Management' },
       { id: 'ipmgt-config',      label: 'Subnets & Assignment', icon: 'i-lucide-id-card' },
       { heading: true, label: 'General · Authentication' },
@@ -1354,8 +1197,7 @@ const navConfig: Array<{ id: string; label: string; icon: string; external?: str
       { heading: true, label: 'By module' },
       { id: 'api-general', label: 'General · Core',        icon: 'i-lucide-shield-check' },
       { id: 'api-docker',  label: 'Docker module',         icon: 'i-lucide-container' },
-      { id: 'api-net',     label: 'Network module',        icon: 'i-lucide-network' },
-      { id: 'api-server',  label: 'Server module',         icon: 'i-lucide-server-cog' },
+      { id: 'api-monitoring', label: 'Monitoring module',  icon: 'i-lucide-activity' },
       { id: 'api-ipmgt',   label: 'IP Management module',  icon: 'i-lucide-id-card' }
     ]
   },
@@ -1476,13 +1318,13 @@ const qaGroups: Array<{ id: string; label: string; icon: string; items: QaItem[]
         id: 'qa-monitor-down',
         q: 'Why does every monitored device show “down”?',
         a: 'Usually ICMP is blocked from the server running KNetraHub, or the ping binary is missing on bare-metal installs. Devices need ICMP echo allowed and UDP/161 open for SNMP polling.',
-        link: { section: 'configuration', anchor: 'net-monitoring-config', label: 'Polling & SNMP' }
+        link: { section: 'configuration', anchor: 'monitoring-config', label: 'Dispatcher & SNMP' }
       },
       {
         id: 'qa-bitrates',
         q: 'Why don’t interface bit-rates appear immediately?',
-        a: 'Bit-rates are computed from SNMP counter deltas, so the first poll only seeds the counters. Rates appear from the second poll interval onward.',
-        link: { section: 'configuration', anchor: 'net-monitoring-config', label: 'Polling & SNMP' }
+        a: 'Bit-rates are computed from SNMP counter deltas, so the first poll only seeds the counter baselines. Rates appear from the second poll interval onward; counter rollover and device reboots are detected and never graphed as negative spikes.',
+        link: { section: 'configuration', anchor: 'monitoring-config', label: 'Dispatcher & SNMP' }
       },
       {
         id: 'qa-alerts',
@@ -1525,7 +1367,7 @@ const tourShots = [
   { file: 'stacks.png', title: 'Stacks', desc: 'GitLab-versioned compose deployments with commit history and one-click rollback.' },
   { file: 'service-detail.png', title: 'Service detail', desc: 'Replicas, tasks, logs, and live usage for a single service.' },
   { file: 'nodes.png', title: 'Nodes', desc: 'Manager and worker fleet with availability, resources, and maintenance state.' },
-  { file: 'monitoring-dashboard.png', title: 'Monitoring', desc: 'Unified network and server health, active problems, sensors, and availability.' },
+  { file: 'monitoring-dashboard.png', title: 'Monitoring', desc: 'Unified device inventory with status, health sensors, active alerts, and collection coverage.' },
   { file: 'ipmgt-dashboard.png', title: 'IP Management', desc: 'Sections, subnets, addresses, VLANs, and VRFs in one searchable inventory.' },
   { file: 'portal-home.png', title: 'App launcher', desc: 'The portal home lists only the apps each signed-in user may reach.' },
   { file: 'login.png', title: 'Sign-in', desc: 'Local accounts, LDAP / Active Directory, and OIDC single sign-on.' }
@@ -1547,7 +1389,7 @@ const searchIndex: DocSearchEntry[] = [
   { section: 'configuration', title: 'Configuration', description: 'System options, integrations, authentication providers, and setup guides.', group: 'Section', icon: 'i-lucide-sliders-horizontal', keywords: 'setup env vars settings install' },
   { section: 'api', title: 'API Reference', description: 'REST endpoints grouped by module, with the interactive Swagger explorer.', group: 'Section', icon: 'i-lucide-braces', keywords: 'rest swagger openapi endpoints' },
   { section: 'home', anchor: 'home-capabilities', title: 'Core capabilities', description: 'Stack management, service control, live monitoring, alerts, access control, infrastructure, and the REST API.', group: 'Overview', icon: 'i-lucide-sparkles' },
-  { section: 'home', anchor: 'home-modules', title: 'Modules in this portal', description: 'Docker, Network, Server, and IP Management apps behind one portal.', group: 'Overview', icon: 'i-lucide-layout-grid' },
+  { section: 'home', anchor: 'home-modules', title: 'Modules in this portal', description: 'Docker, Monitoring, and IP Management apps behind one portal.', group: 'Overview', icon: 'i-lucide-layout-grid' },
   { section: 'home', anchor: 'home-architecture', title: 'Technology stack & roles', description: 'Runtime, database, live events, and auth architecture, plus the viewer / operator / admin access model.', group: 'Overview', icon: 'i-lucide-cpu', keywords: techStack.map(([k, v]) => `${k} ${v}`).join(' ') },
   { section: 'home', anchor: 'home-quickstart', title: 'Quick start', description: 'Copy the env file, set required vars, mount the Docker socket, and start the app.', group: 'Overview', icon: 'i-lucide-rocket', keywords: 'docker compose install setup .env getting started' },
   ...appFeatures.map((f) => ({ section: 'home', anchor: 'home-capabilities', title: f.title, description: f.desc, group: 'Overview', icon: f.icon })),

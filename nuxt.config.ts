@@ -147,11 +147,10 @@ export default defineNuxtConfig({
       user: process.env.NUXT_DB_USER || 'knetrahub',
       password: process.env.NUXT_DB_PASSWORD || 'knetrahub',
       ssl: process.env.NUXT_DB_SSL === 'true',
-      // The net + server pollers alone can each run up to pollConcurrency (16)
-      // concurrent DB-touching tasks - a pool of 10 was smaller than either
-      // poller's own concurrency, before counting interactive request traffic
-      // on top, so it queued connections under load. 40 gives both pollers
-      // headroom (16+16=32) plus room for regular API traffic.
+      // The monitoring worker pool alone can run up to workerConcurrency (16)
+      // concurrent DB-touching jobs, and the IPAM scanner adds more on top -
+      // a pool of 10 queued connections under load. 40 gives the workers
+      // headroom plus room for regular API traffic.
       poolMax: Number(process.env.NUXT_DB_POOL_MAX || 40)
     },
 
@@ -182,42 +181,51 @@ export default defineNuxtConfig({
       intervalMinutes: Number(process.env.NUXT_ALERTS_INTERVAL_MINUTES || 3)
     },
 
-    // Network module: real device monitoring (ICMP ping + SNMP v1/v2c). The
-    // poller pings every device and reads SNMP system/interface data on each
-    // cycle; discovery uses the same primitives to scan a CIDR. SNMPv3 needs
-    // auth/priv credentials not stored per device yet, so v3 devices are pinged
-    // only. Disable polling entirely with NUXT_NET_POLLING_ENABLED=false.
-    net: {
-      pollingEnabled: process.env.NUXT_NET_POLLING_ENABLED !== 'false',
-      pollIntervalSeconds: Number(process.env.NUXT_NET_POLL_INTERVAL_SECONDS || 60),
-      pollConcurrency: Number(process.env.NUXT_NET_POLL_CONCURRENCY || 16),
-      snmpCommunity: process.env.NUXT_NET_SNMP_COMMUNITY || 'public',
-      snmpVersion: process.env.NUXT_NET_SNMP_VERSION || 'v2c',
-      snmpTimeoutMs: Number(process.env.NUXT_NET_SNMP_TIMEOUT_MS || 2000),
-      pingTimeoutSeconds: Number(process.env.NUXT_NET_PING_TIMEOUT_SECONDS || 2),
-      discoveryConcurrency: Number(process.env.NUXT_NET_DISCOVERY_CONCURRENCY || 64)
-    },
-
-    // Server module (Zabbix-style): real host monitoring (ICMP ping + SNMP
-    // host-resources/UCD metrics). The serverPoller pings every enabled host,
-    // collects its SNMP items, evaluates triggers into problems, and fires
-    // actions. Disable with NUXT_SERVER_POLLING_ENABLED=false.
-    server: {
-      pollingEnabled: process.env.NUXT_SERVER_POLLING_ENABLED !== 'false',
-      pollIntervalSeconds: Number(process.env.NUXT_SERVER_POLL_INTERVAL_SECONDS || 60),
-      pollConcurrency: Number(process.env.NUXT_SERVER_POLL_CONCURRENCY || 16),
-      snmpCommunity: process.env.NUXT_SERVER_SNMP_COMMUNITY || 'public',
-      snmpVersion: process.env.NUXT_SERVER_SNMP_VERSION || 'v2c',
-      snmpTimeoutMs: Number(process.env.NUXT_SERVER_SNMP_TIMEOUT_MS || 2000),
-      pingTimeoutSeconds: Number(process.env.NUXT_SERVER_PING_TIMEOUT_SECONDS || 2),
-      discoveryConcurrency: Number(process.env.NUXT_SERVER_DISCOVERY_CONCURRENCY || 64),
-      webTimeoutMs: Number(process.env.NUXT_SERVER_WEB_TIMEOUT_MS || 8000),
-      // SNMP trap receiver: opt-in (off by default — it opens a UDP listener).
-      // Defaults to 1162, not the standard 162, since binding <1024 needs root/
-      // CAP_NET_BIND_SERVICE; production deployments typically forward 162->1162.
-      trapEnabled: process.env.NUXT_SERVER_TRAP_ENABLED === 'true',
-      trapPort: Number(process.env.NUXT_SERVER_TRAP_PORT || 1162),
-      trapBindAddress: process.env.NUXT_SERVER_TRAP_BIND_ADDRESS || '0.0.0.0'
+    // Monitoring module (LibreNMS-equivalent). One unified device model —
+    // routers, switches, firewalls, servers, printers, UPSes etc. are all
+    // "devices" with different discovered capabilities. Work is executed by a
+    // durable DB-backed job queue (monitoring.jobs) claimed by this node's
+    // worker pool; multiple app instances cooperate via lease-based claiming.
+    // Full documentation: docs/monitoring/.
+    monitoring: {
+      // Master switch for this node's dispatcher + workers. UI/API stay up
+      // regardless; with this off the node enqueues nothing and claims nothing.
+      dispatcherEnabled: process.env.NUXT_MONITORING_DISPATCHER_ENABLED !== 'false',
+      // Identity of this poller node (defaults to hostname) and its group (0 =
+      // default group). Devices are assigned to poller groups.
+      pollerName: process.env.NUXT_MONITORING_POLLER_NAME || '',
+      pollerGroup: Number(process.env.NUXT_MONITORING_POLLER_GROUP || 0),
+      // Worker pool size = max jobs this node runs concurrently.
+      workerConcurrency: Number(process.env.NUXT_MONITORING_WORKER_CONCURRENCY || 16),
+      // Default schedules (seconds); per-device/per-module overrides live in DB
+      // settings. LibreNMS-equivalent defaults: poll 5m, full rediscovery 6h,
+      // services 5m, alert evaluation 1m, down-device retry 1m.
+      pollIntervalSeconds: Number(process.env.NUXT_MONITORING_POLL_INTERVAL_SECONDS || 300),
+      discoveryIntervalSeconds: Number(process.env.NUXT_MONITORING_DISCOVERY_INTERVAL_SECONDS || 21600),
+      serviceIntervalSeconds: Number(process.env.NUXT_MONITORING_SERVICE_INTERVAL_SECONDS || 300),
+      alertIntervalSeconds: Number(process.env.NUXT_MONITORING_ALERT_INTERVAL_SECONDS || 60),
+      downRetrySeconds: Number(process.env.NUXT_MONITORING_DOWN_RETRY_SECONDS || 60),
+      // SNMP engine defaults (per-device/credential-profile values override).
+      snmpTimeoutMs: Number(process.env.NUXT_MONITORING_SNMP_TIMEOUT_MS || 3000),
+      snmpRetries: Number(process.env.NUXT_MONITORING_SNMP_RETRIES || 2),
+      pingTimeoutSeconds: Number(process.env.NUXT_MONITORING_PING_TIMEOUT_SECONDS || 2),
+      // SNMP trap receiver: opt-in (opens a UDP listener). Defaults to 1162,
+      // not the standard 162, since binding <1024 needs root/CAP_NET_BIND_SERVICE;
+      // production deployments typically forward 162->1162.
+      trapEnabled: process.env.NUXT_MONITORING_TRAP_ENABLED === 'true',
+      trapPort: Number(process.env.NUXT_MONITORING_TRAP_PORT || 1162),
+      trapBindAddress: process.env.NUXT_MONITORING_TRAP_BIND_ADDRESS || '0.0.0.0',
+      // Syslog receiver (RFC 3164 + RFC 5424 over UDP/TCP): opt-in. 1514 for
+      // the same <1024 reason; forward 514->1514 in production.
+      syslogEnabled: process.env.NUXT_MONITORING_SYSLOG_ENABLED === 'true',
+      syslogPort: Number(process.env.NUXT_MONITORING_SYSLOG_PORT || 1514),
+      syslogBindAddress: process.env.NUXT_MONITORING_SYSLOG_BIND_ADDRESS || '0.0.0.0',
+      // Retention (days) for high-volume monitoring data; Timescale policies.
+      metricRetentionDays: Number(process.env.NUXT_MONITORING_METRIC_RETENTION_DAYS || 30),
+      eventRetentionDays: Number(process.env.NUXT_MONITORING_EVENT_RETENTION_DAYS || 90),
+      syslogRetentionDays: Number(process.env.NUXT_MONITORING_SYSLOG_RETENTION_DAYS || 30),
+      trapRetentionDays: Number(process.env.NUXT_MONITORING_TRAP_RETENTION_DAYS || 30),
+      jobRunRetentionDays: Number(process.env.NUXT_MONITORING_JOB_RUN_RETENTION_DAYS || 7)
     },
 
     // IPAM module: subnet host-status scanning (ICMP) and new-host discovery.

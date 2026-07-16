@@ -73,8 +73,8 @@ export async function setModuleDebug(module: LogModule, enabled: boolean, actor:
 // Route-prefix → module. Everything not matched belongs to the portal itself.
 const MODULE_PREFIXES: [string, LogModule][] = [
   ['/api/ipmgt', 'ipmgt'],
-  ['/api/net', 'monitoring'],
-  ['/api/server', 'monitoring'],
+  ['/api/monitoring', 'monitoring'],
+  ['/api/sse/monitoring', 'monitoring'],
   ['/api/stacks', 'docker'],
   ['/api/services', 'docker'],
   ['/api/nodes', 'docker'],

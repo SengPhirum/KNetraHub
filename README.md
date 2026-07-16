@@ -6,7 +6,7 @@
 
 **A portal for everything in your infrastructure, one hub at a time.**
 
-Self-hosted infrastructure operations: Docker Swarm orchestration, network & server monitoring,
+Self-hosted infrastructure operations: Docker Swarm orchestration, full-stack infrastructure monitoring,
 and IP address management — behind one login, one theme, and one audit trail.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
@@ -54,7 +54,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
   - [Alerts](#alerts)
 - [🔐 Roles & Tiers](#-roles--tiers)
 - [🧩 How "Stacks" Work](#-how-stacks-work)
-- [📡 Monitoring (Network + Server)](#-monitoring-network--server)
+- [📡 Monitoring (LibreNMS-equivalent)](#-monitoring-librenms-equivalent)
 - [🗺️ Roadmap & Limitations](#️-roadmap--limitations)
 - [🛠️ Tech Stack](#️-tech-stack)
 - [📝 License & Author](#-license--author)
@@ -67,7 +67,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 - **Git-Versioned Stacks:** Deploy stacks from compose YAML. Every deploy is committed to GitLab first, giving you a full change history and one-click **rollback** to any previous commit. Configurable entirely from the UI (no env vars required).
 - **Alerting:** Notify Telegram, Microsoft Teams, or any generic webhook. Alerts trigger when a deploy fails, a service nears its CPU/memory limit, a node stops reporting, replicas stay degraded, or disk usage crosses a threshold. Customizable `{{placeholder}}` messages.
 - **Data Resources:** Create and manage overlay networks, volumes, secrets (write-only), and configs.
-- **Portal + App Launcher:** The home page lists only the apps you can reach (Dock, Net, Server, IP Mgt, etc.). The sidebar is contextual to the app you're in. Docker management is the built-in **"Dock"** app.
+- **Portal + App Launcher:** The home page lists only the apps you can reach (Dock, Monitoring, IP Mgt, etc.). The sidebar is contextual to the app you're in. Docker management is the built-in **"Dock"** app.
 - **Per-App Access via Keycloak:** Each app is gated independently by realm roles, mapped in Settings → Apps & Access. Supported by a viewer/operator/admin tier per app.
 - **Auth & RBAC:** Local accounts, LDAP, and OIDC SSO. Includes a global role (`viewer`/`operator`/`admin`) for portal administration.
 - **Encrypted Credentials:** LDAP bind password, OIDC client secret, registry auth, GitLab token, and alert channel configs are all encrypted at rest (AES-256-GCM, derived from `NUXT_JWT_SECRET`).
@@ -88,7 +88,7 @@ search palette (<kbd>Ctrl</kbd> <kbd>K</kbd>) over every guide, env var, API end
 | ![Stacks](public/screenshots/stacks.png) | ![Services](public/screenshots/services.png) |
 | **Service detail** — replicas, tasks, logs & usage history | **Nodes** — fleet availability and resources |
 | ![Service detail](public/screenshots/service-detail.png) | ![Nodes](public/screenshots/nodes.png) |
-| **Monitoring** — unified network and server health | **IP Management** — subnets, addresses, VLANs, VRFs, devices, racks, circuits, requests, and vault ([details](layers/ipmgt/README.md)) |
+| **Monitoring** — unified device health, sensors & alerts | **IP Management** — subnets, addresses, VLANs, VRFs, devices, racks, circuits, requests, and vault ([details](layers/ipmgt/README.md)) |
 | ![Monitoring](public/screenshots/monitoring-dashboard.png) | ![IP Management](public/screenshots/ipmgt-dashboard.png) |
 | **Documentation** — animated overview, guides, config & API reference | **Smart Q&A** — curated answers, deep-linked to the right guide |
 | ![Documentation](public/screenshots/docs-overview.png) | ![Smart Q&A](public/screenshots/docs-qa.png) |
@@ -127,8 +127,8 @@ result is written to `.qa-results/smart-qa-report.json`. QA never performs mutat
 deploy, scale, delete, or configuration updates.
 
 `--init-data` is the explicit exception to the read-only rule: it transactionally creates only
-deterministic `qa-*` fixtures covering portal audit data, Docker stack history, Monitoring
-(network and server), and IP Management. Fixtures are removed after QA by default. Add
+deterministic `qa-*` fixtures covering portal audit data, Docker stack history, and IP
+Management (Monitoring holds only real collected data, so it has no QA fixtures). Fixtures are removed after QA by default. Add
 `--keep-data` for manual inspection, then remove them with `./service.sh qa --clean-data`.
 The temporary account is `qa-admin` with local-only password `qa-local-only`; override that
 password with `QA_FIXTURE_PASSWORD` when needed.
@@ -145,8 +145,8 @@ app/, server/, shared/           <- portal core: login/auth, launcher (home), ad
 layers/
 ├── docker/                      <- Docker Swarm management (nodes, services, stacks, tasks,
 │                                   containers, networks, volumes, secrets, configs, registries)
-├── monitoring/                  <- network devices (/monitoring/network, /api/net) and
-│                                   server hosts (/monitoring/server, /api/server) + pollers
+├── monitoring/                  <- LibreNMS-equivalent monitoring (/monitoring, /api/monitoring/v1):
+│                                   unified devices, discovery/polling engines, alerting, traps, syslog
 └── ipmgt/                       <- IP address management (/ipmgt, /api/ipmgt) - see layers/ipmgt/README.md
 ```
 
@@ -186,8 +186,8 @@ An iframe isolates a remote's CSS/DOM cleanly, but it can't share the portal's l
 
 One shared Postgres/TimescaleDB instance, separated by **schema**:
 - Portal tables in `public`.
-- `KNetraHub-Net` owns a `net` schema.
-- Future modules like `KNetraHub-Server` will follow the identical pattern (`server` schema).
+- Monitoring owns the `monitoring` schema (repeatable migrations in `layers/monitoring/migrations/`).
+- Future modules follow the identical pattern (one schema per module).
 
 ### Shared Authentication
 
@@ -314,111 +314,90 @@ Docker Swarm has no native stack API. KNetraHub parses your compose YAML, ensure
 
 ---
 
-## 📡 Monitoring (Network + Server)
+## 📡 Monitoring (LibreNMS-equivalent)
 
-The **Monitoring app** (`/monitoring`, layer `layers/monitoring/`) unifies real network-device
-monitoring (PRTG-style) and server/host monitoring (Zabbix-style) behind one nav and one
-`monitoring.view` / `monitoring.manage` permission pair. There is no simulated/dummy data:
-every status, latency, interface, and alert comes from an actual device or host. Network
-devices are polled by `server/plugins/netPoller.ts`; hosts by `server/plugins/serverPoller.ts`.
-Both use real **ICMP ping** and **SNMP v1/v2c/v3**.
+The **Monitoring app** (`/monitoring`, layer `layers/monitoring/`) is a clean-room,
+LibreNMS-equivalent monitoring platform with **one unified device model**: routers, switches,
+firewalls, servers, hypervisors, printers, wireless controllers, storage, UPS and
+environmental systems are all *devices* whose capabilities are detected by modular
+**discovery** and collected by modular **polling**. There is no simulated/dummy data:
+every status, interface, sensor, and alert comes from a real device.
+
+Full documentation lives in [`docs/monitoring/`](docs/monitoring/) — architecture, database
+schema, module guides, API guide, and the LibreNMS feature-parity matrix.
 
 ### How it works
 
-- **Poller:** every `NUXT_NET_POLL_INTERVAL_SECONDS` it ICMP-pings each device (status +
-  latency) and, for SNMP devices that respond, reads system info (sysName, sysDescr,
-  sysObjectID, uptime) and the interface table (admin/oper status, speed, MAC, MTU, and
-  **bit-rate computed from counter deltas**). SNMPv3 (noAuthNoPriv / authNoPriv / authPriv;
-  MD5/SHA/SHA-256/SHA-512 auth; DES/AES/AES-256 priv) is fully supported per-device.
-- **ICMP-latency sensor:** each device gets a live `ICMP Latency` sensor (ms).
-- **Auto-alerts:** when a device stops responding a **critical** alert opens; when it
-  recovers, the alert clears. Network alerts and Server problems both surface in one unified
-  **Monitoring → Problems** view (`/monitoring/problems`) — acknowledge works for either source.
-- **Discovery** (**Monitoring → Discovery**, `/monitoring/discovery`): a real ICMP/SNMP sweep
-  of a CIDR (max **1024 hosts** per scan) that creates a device for every responder; the
-  poller fills in interfaces on the next cycle.
-- **Paused devices are skipped:** a device with monitoring paused is left alone by the
-  poller — it shows as `paused` rather than flapping to `down`, and no "device down" alert
-  fires while it's offline for maintenance.
-- Flow (NetFlow) and Syslog collectors are not implemented; those pages stay empty until a
-  collector is added.
+- **Dispatcher & workers:** a durable, DB-backed job queue (`monitoring.jobs`) with leases,
+  retries, backoff, and dead-lettering. Each app instance registers as a poller node and
+  claims jobs up to `NUXT_MONITORING_WORKER_CONCURRENCY`; devices are assigned to poller
+  groups for distributed polling. No fire-and-forget `setInterval` polling.
+- **Discovery (every 6h + on add):** registry-driven modules (system/OS detection, ports,
+  processors, memory pools, storage, health sensors, ENTITY-MIB inventory, IP addresses,
+  ARP/FDB, VLANs, BGP, OSPF, …) reconcile discovered entities against the database with
+  stable identity keys — new entities are inserted, changed ones updated, missing ones marked
+  **stale** (never deleted after a single failed walk).
+- **Polling (every 5m):** each enabled module collects **every** discovered entity — all
+  interfaces, all sensors, all processors/memory pools/storage — with per-request outcome
+  tracking. 32/64-bit counter rollover, device reboots, and interface-speed changes are
+  handled; rates and utilisation are computed from counter deltas.
+- **No silent loss:** each poll starts from a persisted **collection plan**; every planned
+  item ends as persisted / unsupported / skipped-with-reason / failed-with-error. The
+  **Data Collection** pages show coverage, failures, and stale data down to individual OIDs.
+- **Alerting:** structured rules (visual builder semantics, AND/OR groups, duration
+  conditions) → alert incidents with acknowledge/recover lifecycle, maintenance and
+  dependency suppression, templates, and pluggable transports.
+- **Receivers:** opt-in SNMP trap receiver (UDP 1162 by default) and syslog receiver
+  (RFC 3164/5424, UDP/TCP 1514 by default), both device-associated and searchable.
+- **SNMP v1/v2c/v3** (noAuthNoPriv / authNoPriv / authPriv; MD5/SHA-family auth,
+  DES/AES-family priv), per-device or via reusable **credential profiles**; credentials are
+  AES-256-GCM encrypted at rest and never returned to the browser.
 
 ### Prerequisites
 
 1. **Reachability** from the server running KNetraHub to your devices: ICMP echo allowed
-   (ping/status/latency) and UDP/161 open (SNMP polling + discovery identification).
+   and UDP/161 open (SNMP polling + discovery).
 2. **A working `ping` binary** — the Docker image installs `iputils` automatically; on bare
    metal ensure `ping` is on `PATH`.
-3. **SNMP enabled on the devices**, with a community string you know (commonly `public`
-   read-only) or v3 credentials. Each device stores its own version/community; otherwise the
-   env defaults below apply.
+3. **SNMP enabled on the devices** with a community string or v3 credentials.
 
 ### Configure (env)
 
-All optional — sensible defaults shown. See [`.env.example`](./.env.example).
+All optional — sensible defaults shown (see [`docs/monitoring/`](docs/monitoring/) for the
+full list, including retention and receiver options).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `NUXT_NET_POLLING_ENABLED` | `true` | Master switch for the poller |
-| `NUXT_NET_POLL_INTERVAL_SECONDS` | `60` | How often each device is polled |
-| `NUXT_NET_POLL_CONCURRENCY` | `16` | Devices polled in parallel |
-| `NUXT_NET_SNMP_COMMUNITY` | `public` | Default community (per-device value wins) |
-| `NUXT_NET_SNMP_VERSION` | `v2c` | Default SNMP version (`v1`/`v2c`) |
-| `NUXT_NET_SNMP_TIMEOUT_MS` | `2000` | Per-request SNMP timeout |
-| `NUXT_NET_PING_TIMEOUT_SECONDS` | `2` | Per-host ICMP timeout |
-| `NUXT_NET_DISCOVERY_CONCURRENCY` | `64` | Parallel hosts during a scan |
+| `NUXT_MONITORING_DISPATCHER_ENABLED` | `true` | Master switch for this node's scheduler + workers |
+| `NUXT_MONITORING_POLL_INTERVAL_SECONDS` | `300` | Device polling cadence |
+| `NUXT_MONITORING_DISCOVERY_INTERVAL_SECONDS` | `21600` | Full rediscovery cadence |
+| `NUXT_MONITORING_WORKER_CONCURRENCY` | `16` | Concurrent jobs per node |
+| `NUXT_MONITORING_SNMP_TIMEOUT_MS` | `3000` | Per-request SNMP timeout |
+| `NUXT_MONITORING_SNMP_RETRIES` | `2` | SNMP retries per request |
+| `NUXT_MONITORING_TRAP_ENABLED` | `false` | SNMP trap receiver (UDP :1162) |
+| `NUXT_MONITORING_SYSLOG_ENABLED` | `false` | Syslog receiver (UDP/TCP :1514) |
 
 ### Add & organize devices
 
-- **Auto-discovery (recommended):** **Monitoring → Discovery**, needs the *operator* tier.
-  Enter a subnet (e.g. `192.168.1.0/24`), pick **Ping + SNMP**, **Ping only**, or **SNMP
-  only**, optionally set the SNMP community, and start the scan.
-- **Add one device:** **Monitoring → Network → Devices → Add Device.** Optionally pick a
-  **Template** to prefill category + SNMP settings, then enter hostname/IP and save — the
-  next poll cycle populates status, latency, and ports.
-- **Device templates** (**Monitoring → Settings → Templates** tab, needs *admin*): save a
-  reusable bundle of monitoring defaults (category, poll method, SNMP v1/v2c/v3 credentials)
-  under a name like *"Core Switch — SNMPv3"*.
-- **Categories** (**Monitoring → Settings → Categories** tab): a single fixed list shared by
-  the Add Device form and a device's Settings tab — `network`, `server`, `storage`, `iot`,
-  `ping-only`.
-- **Groups** (**Monitoring → Groups**, `/monitoring/groups`): logical groups by site/role/
-  owner; deleting a group never deletes devices.
-- **Pause/resume monitoring:** pause a device (detail page header or inventory row) before
-  planned maintenance; **Resume** returns it to polling.
-
-### Clean up old/dummy data
-
-Existing databases keep whatever was seeded before. Remove devices per-device (trash icon on
-**Monitoring → Network → Devices**, cascades to that device's interfaces/sensors/alerts), or
-via a full SQL reset:
-
-```sql
-TRUNCATE net_flows, net_syslog, net_backups, net_device_groups, net_sensors,
-         net_interfaces, net_alerts, net_devices RESTART IDENTITY CASCADE;
-```
-
-Fresh installs start empty automatically — no fake devices are seeded.
+- **Add one device:** **Monitoring → Devices → Add Device** — hostname/IP, SNMP transport +
+  credentials (or a credential profile), or ICMP-only; force-add skips the reachability
+  preflight. Discovery and the first poll then run automatically.
+- **Auto-discovery:** **Monitoring → Discovery** (operator tier) sweeps a CIDR with ordered
+  credential profiles and allow/exclude CIDR safety lists; duplicates (sysName/serial/
+  management IP) are detected instead of re-added.
+- **Organize:** locations, static and dynamic device groups, poller groups, dependencies,
+  and per-device module overrides (device > group > OS > global precedence).
+- **Maintenance:** schedule windows to suppress alerts; disable a device to stop polling
+  entirely (it shows as `disabled`, never flaps to `down`).
 
 ### Verify it's working
 
-A device you can ping flips to **up** with a latency value within one poll interval;
-blocking ICMP flips it to **down** and opens a critical alert on **Monitoring → Problems**
-(restoring it clears the alert). For SNMP devices, the **Ports** tab on the device page lists
-interfaces, with in/out bit-rates appearing from the **second** poll onward (the first poll
-just seeds the counters).
+A reachable device flips to **up** within one poll cycle and its overview shows uptime,
+hardware, and OS from SNMP. The **Ports** tab lists every interface (bit-rates from the
+second poll onward), **Health** lists every discovered sensor, and **Data Collection**
+shows the collection plan outcome for the last run — anything less than 100% coverage is
+itemised, never hidden.
 
-### Troubleshooting
-
-| Symptom | Likely cause |
-|---|---|
-| Everything shows **down** | ICMP blocked from the server, or `ping` binary missing |
-| Status up but **no SNMP data** | Wrong community/version, UDP/161 blocked, or device is v3 with no credentials set |
-| **No bit-rates** on interfaces | Only one poll has run — wait one more interval |
-| Discovery finds **nothing** | Wrong CIDR, firewall, or community; try `Ping only` first |
-| Scan rejected as **too large** | Range > 1024 hosts — scan a smaller subnet (e.g. `/24`) |
-
----
 
 ## 🗺️ Roadmap & Limitations
 

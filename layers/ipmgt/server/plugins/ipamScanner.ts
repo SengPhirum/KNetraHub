@@ -6,9 +6,9 @@ import type { SubnetRow } from '~~/layers/ipmgt/server/utils/ipamStore'
 /**
  * Scheduled IPAM subnet scanner. On each cycle, scans every subnet with
  * ping_enabled or scan_enabled (host-status refresh and/or new-host
- * discovery respectively - see ipamScan.ts). Same setTimeout-warm-up +
- * setInterval pattern as Monitoring's netPoller/serverPoller; no shared job
- * queue exists in this app. Disable with NUXT_IPMGT_SCAN_ENABLED=false.
+ * discovery respectively - see ipamScan.ts). Simple setTimeout-warm-up +
+ * setInterval pattern (unlike Monitoring, which runs a durable DB-backed job
+ * queue). Disable with NUXT_IPMGT_SCAN_ENABLED=false.
  */
 export default defineNitroPlugin(() => {
   if (useRuntimeConfig().public.staticDocs) return
