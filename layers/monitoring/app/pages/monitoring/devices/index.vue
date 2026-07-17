@@ -5,7 +5,7 @@ const route = useRoute()
 const toast = useToast()
 
 const filters = reactive({
-  status: (route.query.status as string) || '',
+  status: (route.query.status as string) || 'all',
   os: '',
   q: ''
 })
@@ -13,7 +13,7 @@ const page = ref(1)
 
 const query = computed(() => {
   const p = new URLSearchParams()
-  if (filters.status) p.set('status', filters.status)
+  if (filters.status && filters.status !== 'all') p.set('status', filters.status)
   if (filters.os) p.set('os', filters.os)
   if (filters.q) p.set('q', filters.q)
   p.set('page', String(page.value))
@@ -25,8 +25,42 @@ const { data, status, refresh } = useAsyncData('monDevices',
   () => $fetch<any>(`/api/monitoring/v1/devices?${query.value}`),
   { server: false, default: () => ({ items: [], total: 0 }), watch: [query] })
 
+const selected = ref<Set<number>>(new Set())
+watch(query, () => { selected.value = new Set() })
+const allOnPageSelected = computed(() => !!data.value?.items?.length && data.value.items.every((d: any) => selected.value.has(d.id)))
+function toggleAllOnPage() {
+  const next = new Set(selected.value)
+  if (allOnPageSelected.value) {
+    for (const d of data.value.items) next.delete(d.id)
+  } else {
+    for (const d of data.value.items) next.add(d.id)
+  }
+  selected.value = next
+}
+function toggleOne(id: number) {
+  const next = new Set(selected.value)
+  if (next.has(id)) next.delete(id); else next.add(id)
+  selected.value = next
+}
+
+const deleteConfirmOpen = ref(false)
+const deleting = ref(false)
+async function confirmBulkDelete() {
+  deleting.value = true
+  try {
+    const ids = [...selected.value]
+    const res = await $fetch<any>('/api/monitoring/v1/devices', { method: 'DELETE', body: { ids } })
+    toast.add({ title: `Deleted ${res.deleted} device(s)`, color: 'primary', icon: 'i-lucide-check' })
+    selected.value = new Set()
+    deleteConfirmOpen.value = false
+    await refresh()
+  } catch (e: any) {
+    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { deleting.value = false }
+}
+
 const statusItems = [
-  { value: '', label: 'All statuses' }, { value: 'up', label: 'Up' }, { value: 'down', label: 'Down' },
+  { value: 'all', label: 'All statuses' }, { value: 'up', label: 'Up' }, { value: 'down', label: 'Down' },
   { value: 'degraded', label: 'Degraded' }, { value: 'maintenance', label: 'Maintenance' },
   { value: 'disabled', label: 'Disabled' }, { value: 'pending', label: 'Pending' }
 ]
@@ -64,13 +98,16 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
       <div class="flex flex-wrap items-center gap-2">
         <USelect v-model="filters.status" :items="statusItems" size="sm" class="w-44" />
         <UInput v-model="filters.q" placeholder="Search hostname / IP…" icon="i-lucide-search" size="sm" class="w-64" />
-        <span class="ml-auto text-sm text-muted">{{ data?.total ?? 0 }} devices</span>
+        <UButton v-if="canManage && selected.size" size="sm" color="error" variant="soft" icon="i-lucide-trash-2"
+          @click="deleteConfirmOpen = true">Delete selected ({{ selected.size }})</UButton>
+        <span class="ml-auto text-sm text-muted">{{ data?.total ?? 0 }} device{{ (data?.total ?? 0) === 1 ? '' : 's' }}</span>
       </div>
 
       <div class="panel overflow-hidden">
         <table class="w-full text-sm">
           <thead class="bg-surface-2 text-left text-xs uppercase tracking-wide text-faint">
             <tr>
+              <th v-if="canManage" class="w-8 px-3 py-2"><UCheckbox :model-value="allOnPageSelected" @update:model-value="toggleAllOnPage" /></th>
               <th class="px-3 py-2">Status</th><th class="px-3 py-2">Hostname</th>
               <th class="px-3 py-2">IP</th><th class="px-3 py-2">OS</th>
               <th class="px-3 py-2 text-right">Uptime</th><th class="px-3 py-2 text-right">Ports</th>
@@ -78,14 +115,16 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="status === 'pending'"><td colspan="8" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
-            <tr v-else-if="!data?.items?.length"><td colspan="8" class="px-3 py-8 text-center text-muted">No devices. Add one to begin.</td></tr>
+            <tr v-if="status === 'pending'"><td :colspan="canManage ? 9 : 8" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
+            <tr v-else-if="!data?.items?.length"><td :colspan="canManage ? 9 : 8" class="px-3 py-8 text-center text-muted">No devices. Add one to begin.</td></tr>
             <tr v-for="d in data.items" :key="d.id" class="border-t border-hull hover:bg-surface-2/50">
+              <td v-if="canManage" class="px-3 py-2"><UCheckbox :model-value="selected.has(d.id)" @update:model-value="toggleOne(d.id)" /></td>
               <td class="px-3 py-2">
-                <span :class="['inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs', deviceStatusMeta(d.status).badge]">
+                <span :class="['inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs', deviceStatusMeta(d.status).badge]" :title="d.status_reason">
                   <span :class="['h-1.5 w-1.5 rounded-full', deviceStatusMeta(d.status).dot]" />
                   {{ deviceStatusMeta(d.status).label }}
                 </span>
+                <div v-if="d.status_reason" class="mt-0.5 max-w-[16rem] truncate text-xs text-faint" :title="d.status_reason">{{ d.status_reason }}</div>
               </td>
               <td class="px-3 py-2">
                 <NuxtLink :to="`/monitoring/devices/${d.id}`" class="font-medium text-primary hover:underline">
@@ -139,6 +178,21 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
         <div class="flex justify-end gap-2">
           <UButton variant="ghost" @click="addOpen = false">Cancel</UButton>
           <UButton :loading="adding" :disabled="!addForm.hostname" @click="submitAdd">Add device</UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="deleteConfirmOpen" title="Delete devices">
+      <template #body>
+        <p class="text-sm text-muted">
+          Delete <strong>{{ selected.size }}</strong> device(s) and all their collected data (ports, sensors, metrics,
+          alerts, history)? This cannot be undone.
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton variant="ghost" @click="deleteConfirmOpen = false">Cancel</UButton>
+          <UButton color="error" :loading="deleting" @click="confirmBulkDelete">Delete</UButton>
         </div>
       </template>
     </UModal>

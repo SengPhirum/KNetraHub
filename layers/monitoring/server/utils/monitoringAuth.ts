@@ -10,9 +10,12 @@ import type { AppTier } from '~~/shared/utils/entitlements'
  *  - viewer:   read everything (devices, graphs, alerts, logs, maps, reports)
  *  - operator: acknowledge alerts + notes, run poll/discovery now,
  *              maintenance windows, replay dead-letter jobs / traps
- *  - manager:  full Monitoring administration (devices, credentials, rules,
- *              transports, templates, services, bills, groups, settings) —
- *              the "Monitoring administrator" tier
+ *  - admin:    full Monitoring administration (devices, credentials, rules,
+ *              transports, templates, services, bills, groups, settings)
+ *
+ * `manager` (between operator and admin in the platform-wide AppTier scale)
+ * is not used by any Monitoring endpoint — every admin-only route requires
+ * 'admin' outright.
  */
 export function requireMonitoring(event: H3Event, min: AppTier = 'viewer'): Promise<SessionUser> {
   return requireApp(event, 'monitoring', min)

@@ -9,6 +9,6 @@ export default defineEventHandler(async (event) => {
   const inner = `SELECT p.id, p.description, p.usage_percent, p.polled_at, d.id AS device_id, d.hostname
      FROM monitoring.processors p JOIN monitoring.devices d ON d.id = p.device_id WHERE p.stale_since IS NULL`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY p.usage_percent DESC NULLS LAST LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY usage_percent DESC NULLS LAST LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })

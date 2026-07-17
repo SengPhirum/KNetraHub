@@ -14,7 +14,10 @@ export default defineEventHandler(async (event) => {
     args.push(String(query.state))
     stateFilter = `WHERE j.state = $${args.length}`
   } else {
-    stateFilter = `WHERE j.state IN ('failed','dead','running')`
+    // Include pending so a backlog (e.g. jobs stuck under a poller_group with
+    // no active node) is visible by default instead of hidden until an
+    // operator thinks to switch the filter.
+    stateFilter = `WHERE j.state IN ('pending','failed','dead','running')`
   }
 
   const rows = await db.query(

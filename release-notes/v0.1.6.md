@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-15 UTC
+Date: 2026-07-17 UTC
 
 ## Docker Images
 
@@ -11,11 +11,15 @@ Date: 2026-07-15 UTC
 
 ## Source
 
-- Commit: `0571274`
+- Commit: `5139116`
 - Previous tag: none
 
 ## Changes
 
+- docs(monitoring): module guides, API/CLI/troubleshooting guides, full parity matrices (5139116)
+- feat(monitoring): build LibreNMS-equivalent monitoring platform from scratch (9a6a30b)
+- refactor(monitoring)!: remove legacy Network/Server (Zabbix-style) monitoring module (71c0019)
+- Update (c135e43)
 - feat: Implement auto-generated favicon and PWA icon based on primary color customization (0571274)
 - feat: Implement auto-generated favicon and PWA icon based on primary color customization (c7ae3aa)
 - feat: Implement dynamic favicon and PWA icon tinting based on primary color customization (c9f114d)

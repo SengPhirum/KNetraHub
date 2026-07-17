@@ -55,6 +55,10 @@ export function notFound(what = 'resource'): never {
   throw createError({ statusCode: 404, statusMessage: `${what} not found` })
 }
 
+export function conflict(message: string): never {
+  throw createError({ statusCode: 409, statusMessage: message })
+}
+
 /** Write a portal audit row for a monitoring state change. */
 export async function auditMonitoring(actor: string, action: string, target: string, detail?: string): Promise<void> {
   try {

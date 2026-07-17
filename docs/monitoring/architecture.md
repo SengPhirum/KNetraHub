@@ -139,7 +139,8 @@ deliveries are recorded redacted in `alert_notifications`.
 (`appAccess` middleware = authentication boundary), tiers enforced per
 endpoint with `requireMonitoring(event, tier)`:
 viewer = read; operator = ack/notes/poll-now/discover-now/maintenance;
-manager = full configuration. All list endpoints support
+admin = full configuration (the `manager` AppTier is not used by this app).
+All list endpoints support
 `page/per_page/sort/order/q` + column filters and return
 `{ items, total, page, per_page }`. Errors use H3 `createError` consistently.
 Secrets never serialize. OpenAPI description lives in `docs/monitoring/api.md`.

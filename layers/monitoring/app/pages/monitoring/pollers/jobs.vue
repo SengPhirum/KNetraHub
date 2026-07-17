@@ -2,8 +2,8 @@
 // Failed/dead/running jobs with dead-letter replay (operator tier).
 const { hasMonitoring, canOperate } = useMonitoring()
 const toast = useToast()
-const stateFilter = ref('')
-const url = computed(() => `/api/monitoring/v1/pollers/jobs${stateFilter.value ? '?state=' + stateFilter.value : ''}`)
+const stateFilter = ref('all')
+const url = computed(() => `/api/monitoring/v1/pollers/jobs${stateFilter.value !== 'all' ? '?state=' + stateFilter.value : ''}`)
 const { data, status, refresh } = useAsyncData('monJobs',
   () => $fetch<any>(url.value),
   { server: false, default: () => ({ items: [] }), watch: [url] })
@@ -19,7 +19,7 @@ async function replay(id: number) {
   } finally { replaying.value = null }
 }
 const stateItems = [
-  { value: '', label: 'Failed + dead + running' }, { value: 'pending', label: 'Pending' },
+  { value: 'all', label: 'Pending + failed + dead + running' }, { value: 'pending', label: 'Pending only' },
   { value: 'running', label: 'Running' }, { value: 'failed', label: 'Failed' },
   { value: 'dead', label: 'Dead-letter' }, { value: 'done', label: 'Done' }
 ]
@@ -49,8 +49,8 @@ const stateItems = [
               <td class="px-3 py-2 text-right text-muted">{{ j.attempts }}/{{ j.max_attempts }}</td>
               <td class="px-3 py-2 max-w-md truncate text-xs text-faint" :title="j.last_error">{{ j.last_error || '—' }}</td>
               <td class="px-3 py-2 text-right">
-                <UButton v-if="canOperate && ['failed','dead'].includes(j.state)" size="xs" variant="soft"
-                  :loading="replaying === j.id" @click="replay(j.id)">Replay</UButton>
+                <UButton v-if="canOperate && ['pending','failed','dead'].includes(j.state)" size="xs" variant="soft"
+                  :loading="replaying === j.id" @click="replay(j.id)">Run now</UButton>
               </td>
             </tr>
           </tbody>

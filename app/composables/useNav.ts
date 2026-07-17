@@ -127,6 +127,7 @@ const MONITORING_GROUPS: NavGroup[] = [
     items: [
       { label: 'Pollers',         to: '/monitoring/pollers',         icon: 'i-lucide-radio-tower',   permission: 'monitoring.view' },
       { label: 'Data Collection', to: '/monitoring/data-collection', icon: 'i-lucide-database-zap',  permission: 'monitoring.view' },
+      { label: 'SNMP Credentials', to: '/monitoring/settings/credentials', icon: 'i-lucide-key-round', permission: 'monitoring.manage' },
       { label: 'Settings',        to: '/monitoring/settings',        icon: 'i-lucide-settings',      permission: 'monitoring.manage' },
       { label: 'Logs',            to: '/monitoring/logs',            icon: 'i-lucide-file-terminal', permission: 'monitoring.scan' }
     ]

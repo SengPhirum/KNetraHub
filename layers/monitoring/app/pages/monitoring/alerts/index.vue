@@ -2,9 +2,9 @@
 // Active alerts with acknowledge action (operator tier).
 const { hasMonitoring, canOperate } = useMonitoring()
 const toast = useToast()
-const stateFilter = ref('')
+const stateFilter = ref('active')
 
-const url = computed(() => `/api/monitoring/v1/alerts${stateFilter.value ? '?state=' + stateFilter.value : ''}`)
+const url = computed(() => `/api/monitoring/v1/alerts${stateFilter.value !== 'active' ? '?state=' + stateFilter.value : ''}`)
 const { data, status, refresh } = useAsyncData('monAlerts',
   () => $fetch<any>(url.value),
   { server: false, default: () => ({ items: [], total: 0 }), watch: [url] })
@@ -27,7 +27,7 @@ async function confirmAck() {
 }
 
 const stateItems = [
-  { value: '', label: 'Active' }, { value: 'open', label: 'Open' },
+  { value: 'active', label: 'Active' }, { value: 'open', label: 'Open' },
   { value: 'acknowledged', label: 'Acknowledged' }, { value: 'recovered', label: 'Recovered' }
 ]
 </script>

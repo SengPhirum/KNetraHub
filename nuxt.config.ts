@@ -16,6 +16,10 @@ const appVersion = require('./package.json').version
 // the built output so it reflects when THIS build was produced, not when the
 // server process happens to start. Lets ops confirm the right build is live.
 const buildDate = new Date().toISOString()
+// Nitro's rollup treeshaker normalizes ids via `pathe` (forward slashes on
+// every platform) before prefix-matching against moduleSideEffects below —
+// path.resolve() alone would emit backslashes on Windows and never match.
+const monitoringServerDir = require('node:path').resolve(__dirname, 'layers/monitoring/server').replace(/\\/g, '/')
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-06-01',
@@ -269,6 +273,17 @@ export default defineNuxtConfig({
     // (Network monitoring) are kept external too: ping spawns the system binary
     // and net-snmp pulls in BER/buffer deps that are happier left unbundled.
     externals: { external: ['pg', 'net-snmp', 'ping'] },
+    // Nitro's Rollup build defaults every first-party module to
+    // moduleSideEffects:false, so a bare `import './foo'` with no imported
+    // binding gets silently dropped from the bundle unless something else
+    // also imports a named export from it. The monitoring layer's
+    // registry-driven architecture (OS definitions, discovery/poller
+    // modules) is built entirely on such imports — each file self-registers
+    // via a defineXxx() call at module load time, with nothing to import by
+    // name. Without this, those calls never ran in the built server: the OS
+    // and module registries were empty at runtime, and every poll/discovery
+    // job crashed reading `.disabledModules` off an undefined OS lookup.
+    moduleSideEffects: [monitoringServerDir],
     // Docs build: only prerender /documentation (and root redirect)
     ...(isDocsBuild ? {
       prerender: {

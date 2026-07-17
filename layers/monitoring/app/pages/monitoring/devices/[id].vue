@@ -10,6 +10,35 @@ const { data, status, refresh } = useAsyncData(`monDevice:${id.value}`,
   () => $fetch<any>(`/api/monitoring/v1/devices/${id.value}`),
   { server: false, default: () => null })
 
+// SNMP credential profile assignment (device detail's own picker — the
+// Settings > SNMP Credentials page only manages the profile list, it has no
+// per-device assignment UI).
+const { data: profilesData } = useAsyncData('monCredentialProfilesForDevice',
+  () => $fetch<any>('/api/monitoring/v1/credential-profiles'),
+  { server: false, default: () => ({ items: [] }) })
+const profileItems = computed(() => [
+  { value: 'none', label: '— None —' },
+  ...(profilesData.value?.items ?? []).map((p: any) => ({ value: String(p.id), label: p.name }))
+])
+const selectedProfileId = ref('none')
+watch(() => data.value?.device?.credential_profile_id, (pid) => {
+  selectedProfileId.value = pid != null ? String(pid) : 'none'
+}, { immediate: true })
+const savingProfile = ref(false)
+async function updateCredentialProfile(value: string) {
+  savingProfile.value = true
+  try {
+    await $fetch(`/api/monitoring/v1/devices/${id.value}`, {
+      method: 'PUT', body: { credential_profile_id: value === 'none' ? null : Number(value) }
+    })
+    toast.add({ title: 'SNMP credential updated', color: 'primary', icon: 'i-lucide-check' })
+    await refresh()
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+    selectedProfileId.value = data.value?.device?.credential_profile_id != null ? String(data.value.device.credential_profile_id) : 'none'
+  } finally { savingProfile.value = false }
+}
+
 const tab = ref('overview')
 const tabs = [
   ['overview', 'Overview'], ['ports', 'Ports'], ['health', 'Health'], ['processors', 'Processors'],
@@ -34,12 +63,32 @@ async function loadTab(t: string) {
 }
 watch(tab, (t) => loadTab(t))
 
+const actionRunning = ref<'poll' | 'discover' | null>(null)
 async function runAction(action: 'poll' | 'discover') {
+  const label = action === 'poll' ? 'Poll' : 'Discovery'
+  const stampField = action === 'poll' ? 'last_polled_at' : 'last_discovered_at'
+  const stampBefore = d.value?.[stampField]
+  actionRunning.value = action
   try {
     await $fetch(`/api/monitoring/v1/devices/${id.value}/${action}`, { method: 'POST' })
-    toast.add({ title: `${action === 'poll' ? 'Poll' : 'Discovery'} queued`, color: 'primary', icon: 'i-lucide-check' })
+    toast.add({ title: `${label} queued`, color: 'primary', icon: 'i-lucide-check' })
+    // Jobs run in the background (SNMP timeouts alone can take several
+    // seconds) — without this the page just sits stale until a manual
+    // reload, which reads as "the button doesn't do anything."
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      await refresh()
+      if (d.value?.[stampField] && d.value[stampField] !== stampBefore) {
+        toast.add({ title: `${label} complete`, color: 'primary', icon: 'i-lucide-check-check' })
+        if (SUB_ENDPOINTS[tab.value]) await loadTab(tab.value)
+        return
+      }
+    }
+    toast.add({ title: `${label} still running`, description: 'Taking longer than expected — check Jobs or reload shortly.', color: 'warning' })
   } catch (e: any) {
     toast.add({ title: 'Action failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally {
+    actionRunning.value = null
   }
 }
 
@@ -58,8 +107,11 @@ const d = computed(() => data.value?.device)
               <span :class="['h-1.5 w-1.5 rounded-full', deviceStatusMeta(d.status).dot]" />
               {{ deviceStatusMeta(d.status).label }}
             </span>
-            <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-refresh-cw" @click="runAction('poll')">Poll now</UButton>
-            <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-scan-line" @click="runAction('discover')">Rediscover</UButton>
+            <span v-if="d.status_reason" class="text-xs text-amber-400">{{ d.status_reason }}</span>
+            <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-refresh-cw" :loading="actionRunning === 'poll'"
+              :disabled="!!actionRunning" @click="runAction('poll')">Poll now</UButton>
+            <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-scan-line" :loading="actionRunning === 'discover'"
+              :disabled="!!actionRunning" @click="runAction('discover')">Rediscover</UButton>
           </div>
         </template>
       </PageHeader>
@@ -85,6 +137,31 @@ const d = computed(() => data.value?.device)
             <div class="flex justify-between"><dt class="text-muted">Location</dt><dd>{{ d.location_name || '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-muted">sysName</dt><dd>{{ d.sys_name || '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-muted">ICMP / SNMP</dt><dd>{{ d.icmp_status }} / {{ d.snmp_status }}</dd></div>
+            <div class="flex justify-between">
+              <dt class="text-muted">SNMP credential</dt>
+              <dd class="text-right">
+                <span v-if="d.snmp_disabled" class="text-faint">ICMP-only</span>
+                <div v-else-if="canManage">
+                  <USelect v-model="selectedProfileId" :items="profileItems" size="xs" class="w-40"
+                    :disabled="savingProfile" @update:model-value="updateCredentialProfile" />
+                  <div v-if="d.snmp_community_set || d.v3_auth_password_set" class="mt-0.5 text-[11px] text-amber-400">
+                    device-specific settings also set — those win per-field
+                  </div>
+                  <div v-else-if="!profilesData?.items?.length" class="mt-0.5 text-[11px] text-faint">
+                    No profiles yet —
+                    <NuxtLink to="/monitoring/settings/credentials" class="underline">create one</NuxtLink>
+                  </div>
+                </div>
+                <template v-else>
+                  <span v-if="d.snmp_community_set || d.v3_auth_password_set">device-specific</span>
+                  <span v-else-if="d.credential_profile_name">{{ d.credential_profile_name }}</span>
+                  <span v-else class="text-amber-400">
+                    none —
+                    <NuxtLink to="/monitoring/settings/credentials" class="underline">add one</NuxtLink>
+                  </span>
+                </template>
+              </dd>
+            </div>
             <div class="flex justify-between"><dt class="text-muted">Last polled</dt><dd class="text-xs">{{ d.last_polled_at ? new Date(d.last_polled_at).toLocaleString() : '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-muted">Last discovered</dt><dd class="text-xs">{{ d.last_discovered_at ? new Date(d.last_discovered_at).toLocaleString() : '—' }}</dd></div>
           </dl>

@@ -6,8 +6,8 @@ import { enqueue } from '../../../../jobs/queue'
 /**
  * POST /api/monitoring/v1/devices — add a device (admin tier).
  * Body: hostname (required) + optional SNMP/credential/location fields.
- * force=true skips the reachability preflight. Discovery is queued
- * immediately so the device populates without waiting for the next cycle.
+ * There is no reachability preflight — discovery is queued immediately so
+ * the device populates without waiting for the next cycle.
  */
 export default defineEventHandler(async (event) => {
   const user = await requireMonitoring(event, 'admin')
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   )
   const device = res.rows[0]
 
-  await enqueue(db, { type: 'discovery', deviceId: Number(device.id), dedupeKey: `discovery:${device.id}`, priority: 10 })
+  await enqueue(db, { type: 'discovery', deviceId: Number(device.id), pollerGroup: Number(values.poller_group ?? 0), dedupeKey: `discovery:${device.id}`, priority: 10 })
   await auditMonitoring(user.username, 'device.create', String(device.id), `hostname=${device.hostname}`)
 
   setResponseStatus(event, 201)

@@ -13,6 +13,6 @@ export default defineEventHandler(async (event) => {
      LEFT JOIN LATERAL (SELECT * FROM monitoring.port_metrics WHERE port_id = p.id ORDER BY time DESC LIMIT 1) m ON true
      WHERE p.stale_since IS NULL`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY p.oper_status DESC, d.hostname, p.if_index LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY oper_status DESC, hostname, if_index LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })

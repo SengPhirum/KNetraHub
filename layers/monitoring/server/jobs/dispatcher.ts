@@ -3,6 +3,7 @@ import { getDb } from '~~/server/utils/db'
 import { enqueue, claim, complete, fail, reapExpiredLeases, type JobRow } from './queue'
 import { runPoll } from '../polling/engine'
 import { runDiscovery } from '../discovery/engine'
+import { runDiscoveryScan } from '../discovery/scan'
 import { runDueServiceChecks } from '../services/runner'
 import { evaluateAlertRules } from '../alerting/evaluate'
 import { runHousekeeping } from './housekeeping'
@@ -112,13 +113,15 @@ async function scheduleDueWork(): Promise<void> {
     await enqueue(db, { type: 'discovery', deviceId: Number(row.id), pollerGroup: Number(row.poller_group), dedupeKey: `discovery:${row.id}`, priority: 80 })
   }
 
-  // Singleton periodic jobs (dedupe key includes the time bucket).
+  // Singleton periodic jobs (dedupe key includes the time bucket). Marked
+  // global so they run even on deployments where every node has a dedicated
+  // non-zero poller_group and none is left running the default group 0.
   const minuteBucket = Math.floor(Date.now() / 60000)
-  await enqueue(db, { type: 'alerts', dedupeKey: `alerts:${minuteBucket}`, priority: 10, maxAttempts: 1 })
-  await enqueue(db, { type: 'services', dedupeKey: `services:${minuteBucket}`, priority: 40, maxAttempts: 1 })
-  await enqueue(db, { type: 'billing', dedupeKey: `billing:${minuteBucket}`, priority: 90, maxAttempts: 1 })
+  await enqueue(db, { type: 'alerts', global: true, dedupeKey: `alerts:${minuteBucket}`, priority: 10, maxAttempts: 1 })
+  await enqueue(db, { type: 'services', global: true, dedupeKey: `services:${minuteBucket}`, priority: 40, maxAttempts: 1 })
+  await enqueue(db, { type: 'billing', global: true, dedupeKey: `billing:${minuteBucket}`, priority: 90, maxAttempts: 1 })
   const dayBucket = new Date().toISOString().slice(0, 10)
-  await enqueue(db, { type: 'housekeeping', dedupeKey: `housekeeping:${dayBucket}`, priority: 200, maxAttempts: 1 })
+  await enqueue(db, { type: 'housekeeping', global: true, dedupeKey: `housekeeping:${dayBucket}`, priority: 200, maxAttempts: 1 })
 }
 
 async function claimAndRun(): Promise<void> {
@@ -157,6 +160,12 @@ async function executeJob(job: JobRow): Promise<void> {
       if (job.device_id == null) throw new Error('discovery job without device')
       await runDiscovery(job.device_id, job.id)
       return
+    case 'discovery_scan': {
+      const scanId = Number((job.payload as any)?.scanId)
+      if (!scanId) throw new Error('discovery_scan job without scanId')
+      await runDiscoveryScan(scanId)
+      return
+    }
     case 'services':
       await runDueServiceChecks()
       return

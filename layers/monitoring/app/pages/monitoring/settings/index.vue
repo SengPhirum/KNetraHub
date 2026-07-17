@@ -37,7 +37,8 @@ const rows = [
           </tbody>
         </table>
       </div>
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid gap-4 sm:grid-cols-4">
+        <NuxtLink to="/monitoring/settings/credentials" class="panel p-4 hover:ring-1 hover:ring-primary/40"><h3 class="font-semibold">SNMP Credentials</h3><p class="text-sm text-muted">Community/v3 sets tried during discovery</p></NuxtLink>
         <NuxtLink to="/monitoring/alerts/rules" class="panel p-4 hover:ring-1 hover:ring-primary/40"><h3 class="font-semibold">Alert rules</h3><p class="text-sm text-muted">Rule conditions, delays, scoping</p></NuxtLink>
         <NuxtLink to="/monitoring/alerts/transports" class="panel p-4 hover:ring-1 hover:ring-primary/40"><h3 class="font-semibold">Transports</h3><p class="text-sm text-muted">Delivery channels + test</p></NuxtLink>
         <NuxtLink to="/monitoring/pollers" class="panel p-4 hover:ring-1 hover:ring-primary/40"><h3 class="font-semibold">Pollers</h3><p class="text-sm text-muted">Nodes, queue, dead-letter</p></NuxtLink>

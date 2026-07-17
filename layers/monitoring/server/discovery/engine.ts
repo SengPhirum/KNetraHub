@@ -1,6 +1,7 @@
 import { getDb } from '~~/server/utils/db'
 import { SnmpClient } from '../snmp/engine'
-import { resolveSnmpConfig } from '../core/credentials'
+import { resolveSnmpCandidates } from '../core/credentials'
+import { SYS } from '../snmp/oids'
 import { getDiscoveryModules, getOs, type DeviceRow, type ModuleContext } from '../core/registry'
 import { resolveEnabledModules } from '../core/moduleSettings'
 import { AttemptBuffer } from '../core/attempts'
@@ -49,15 +50,40 @@ export async function runDiscovery(deviceId: number, jobId: number | null = null
   const runId = Number(runRes.rows[0].id)
   const attempts = new AttemptBuffer(db, runId, deviceId)
 
+  // Establish an SNMP session. A device with its own SNMP settings or an
+  // already-assigned credential profile gets exactly one candidate (nothing
+  // to try). A freshly-added device with neither (e.g. imported from a CIDR
+  // scan) gets every saved credential profile tried in attempt_order, then
+  // the classic "public"/v2c default — the first one to answer a real GET
+  // is adopted and pinned on the device so future polls skip straight to it.
   let snmp: SnmpClient | null = null
   if (!device.snmp_disabled) {
-    const cfg = await resolveSnmpConfig(db, device)
-    if (cfg) {
+    const candidates = await resolveSnmpCandidates(db, device)
+    for (const candidate of candidates) {
+      let client: SnmpClient
       try {
-        snmp = new SnmpClient(cfg)
+        client = new SnmpClient(candidate.cfg)
       } catch (err: any) {
         attempts.record('core', 'snmp-session', 'failed', String(err?.message ?? err))
+        continue
       }
+      const probe = await client.getOne(SYS.sysDescr)
+      if (probe.ok) {
+        snmp = client
+        if (candidate.profileId != null && device.credential_profile_id == null) {
+          await db.query(`UPDATE monitoring.devices SET credential_profile_id = $2 WHERE id = $1`, [device.id, candidate.profileId])
+          device.credential_profile_id = candidate.profileId
+        }
+        break
+      }
+      client.close()
+    }
+    if (!snmp && candidates.length) {
+      attempts.record('core', 'snmp-session', 'failed', `no working SNMP credential (tried ${candidates.length})`)
+      await recordEvent(db, {
+        deviceId: device.id, eventType: 'snmp_credentials_missing', severity: 'warning',
+        message: `SNMP: none of ${candidates.length} configured credential(s) responded — add or fix a profile in Settings → SNMP Credentials, or set this device's SNMP settings directly`
+      })
     }
   }
 
@@ -115,11 +141,15 @@ export async function runDiscovery(deviceId: number, jobId: number | null = null
 
   const durationMs = Date.now() - started
   const intervalSec = Number(device.discovery_interval_seconds ?? (useRuntimeConfig().monitoring as any).discoveryIntervalSeconds ?? 21600)
+  // Liveness (pending/up/down) is decided solely by the poll cycle's
+  // availability module (real ICMP reachability) — discovery used to flip
+  // status to 'up' unconditionally on completion, even for a host that never
+  // answered SNMP or ICMP, as long as no module outright failed (e.g. no
+  // credentials configured means every SNMP module is skipped, not failed).
   await db.query(
     `UPDATE monitoring.devices SET
        last_discovered_at = now(), last_discovery_duration_ms = $2,
        next_discovery_at = now() + make_interval(secs => $3),
-       status = CASE WHEN status = 'pending' THEN 'up' ELSE status END,
        updated_at = now()
      WHERE id = $1`,
     [deviceId, durationMs, intervalSec]

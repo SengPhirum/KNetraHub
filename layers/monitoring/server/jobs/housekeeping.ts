@@ -30,6 +30,12 @@ export async function runHousekeeping(): Promise<void> {
   await db.query(`DELETE FROM monitoring.events WHERE created_at < now() - make_interval(days => $1)`, [Number(rc.eventRetentionDays ?? 90)])
   await db.query(`DELETE FROM monitoring.traps WHERE received_at < now() - make_interval(days => $1)`, [Number(rc.trapRetentionDays ?? 30)])
   await db.query(`DELETE FROM monitoring.poll_runs WHERE started_at < now() - make_interval(days => $1)`, [Number(rc.jobRunRetentionDays ?? 7)])
+  // Only trim finished scans — never a still-running one, however old (a stuck
+  // 'running' scan is a bug to investigate, not data to silently delete).
+  await db.query(
+    `DELETE FROM monitoring.discovery_scans WHERE status IN ('done','failed') AND created_at < now() - make_interval(days => $1)`,
+    [Number(rc.jobRunRetentionDays ?? 7)]
+  )
   await trimFinishedJobs(db, 2)
 
   // ── Stale entity purge (repeatedly-confirmed-absent only) ──

@@ -57,7 +57,7 @@ export const JOB_STATES = ['pending', 'running', 'done', 'failed', 'dead'] as co
 export type JobState = (typeof JOB_STATES)[number]
 
 /** Job types the dispatcher schedules. */
-export const JOB_TYPES = ['poll', 'discovery', 'services', 'alerts', 'housekeeping', 'billing'] as const
+export const JOB_TYPES = ['poll', 'discovery', 'discovery_scan', 'services', 'alerts', 'housekeeping', 'billing'] as const
 export type JobType = (typeof JOB_TYPES)[number]
 
 /**

@@ -18,14 +18,19 @@ export default defineEventHandler(async (event) => {
     deviceFilter = `AND ca.device_id = $${args.length}`
   }
 
+  const whereClause = `ca.outcome IN ('timeout','auth_failure','parse_error','db_error','failed') ${deviceFilter}`
   const rows = await db.query(
     `SELECT ca.time, ca.device_id, d.hostname, ca.module, ca.item, ca.outcome, ca.detail, ca.duration_ms
      FROM monitoring.collection_attempts ca
      LEFT JOIN monitoring.devices d ON d.id = ca.device_id
-     WHERE ca.outcome IN ('timeout','auth_failure','parse_error','db_error','failed') ${deviceFilter}
+     WHERE ${whereClause}
      ORDER BY ca.time DESC
      LIMIT $${args.length + 1} OFFSET $${args.length + 2}`,
     [...args, p.perPage, p.offset]
+  )
+  const totalRes = await db.query(
+    `SELECT count(*)::int AS c FROM monitoring.collection_attempts ca WHERE ${whereClause}`,
+    args
   )
   const byOutcome = await db.query(
     `SELECT outcome, count(*)::int AS c FROM monitoring.collection_attempts
@@ -33,5 +38,5 @@ export default defineEventHandler(async (event) => {
        AND outcome IN ('timeout','auth_failure','parse_error','db_error','failed','unsupported')
      GROUP BY outcome ORDER BY c DESC`
   )
-  return { ...listEnvelope(rows.rows, rows.rows.length, p), by_outcome_24h: byOutcome.rows }
+  return { ...listEnvelope(rows.rows, Number(totalRes.rows[0].c), p), by_outcome_24h: byOutcome.rows }
 })

@@ -3,22 +3,7 @@ import { decryptSecret } from '~~/server/utils/secretCrypto'
 import type { ResolvedSnmpConfig } from '../snmp/engine'
 import type { DeviceRow } from './registry'
 
-/**
- * Resolve the effective SNMP configuration for a device: per-device override
- * columns win, then the linked credential profile, then engine defaults from
- * runtimeConfig. All secrets are decrypted here, on the server, at use time —
- * they never leave this module except inside the SnmpClient.
- */
-export async function resolveSnmpConfig(db: Pool, device: DeviceRow): Promise<ResolvedSnmpConfig | null> {
-  if (device.snmp_disabled) return null
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
-
-  let profile: Record<string, any> | null = null
-  if (device.credential_profile_id != null) {
-    const res = await db.query('SELECT * FROM monitoring.credential_profiles WHERE id = $1', [device.credential_profile_id])
-    profile = res.rows[0] ?? null
-  }
-
+function buildConfig(device: DeviceRow, profile: Record<string, any> | null, rc: Record<string, any>): ResolvedSnmpConfig | null {
   const pick = <T>(deviceVal: T | null | undefined, profileVal: T | null | undefined, fallback: T): T =>
     deviceVal ?? profileVal ?? fallback
 
@@ -49,6 +34,64 @@ export async function resolveSnmpConfig(db: Pool, device: DeviceRow): Promise<Re
     cfg.community = decryptSecret(pick(device.snmp_community as any, profile?.snmp_community, '')) || 'public'
   }
   return cfg
+}
+
+/**
+ * Resolve the effective SNMP configuration for a device: per-device override
+ * columns win, then the linked credential profile, then engine defaults from
+ * runtimeConfig. Single result — used by polling, which should stay fast and
+ * not re-probe alternatives every cycle. All secrets are decrypted here, on
+ * the server, at use time — they never leave this module except inside the
+ * SnmpClient.
+ */
+export async function resolveSnmpConfig(db: Pool, device: DeviceRow): Promise<ResolvedSnmpConfig | null> {
+  if (device.snmp_disabled) return null
+  const rc = useRuntimeConfig().monitoring as Record<string, any>
+
+  let profile: Record<string, any> | null = null
+  if (device.credential_profile_id != null) {
+    const res = await db.query('SELECT * FROM monitoring.credential_profiles WHERE id = $1', [device.credential_profile_id])
+    profile = res.rows[0] ?? null
+  }
+  return buildConfig(device, profile, rc)
+}
+
+export interface SnmpCandidate {
+  cfg: ResolvedSnmpConfig
+  /** The credential_profiles row this came from, if any — discovery pins this on the device once it's confirmed to work. */
+  profileId: number | null
+}
+
+/**
+ * Resolve every SNMP configuration worth trying for a device, in order —
+ * used only by discovery (never polling, which needs one fast answer, not a
+ * trial-and-error loop). A device with its own inline SNMP settings or an
+ * already-assigned profile still resolves to exactly one candidate (nothing
+ * to try — it's already known). Only a device with neither gets the full
+ * list: every saved credential profile in attempt_order, then the classic
+ * "public"/v2c default last, mirroring LibreNMS trying a configured
+ * community list against a newly discovered host.
+ */
+export async function resolveSnmpCandidates(db: Pool, device: DeviceRow): Promise<SnmpCandidate[]> {
+  if (device.snmp_disabled) return []
+  const rc = useRuntimeConfig().monitoring as Record<string, any>
+
+  const hasOwnConfig = device.credential_profile_id != null ||
+    !!device.snmp_version || !!(device.snmp_community as any) || !!(device.v3_username as any)
+  if (hasOwnConfig) {
+    const cfg = await resolveSnmpConfig(db, device)
+    return cfg ? [{ cfg, profileId: (device.credential_profile_id as any) ?? null }] : []
+  }
+
+  const profiles = (await db.query('SELECT * FROM monitoring.credential_profiles ORDER BY attempt_order ASC, id ASC')).rows
+  const candidates: SnmpCandidate[] = []
+  for (const profile of profiles) {
+    const cfg = buildConfig(device, profile, rc)
+    if (cfg) candidates.push({ cfg, profileId: Number(profile.id) })
+  }
+  const fallback = buildConfig(device, null, rc)
+  if (fallback) candidates.push({ cfg: fallback, profileId: null })
+  return candidates
 }
 
 /** Strip every credential column from a device/profile row for API output. */

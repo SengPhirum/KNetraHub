@@ -11,6 +11,6 @@ export default defineEventHandler(async (event) => {
      FROM monitoring.sensors s JOIN monitoring.devices d ON d.id = s.device_id
      WHERE s.stale_since IS NULL`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY s.status DESC, d.hostname, s.sensor_class LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY status DESC, hostname, sensor_class LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })
