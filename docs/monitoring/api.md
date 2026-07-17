@@ -28,12 +28,19 @@ authentication boundary; handlers additionally call
 | Method | Path | Tier | Purpose |
 |---|---|---|---|
 | GET | `/devices` | viewer | List devices (filter: status, os, location_id, poller_group, group_id, q) |
-| POST | `/devices` | admin | Add a device |
+| POST | `/devices` | admin | Add a device — reachability preflight first (explicit credentials must answer a system-scalar GET; with none given every credential profile is tried in attempt order and the match is pinned; ICMP-only devices must answer a ping); `force=true` skips the preflight |
+| DELETE | `/devices` | admin | Bulk delete (`{ ids: [] }`) |
 | GET | `/devices/:id` | viewer | Device detail + counts + availability + last poll |
 | PUT | `/devices/:id` | admin | Update device config |
 | DELETE | `/devices/:id` | admin | Remove a device |
 | POST | `/devices/:id/poll` | operator | Queue an immediate poll |
 | POST | `/devices/:id/discover` | operator | Queue immediate discovery |
+| POST | `/devices/:id/capture` | operator | Diagnostic raw SNMP capture: `{op:'walk', oid|preset, max_rows?}` or `{op:'get', oids:[]}` → every varbind (numeric OID, symbolic name, type, value, hex), row-capped, partial results marked `truncated`; nothing persisted |
+| POST | `/snmp/test` | operator / admin | Connectivity + query test, nothing persisted: `{device_id}` (operator, stored credentials) or inline `{hostname, snmp_version, snmp_community|v3_*, snmp_port?, snmp_context?, credential_profile_id?}` (admin) → ICMP result + SNMP system scalars (parsed + raw varbinds + detected OS) |
+| GET | `/credential-profiles` | viewer | List SNMP credential profiles (secrets as `*_set` booleans) |
+| POST | `/credential-profiles` | admin | Create a credential profile |
+| PUT | `/credential-profiles/:id` | admin | Update a profile (blank secret keeps current) |
+| DELETE | `/credential-profiles/:id` | admin | Delete a profile (referencing devices fall back to per-device credentials) |
 | GET | `/devices/:id/{ports,sensors,processors,mempools,storage,inventory,events,alerts}` | viewer | Device sub-resources |
 | GET | `/ports` `/health` `/processors` `/memory` `/storage` `/inventory` `/wireless` | viewer | Fleet-wide entity lists |
 | GET | `/routing/bgp` `/routing/ospf` | viewer | Routing state |
@@ -69,6 +76,24 @@ curl -sX POST https://portal/api/monitoring/v1/devices \
 
 curl -s https://portal/api/monitoring/v1/devices/42/ports -b "$COOKIE"
 # once discovery completes: every discovered interface, not just one
+```
+
+## Example: test SNMP before adding, then capture raw data
+
+```bash
+# Query test with inline credentials (nothing saved):
+curl -sX POST https://portal/api/monitoring/v1/snmp/test -b "$COOKIE" \
+  -H 'content-type: application/json' \
+  -d '{"hostname":"10.0.0.1","snmp_version":"v2c","snmp_community":"public"}'
+# → { host, icmp: {alive, rttMs}, snmp: { ok, system: {sysName, sysDescr, …},
+#     detected: {os, text}, raw: [{oid, name, type, value}, …] } }
+
+# Raw subtree walk against a saved device (LibreNMS "Capture" equivalent):
+curl -sX POST https://portal/api/monitoring/v1/devices/42/capture -b "$COOKIE" \
+  -H 'content-type: application/json' \
+  -d '{"op":"walk","preset":"interfaces","max_rows":5000}'
+# → { target, rows: [{oid, name:"IF-MIB::ifDescr.1", type, value, hex?}, …],
+#     row_count, truncated, duration_ms }
 ```
 
 ## Example: graph a port

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // Device detail: tabbed view (overview, ports, health, processors, memory,
-// storage, inventory, events, alerts, settings) over real collected data.
+// storage, inventory, events, alerts, data collection, capture, settings)
+// over real collected data.
+import { SNMP_CAPTURE_PRESETS } from '../../../../shared/constants'
+
 const route = useRoute()
 const toast = useToast()
 const id = computed(() => route.params.id as string)
@@ -40,11 +43,16 @@ async function updateCredentialProfile(value: string) {
 }
 
 const tab = ref('overview')
-const tabs = [
-  ['overview', 'Overview'], ['ports', 'Ports'], ['health', 'Health'], ['processors', 'Processors'],
-  ['memory', 'Memory'], ['storage', 'Storage'], ['inventory', 'Inventory'], ['events', 'Events'],
-  ['alerts', 'Alerts'], ['data', 'Data collection']
-] as const
+const tabs = computed(() => {
+  const base: Array<[string, string]> = [
+    ['overview', 'Overview'], ['ports', 'Ports'], ['health', 'Health'], ['processors', 'Processors'],
+    ['memory', 'Memory'], ['storage', 'Storage'], ['inventory', 'Inventory'], ['events', 'Events'],
+    ['alerts', 'Alerts'], ['data', 'Data collection']
+  ]
+  if (canOperate.value) base.push(['capture', 'Capture'])
+  if (canManage.value) base.push(['settings', 'Settings'])
+  return base
+})
 
 // Lazily load the active tab's sub-resource.
 const subData = ref<any>({ items: [] })
@@ -54,6 +62,11 @@ const SUB_ENDPOINTS: Record<string, string> = {
   storage: 'storage', inventory: 'inventory', events: 'events', alerts: 'alerts'
 }
 async function loadTab(t: string) {
+  if (t === 'settings') {
+    initSettings()
+    loadLocations()
+    return
+  }
   const ep = SUB_ENDPOINTS[t]
   if (!ep) return
   subLoading.value = true
@@ -93,6 +106,135 @@ async function runAction(action: 'poll' | 'discover') {
 }
 
 const d = computed(() => data.value?.device)
+
+// --- Capture tab: ad-hoc raw SNMP get/walk against this device. ---
+const presetItems = SNMP_CAPTURE_PRESETS.map((p) => ({ value: p.value, label: `${p.label} — ${p.oid}` }))
+const capForm = reactive({ op: 'walk', preset: 'system', oid: '', oids: '1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.5.0', max_rows: 2000 })
+const capRunning = ref(false)
+const capResult = ref<any>(null)
+
+async function runCapture() {
+  capRunning.value = true
+  capResult.value = null
+  try {
+    const body: Record<string, any> = { op: capForm.op, max_rows: capForm.max_rows }
+    if (capForm.op === 'walk') {
+      if (capForm.oid.trim()) body.oid = capForm.oid.trim()
+      else body.preset = capForm.preset
+    } else {
+      body.oids = capForm.oids.split(/[\s,]+/).filter(Boolean)
+    }
+    capResult.value = await $fetch<any>(`/api/monitoring/v1/devices/${id.value}/capture`, { method: 'POST', body })
+  } catch (e: any) {
+    capResult.value = { ok: false, error: e?.data?.statusMessage || 'capture failed' }
+  } finally { capRunning.value = false }
+}
+
+function downloadCapture() {
+  if (!capResult.value?.rows?.length) return
+  const lines = capResult.value.rows.map((r: any) =>
+    `${r.oid}${r.name ? ` (${r.name})` : ''} = ${r.type}: ${r.value ?? 'null'}`)
+  const header = `# ${capResult.value.target} — ${capForm.op} — ${new Date().toISOString()}\n# rows=${capResult.value.row_count} duration=${capResult.value.duration_ms}ms${capResult.value.truncated ? ' TRUNCATED' : ''}\n`
+  const blob = new Blob([header + lines.join('\n') + '\n'], { type: 'text/plain' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `snmp-capture-device${id.value}-${Date.now()}.txt`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+// --- Settings tab: full device configuration (PUT /devices/:id). ---
+const v3LevelItems = [
+  { value: 'noAuthNoPriv', label: 'noAuthNoPriv' }, { value: 'authNoPriv', label: 'authNoPriv' }, { value: 'authPriv', label: 'authPriv' }
+]
+const authProtoItems = ['md5', 'sha', 'sha224', 'sha256', 'sha384', 'sha512'].map((v) => ({ value: v, label: v.toUpperCase() }))
+const privProtoItems = [
+  { value: 'des', label: 'DES' }, { value: 'aes', label: 'AES-128' }, { value: 'aes256b', label: 'AES-256 (Blumenthal)' }, { value: 'aes256r', label: 'AES-256 (Reeder)' }
+]
+const assocItems = ['ifIndex', 'ifName', 'ifDescr', 'ifAlias'].map((v) => ({ value: v, label: v }))
+
+const settingsForm = reactive<Record<string, any>>({})
+const locations = ref<Array<{ value: number | null; label: string }>>([])
+// Settings-tab variant of the profile picker (number ids + explicit "none"),
+// backed by the same profilesData fetch as the overview picker above.
+const settingsProfileItems = computed(() => [
+  { value: null, label: '— per-device credentials —' },
+  ...(profilesData.value?.items ?? []).map((p: any) => ({ value: p.id, label: `${p.name} (${p.snmp_version})` }))
+])
+const saving = ref(false)
+const deviceTest = ref<any>(null)
+const deviceTesting = ref(false)
+
+function initSettings() {
+  const dev = d.value
+  if (!dev) return
+  Object.assign(settingsForm, {
+    display_name: dev.display_name || '',
+    ip: dev.ip || '',
+    snmp_disabled: !!dev.snmp_disabled,
+    credential_profile_id: dev.credential_profile_id,
+    snmp_version: dev.snmp_version || 'v2c',
+    snmp_community: '',
+    snmp_port: dev.snmp_port,
+    snmp_context: dev.snmp_context || '',
+    v3_level: dev.v3_level || 'authPriv',
+    v3_username: dev.v3_username || '',
+    v3_auth_protocol: dev.v3_auth_protocol || 'sha',
+    v3_auth_password: '',
+    v3_priv_protocol: dev.v3_priv_protocol || 'aes',
+    v3_priv_password: '',
+    os_override: dev.os_override || '',
+    hardware_override: dev.hardware_override || '',
+    location_id: dev.location_id,
+    poller_group: dev.poller_group ?? 0,
+    port_association_mode: dev.port_association_mode || 'ifIndex',
+    poll_interval_seconds: dev.poll_interval_seconds,
+    discovery_interval_seconds: dev.discovery_interval_seconds,
+    notes: dev.notes || ''
+  })
+  deviceTest.value = null
+}
+
+async function loadLocations() {
+  try {
+    const res = await $fetch<any>('/api/monitoring/v1/locations?per_page=500')
+    locations.value = [{ value: null, label: '— auto (sysLocation) —' },
+      ...(res.items ?? []).map((l: any) => ({ value: l.id, label: l.name }))]
+  } catch { /* picker stays empty; field still editable via auto option */ }
+}
+
+async function saveSettings() {
+  saving.value = true
+  try {
+    await $fetch(`/api/monitoring/v1/devices/${id.value}`, { method: 'PUT', body: { ...settingsForm } })
+    toast.add({ title: 'Device updated', color: 'primary', icon: 'i-lucide-check' })
+    await refresh()
+    initSettings()
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { saving.value = false }
+}
+
+async function testDevice() {
+  deviceTesting.value = true
+  deviceTest.value = null
+  try {
+    deviceTest.value = await $fetch<any>('/api/monitoring/v1/snmp/test', { method: 'POST', body: { device_id: Number(id.value) } })
+  } catch (e: any) {
+    deviceTest.value = { error: e?.data?.statusMessage || 'test failed' }
+  } finally { deviceTesting.value = false }
+}
+
+async function deleteDevice() {
+  if (!confirm(`Delete ${d.value?.display_name || d.value?.hostname} and all its collected data? This cannot be undone.`)) return
+  try {
+    await $fetch(`/api/monitoring/v1/devices/${id.value}`, { method: 'DELETE' })
+    toast.add({ title: 'Device deleted', color: 'primary', icon: 'i-lucide-check' })
+    navigateTo('/monitoring/devices')
+  } catch (e: any) {
+    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
 </script>
 
 <template>
@@ -328,6 +470,164 @@ const d = computed(() => data.value?.device)
         <NuxtLink :to="`/monitoring/data-collection?device_id=${id}`" class="mt-3 inline-block text-sm text-primary hover:underline">
           Full collection breakdown →
         </NuxtLink>
+      </div>
+
+      <!-- Capture: ad-hoc raw SNMP query tool -->
+      <div v-else-if="tab === 'capture'" class="space-y-4">
+        <div class="panel p-4">
+          <h2 class="mb-1 font-semibold">Raw SNMP capture</h2>
+          <p class="mb-3 text-xs text-muted">
+            Run an ad-hoc GET or subtree walk against this device with its stored credentials and inspect
+            every varbind exactly as returned. Nothing is saved.
+          </p>
+          <div class="flex flex-wrap items-end gap-3">
+            <UFormField label="Operation">
+              <USelect v-model="capForm.op" :items="[{value:'walk',label:'Walk (subtree)'},{value:'get',label:'Get (scalars)'}]" size="sm" class="w-40" />
+            </UFormField>
+            <template v-if="capForm.op === 'walk'">
+              <UFormField label="Preset subtree">
+                <USelect v-model="capForm.preset" :items="presetItems" size="sm" class="w-96" :disabled="!!capForm.oid.trim()" />
+              </UFormField>
+              <UFormField label="Custom base OID (overrides preset)">
+                <UInput v-model="capForm.oid" placeholder="1.3.6.1.2.1.2.2" size="sm" class="w-64 font-mono" />
+              </UFormField>
+              <UFormField label="Max rows">
+                <UInput v-model.number="capForm.max_rows" type="number" size="sm" class="w-28" />
+              </UFormField>
+            </template>
+            <UFormField v-else label="OIDs (space/comma separated)" class="grow">
+              <UInput v-model="capForm.oids" placeholder="1.3.6.1.2.1.1.1.0 1.3.6.1.2.1.1.5.0" size="sm" class="w-full font-mono" />
+            </UFormField>
+            <UButton size="sm" icon="i-lucide-play" :loading="capRunning" @click="runCapture">Run</UButton>
+          </div>
+        </div>
+
+        <div v-if="capResult" class="panel overflow-hidden">
+          <div class="flex flex-wrap items-center gap-3 border-b border-hull bg-surface-2 px-3 py-2 text-xs">
+            <template v-if="capResult.ok">
+              <span class="font-mono text-faint">{{ capResult.target }}</span>
+              <span>{{ capResult.row_count }} rows in {{ capResult.duration_ms }} ms</span>
+              <span v-if="capResult.truncated" class="text-amber-400">truncated — {{ capResult.note }}</span>
+              <UButton size="xs" variant="soft" icon="i-lucide-download" class="ml-auto" @click="downloadCapture">Download</UButton>
+            </template>
+            <span v-else class="text-rose-400">{{ capResult.outcome ? `${capResult.outcome}: ` : '' }}{{ capResult.error }}</span>
+          </div>
+          <div v-if="capResult.ok" class="max-h-[32rem] overflow-auto">
+            <table class="w-full text-xs">
+              <thead class="sticky top-0 bg-surface-2 text-left uppercase text-faint">
+                <tr><th class="px-3 py-1.5">OID</th><th class="px-3 py-1.5">Name</th><th class="px-3 py-1.5">Type</th><th class="px-3 py-1.5">Value</th></tr>
+              </thead>
+              <tbody>
+                <tr v-if="!capResult.rows.length"><td colspan="4" class="px-3 py-6 text-center text-muted">No varbinds returned.</td></tr>
+                <tr v-for="r in capResult.rows" :key="r.oid" class="border-t border-hull align-top">
+                  <td class="px-3 py-1 font-mono">{{ r.oid }}</td>
+                  <td class="px-3 py-1 text-muted">{{ r.name || '—' }}</td>
+                  <td class="px-3 py-1 text-faint">{{ r.type }}</td>
+                  <td class="max-w-xl break-all px-3 py-1 font-mono">{{ r.value ?? 'null' }}<span v-if="r.hex && String(r.value) !== r.hex" class="ml-1 text-faint">(hex {{ r.hex }})</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings: full device configuration -->
+      <div v-else-if="tab === 'settings'" class="space-y-4">
+        <div class="panel p-4">
+          <h2 class="mb-3 font-semibold">Identity</h2>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <UFormField label="Display name"><UInput v-model="settingsForm.display_name" :placeholder="d.hostname" class="w-full" /></UFormField>
+            <UFormField label="Management IP"><UInput v-model="settingsForm.ip" placeholder="10.0.0.1" class="w-full" /></UFormField>
+            <UFormField label="OS override"><UInput v-model="settingsForm.os_override" :placeholder="d.os" class="w-full" /></UFormField>
+            <UFormField label="Hardware override"><UInput v-model="settingsForm.hardware_override" :placeholder="d.hardware || ''" class="w-full" /></UFormField>
+            <UFormField label="Notes" class="sm:col-span-2"><UTextarea v-model="settingsForm.notes" :rows="2" class="w-full" /></UFormField>
+          </div>
+        </div>
+
+        <div class="panel p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="font-semibold">SNMP</h2>
+            <UButton size="xs" variant="soft" icon="i-lucide-plug-zap" :loading="deviceTesting" @click="testDevice">Test now</UButton>
+          </div>
+          <UCheckbox v-model="settingsForm.snmp_disabled" label="ICMP-only (disable SNMP)" class="mb-3" />
+          <div v-if="!settingsForm.snmp_disabled" class="grid gap-3 sm:grid-cols-2">
+            <UFormField label="Credential profile" class="sm:col-span-2">
+              <USelect v-model="settingsForm.credential_profile_id" :items="settingsProfileItems" class="w-full" />
+            </UFormField>
+            <UFormField label="Version">
+              <USelect v-model="settingsForm.snmp_version" :items="[{value:'v1',label:'v1'},{value:'v2c',label:'v2c'},{value:'v3',label:'v3'}]" class="w-full" />
+            </UFormField>
+            <UFormField label="Port"><UInput v-model.number="settingsForm.snmp_port" type="number" placeholder="161" class="w-full" /></UFormField>
+            <UFormField v-if="settingsForm.snmp_version !== 'v3'" :label="`Community${d.snmp_community_set ? ' (set — blank keeps current)' : ''}`">
+              <UInput v-model="settingsForm.snmp_community" type="password" :placeholder="d.snmp_community_set ? '••••••••' : 'public'" class="w-full" />
+            </UFormField>
+            <template v-else>
+              <UFormField label="Security level"><USelect v-model="settingsForm.v3_level" :items="v3LevelItems" class="w-full" /></UFormField>
+              <UFormField label="Username"><UInput v-model="settingsForm.v3_username" class="w-full" /></UFormField>
+              <template v-if="settingsForm.v3_level !== 'noAuthNoPriv'">
+                <UFormField label="Auth protocol"><USelect v-model="settingsForm.v3_auth_protocol" :items="authProtoItems" class="w-full" /></UFormField>
+                <UFormField :label="`Auth password${d.v3_auth_password_set ? ' (set — blank keeps current)' : ''}`">
+                  <UInput v-model="settingsForm.v3_auth_password" type="password" :placeholder="d.v3_auth_password_set ? '••••••••' : ''" class="w-full" />
+                </UFormField>
+              </template>
+              <template v-if="settingsForm.v3_level === 'authPriv'">
+                <UFormField label="Privacy protocol"><USelect v-model="settingsForm.v3_priv_protocol" :items="privProtoItems" class="w-full" /></UFormField>
+                <UFormField :label="`Privacy password${d.v3_priv_password_set ? ' (set — blank keeps current)' : ''}`">
+                  <UInput v-model="settingsForm.v3_priv_password" type="password" :placeholder="d.v3_priv_password_set ? '••••••••' : ''" class="w-full" />
+                </UFormField>
+              </template>
+            </template>
+            <UFormField label="Context"><UInput v-model="settingsForm.snmp_context" class="w-full" /></UFormField>
+          </div>
+
+          <div v-if="deviceTest" class="mt-3 rounded border border-hull bg-surface-2 p-3 text-xs">
+            <div v-if="deviceTest.error" class="text-rose-400">{{ deviceTest.error }}</div>
+            <template v-else>
+              <div>
+                <span class="text-muted">ICMP:</span>
+                <span :class="deviceTest.icmp?.alive ? 'text-emerald-400' : 'text-rose-400'">
+                  {{ deviceTest.icmp?.alive ? ` reply in ${deviceTest.icmp.rttMs ?? '?'} ms` : ' no reply' }}
+                </span>
+                <span class="ml-4 text-muted">SNMP:</span>
+                <span v-if="deviceTest.snmp?.ok" class="text-emerald-400">
+                  {{ deviceTest.snmp.system.sysName || 'ok' }} — {{ deviceTest.snmp.detected?.text }} ({{ deviceTest.snmp.durationMs }} ms)
+                </span>
+                <span v-else class="text-rose-400"> {{ deviceTest.snmp?.outcome }}: {{ deviceTest.snmp?.error }}</span>
+              </div>
+              <table v-if="deviceTest.snmp?.raw?.length" class="mt-2 w-full">
+                <tbody>
+                  <tr v-for="r in deviceTest.snmp.raw" :key="r.oid" class="align-top">
+                    <td class="whitespace-nowrap pr-3 font-mono text-faint">{{ r.name || r.oid }}</td>
+                    <td class="pr-3 text-faint">{{ r.type }}</td>
+                    <td class="break-all font-mono">{{ r.value ?? 'null' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </template>
+          </div>
+        </div>
+
+        <div class="panel p-4">
+          <h2 class="mb-3 font-semibold">Placement & scheduling</h2>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <UFormField label="Location">
+              <USelect v-model="settingsForm.location_id" :items="locations" class="w-full" />
+            </UFormField>
+            <UFormField label="Poller group"><UInput v-model.number="settingsForm.poller_group" type="number" class="w-full" /></UFormField>
+            <UFormField label="Port association mode">
+              <USelect v-model="settingsForm.port_association_mode" :items="assocItems" class="w-full" />
+            </UFormField>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField label="Poll interval (s)"><UInput v-model.number="settingsForm.poll_interval_seconds" type="number" placeholder="default" class="w-full" /></UFormField>
+              <UFormField label="Discovery interval (s)"><UInput v-model.number="settingsForm.discovery_interval_seconds" type="number" placeholder="default" class="w-full" /></UFormField>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <UButton color="error" variant="soft" icon="i-lucide-trash-2" @click="deleteDevice">Delete device</UButton>
+          <UButton icon="i-lucide-save" :loading="saving" @click="saveSettings">Save changes</UButton>
+        </div>
       </div>
     </div>
   </div>

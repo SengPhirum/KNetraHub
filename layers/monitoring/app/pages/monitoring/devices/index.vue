@@ -66,15 +66,54 @@ const statusItems = [
 ]
 
 const addOpen = ref(false)
-const addForm = reactive({ hostname: '', ip: '', snmp_disabled: false, snmp_version: 'v2c', snmp_community: '' })
+const ADD_DEFAULTS = {
+  hostname: '', ip: '', snmp_disabled: false, force: false,
+  credential_profile_id: null as number | null,
+  snmp_version: 'v2c', snmp_community: '', snmp_port: null as number | null, snmp_context: '',
+  v3_level: 'authPriv', v3_username: '', v3_auth_protocol: 'sha', v3_auth_password: '',
+  v3_priv_protocol: 'aes', v3_priv_password: ''
+}
+
+const profileItems = ref<Array<{ value: number | null; label: string }>>([{ value: null, label: '— inline credentials —' }])
+watch(addOpen, async (open) => {
+  if (!open || profileItems.value.length > 1) return
+  try {
+    const res = await $fetch<any>('/api/monitoring/v1/credential-profiles')
+    profileItems.value = [{ value: null, label: '— inline credentials —' },
+      ...(res.items ?? []).map((p: any) => ({ value: p.id, label: `${p.name} (${p.snmp_version})` }))]
+  } catch { /* keep inline-only */ }
+})
+const addForm = reactive({ ...ADD_DEFAULTS })
 const adding = ref(false)
+const testing = ref(false)
+const testResult = ref<any>(null)
+
+const v3LevelItems = [
+  { value: 'noAuthNoPriv', label: 'noAuthNoPriv' }, { value: 'authNoPriv', label: 'authNoPriv' }, { value: 'authPriv', label: 'authPriv' }
+]
+const authProtoItems = ['md5', 'sha', 'sha224', 'sha256', 'sha384', 'sha512'].map((v) => ({ value: v, label: v.toUpperCase() }))
+const privProtoItems = [
+  { value: 'des', label: 'DES' }, { value: 'aes', label: 'AES-128' }, { value: 'aes256b', label: 'AES-256 (Blumenthal)' }, { value: 'aes256r', label: 'AES-256 (Reeder)' }
+]
+
+async function testConnection() {
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await $fetch('/api/monitoring/v1/snmp/test', { method: 'POST', body: { ...addForm } })
+  } catch (e: any) {
+    testResult.value = { error: e?.data?.statusMessage || 'test failed' }
+  } finally { testing.value = false }
+}
+
 async function submitAdd() {
   adding.value = true
   try {
     await $fetch('/api/monitoring/v1/devices', { method: 'POST', body: { ...addForm } })
     toast.add({ title: 'Device added', description: 'Discovery queued.', color: 'primary', icon: 'i-lucide-check' })
     addOpen.value = false
-    Object.assign(addForm, { hostname: '', ip: '', snmp_disabled: false, snmp_version: 'v2c', snmp_community: '' })
+    Object.assign(addForm, ADD_DEFAULTS)
+    testResult.value = null
     await refresh()
   } catch (e: any) {
     toast.add({ title: 'Add failed', description: e?.data?.statusMessage, color: 'error' })
@@ -164,20 +203,85 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
           </UFormField>
           <UCheckbox v-model="addForm.snmp_disabled" label="ICMP-only (no SNMP)" />
           <template v-if="!addForm.snmp_disabled">
-            <UFormField label="SNMP version">
-              <USelect v-model="addForm.snmp_version" :items="[{value:'v1',label:'v1'},{value:'v2c',label:'v2c'},{value:'v3',label:'v3'}]" class="w-full" />
+            <UFormField v-if="profileItems.length > 1" label="Credential profile">
+              <USelect v-model="addForm.credential_profile_id" :items="profileItems" class="w-full" />
             </UFormField>
+            <div v-if="addForm.credential_profile_id" class="text-xs text-muted">
+              Fields below override the profile; leave blank to use the profile's values.
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <UFormField label="SNMP version">
+                <USelect v-model="addForm.snmp_version" :items="[{value:'v1',label:'v1'},{value:'v2c',label:'v2c'},{value:'v3',label:'v3'}]" class="w-full" />
+              </UFormField>
+              <UFormField label="Port">
+                <UInput v-model.number="addForm.snmp_port" type="number" placeholder="161" class="w-full" />
+              </UFormField>
+            </div>
             <UFormField v-if="addForm.snmp_version !== 'v3'" label="Community">
               <UInput v-model="addForm.snmp_community" type="password" placeholder="public" class="w-full" />
             </UFormField>
-            <p v-else class="text-xs text-muted">For SNMPv3, add the device then set v3 credentials in its Settings tab.</p>
+            <template v-else>
+              <div class="grid grid-cols-2 gap-3">
+                <UFormField label="Security level">
+                  <USelect v-model="addForm.v3_level" :items="v3LevelItems" class="w-full" />
+                </UFormField>
+                <UFormField label="Username" required>
+                  <UInput v-model="addForm.v3_username" class="w-full" />
+                </UFormField>
+              </div>
+              <div v-if="addForm.v3_level !== 'noAuthNoPriv'" class="grid grid-cols-2 gap-3">
+                <UFormField label="Auth protocol">
+                  <USelect v-model="addForm.v3_auth_protocol" :items="authProtoItems" class="w-full" />
+                </UFormField>
+                <UFormField label="Auth password">
+                  <UInput v-model="addForm.v3_auth_password" type="password" class="w-full" />
+                </UFormField>
+              </div>
+              <div v-if="addForm.v3_level === 'authPriv'" class="grid grid-cols-2 gap-3">
+                <UFormField label="Privacy protocol">
+                  <USelect v-model="addForm.v3_priv_protocol" :items="privProtoItems" class="w-full" />
+                </UFormField>
+                <UFormField label="Privacy password">
+                  <UInput v-model="addForm.v3_priv_password" type="password" class="w-full" />
+                </UFormField>
+              </div>
+            </template>
+            <UFormField label="SNMP context (optional)">
+              <UInput v-model="addForm.snmp_context" class="w-full" />
+            </UFormField>
           </template>
+          <UCheckbox v-model="addForm.force" label="Force add (skip reachability preflight)" />
+
+          <div v-if="testResult" class="rounded border border-hull bg-surface-2 p-3 text-xs">
+            <div v-if="testResult.error" class="text-rose-400">{{ testResult.error }}</div>
+            <template v-else>
+              <div class="flex items-center gap-2">
+                <span class="text-muted">ICMP:</span>
+                <span :class="testResult.icmp?.alive ? 'text-emerald-400' : 'text-rose-400'">
+                  {{ testResult.icmp?.alive ? `reply in ${testResult.icmp.rttMs ?? '?'} ms` : 'no reply' }}
+                </span>
+              </div>
+              <div v-if="!addForm.snmp_disabled" class="mt-1 flex items-start gap-2">
+                <span class="text-muted">SNMP:</span>
+                <span v-if="testResult.snmp?.ok" class="text-emerald-400">
+                  {{ testResult.snmp.system.sysName || 'ok' }} — {{ testResult.snmp.detected?.text }} ({{ testResult.snmp.durationMs }} ms)
+                </span>
+                <span v-else class="text-rose-400">{{ testResult.snmp?.outcome }}: {{ testResult.snmp?.error }}</span>
+              </div>
+              <div v-if="testResult.snmp?.ok && testResult.snmp.system.sysDescr" class="mt-1 break-all text-faint">
+                {{ testResult.snmp.system.sysDescr }}
+              </div>
+            </template>
+          </div>
         </div>
       </template>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="addOpen = false">Cancel</UButton>
-          <UButton :loading="adding" :disabled="!addForm.hostname" @click="submitAdd">Add device</UButton>
+        <div class="flex w-full items-center justify-between gap-2">
+          <UButton variant="soft" icon="i-lucide-plug-zap" :loading="testing" :disabled="!addForm.hostname" @click="testConnection">Test connection</UButton>
+          <div class="flex gap-2">
+            <UButton variant="ghost" @click="addOpen = false">Cancel</UButton>
+            <UButton :loading="adding" :disabled="!addForm.hostname" @click="submitAdd">Add device</UButton>
+          </div>
         </div>
       </template>
     </UModal>

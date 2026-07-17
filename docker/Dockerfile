@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# No `# syntax=` pin: it forces BuildKit to pull the docker/dockerfile
+# frontend from Docker Hub on every build, which fails hard on offline or
+# flaky networks (TLS handshake timeout). The builtin frontend of any
+# modern Docker (23+) supports everything used here, including secret mounts.
 
 FROM node:22-alpine AS build
 WORKDIR /app

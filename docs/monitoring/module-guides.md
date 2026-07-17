@@ -62,12 +62,36 @@ module) when computing counter deltas — see
 
 1. **Add Device** (UI or `POST /api/monitoring/v1/devices`) with hostname/IP
    and either a `credential_profile_id` or inline SNMP fields, or
-   `snmp_disabled: true` for ICMP-only.
-2. Discovery is queued immediately; full module discovery runs and detects
+   `snmp_disabled: true` for ICMP-only. The modal's **Test connection**
+   button (`POST /snmp/test`) verifies ICMP + SNMP before saving.
+2. A reachability preflight runs before insert: explicit credentials must
+   answer a GET of the system scalars; with no credentials given, every
+   credential profile is tried in attempt order and the matching profile is
+   pinned on the device; ICMP-only devices must answer a ping. `force=true`
+   (UI: "Force add") skips the preflight, LibreNMS force-add style.
+3. Discovery is queued immediately; full module discovery runs and detects
    OS, ports, sensors, inventory, etc.
-3. The device polls on the default 5-minute cycle from then on
+4. The device polls on the default 5-minute cycle from then on
    (`next_poll_at` is set at discovery completion).
-4. Bulk-add: `POST /api/monitoring/v1/discovery/scan` with a CIDR (≤ /20).
+5. Bulk-add: `POST /api/monitoring/v1/discovery/scan` with a CIDR (≤ /20).
+
+## SNMP query-test & raw-capture guide
+
+- **Query test** — device Settings tab → *Test now*, or
+  `POST /api/monitoring/v1/snmp/test` with `{device_id}` (stored
+  credentials) or inline credentials. Returns the ICMP result plus the
+  SNMPv2-MIB system scalars both parsed (sysName/sysDescr/uptime, detected
+  OS) and raw (OID, symbolic name, type, value). Nothing is persisted.
+- **Raw capture** (LibreNMS "Capture" tab equivalent) — device **Capture**
+  tab, or `POST /api/monitoring/v1/devices/:id/capture` (operator tier).
+  `op:'walk'` takes a base OID or a preset subtree (system, IF-MIB,
+  ENTITY, HOST-RESOURCES, UCD, full MIB-2, …); `op:'get'` takes up to 64
+  scalar OIDs. Every varbind is returned untouched with numeric OID,
+  best-effort symbolic name (`snmp/mibNames.ts`), type, converted value and
+  raw hex for buffers. Walks are row-capped (default 2000, max 20000);
+  partial results are returned with `truncated` set rather than discarded.
+  The UI offers download as a text file. Runs are audit-logged
+  (`monitoring.device.capture`).
 
 ## SNMPv3 guide
 

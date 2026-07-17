@@ -35,7 +35,7 @@ export interface ResolvedSnmpConfig {
 }
 
 export type SnmpOpResult<T> =
-  | { ok: true; value: T; durationMs: number }
+  | { ok: true; value: T; durationMs: number; truncated?: boolean; note?: string }
   | { ok: false; outcome: CollectionOutcome; error: string; durationMs: number }
 
 export interface WalkRow {
@@ -147,8 +147,13 @@ export class SnmpClient {
    * Walk a subtree (GETBULK on v2c/v3, GETNEXT on v1). Returns every row with
    * its index relative to the base OID. An empty result is ok:true with [] —
    * callers decide whether empty means "unsupported" or "no instances".
+   *
+   * `partial: true` (diagnostic capture mode) returns whatever rows were
+   * collected when the walk hits maxRows or fails mid-walk — as ok:true with
+   * `truncated`/`note` set — instead of discarding them. Collection code must
+   * NOT use it: reconciliation needs the complete-or-failed contract.
    */
-  walk(baseOid: string, opts?: { hint?: 'mac' | 'hex' | 'text'; maxRows?: number }): Promise<SnmpOpResult<WalkRow[]>> {
+  walk(baseOid: string, opts?: { hint?: 'mac' | 'hex' | 'text'; maxRows?: number; partial?: boolean }): Promise<SnmpOpResult<WalkRow[]>> {
     const started = Date.now()
     const rows: WalkRow[] = []
     const maxRows = opts?.maxRows ?? 50000
@@ -171,12 +176,18 @@ export class SnmpClient {
       const done = (err: unknown) => {
         if (err) {
           const { outcome, error } = classifyError(err)
+          if (opts?.partial && rows.length) {
+            return resolve({ ok: true, value: rows, durationMs: Date.now() - started, truncated: true, note: `walk failed after ${rows.length} rows: ${error}` })
+          }
           // A walk that already returned rows then failed is a truncated
           // table — surface as failure so reconciliation won't treat the
           // partial data as the complete truth.
           return resolve({ ok: false, outcome, error: rows.length ? `truncated after ${rows.length} rows: ${error}` : error, durationMs: Date.now() - started })
         }
         if (truncated) {
+          if (opts?.partial) {
+            return resolve({ ok: true, value: rows, durationMs: Date.now() - started, truncated: true, note: `stopped at maxRows=${maxRows}` })
+          }
           return resolve({ ok: false, outcome: 'failed', error: `walk exceeded maxRows=${maxRows}`, durationMs: Date.now() - started })
         }
         resolve({ ok: true, value: rows, durationMs: Date.now() - started })

@@ -1,0 +1,4 @@
+# Per-Dockerfile ignore for Dockerfile.offline (BuildKit picks this over the
+# root .dockerignore): the offline image only needs the host-built .output.
+*
+!.output

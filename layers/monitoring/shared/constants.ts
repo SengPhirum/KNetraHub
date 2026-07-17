@@ -92,6 +92,25 @@ export type TransportType = (typeof TRANSPORT_TYPES)[number]
 export const ENTITY_TYPES = ['device', 'port', 'sensor', 'processor', 'mempool', 'storage', 'service', 'bgp_peer', 'wireless_sensor'] as const
 export type EntityType = (typeof ENTITY_TYPES)[number]
 
+/**
+ * Well-known subtrees offered by the raw SNMP capture tool (device Capture
+ * tab / POST /devices/:id/capture). Shared so the UI renders the same list
+ * the API validates.
+ */
+export const SNMP_CAPTURE_PRESETS = [
+  { value: 'system', label: 'System (SNMPv2-MIB)', oid: '1.3.6.1.2.1.1' },
+  { value: 'interfaces', label: 'Interfaces (IF-MIB ifTable)', oid: '1.3.6.1.2.1.2.2' },
+  { value: 'ifx', label: 'Interfaces extended (IF-MIB ifXTable)', oid: '1.3.6.1.2.1.31.1.1' },
+  { value: 'ip', label: 'IP addressing / ARP (IP-MIB)', oid: '1.3.6.1.2.1.4' },
+  { value: 'host-resources', label: 'Host resources (HOST-RESOURCES-MIB)', oid: '1.3.6.1.2.1.25' },
+  { value: 'entity', label: 'Physical inventory (ENTITY-MIB)', oid: '1.3.6.1.2.1.47' },
+  { value: 'entity-sensors', label: 'Sensors (ENTITY-SENSOR-MIB)', oid: '1.3.6.1.2.1.99' },
+  { value: 'bridge', label: 'Bridge / FDB (BRIDGE-MIB)', oid: '1.3.6.1.2.1.17' },
+  { value: 'ucd', label: 'UCD-SNMP (net-snmp agents)', oid: '1.3.6.1.4.1.2021' },
+  { value: 'mib2', label: 'Full MIB-2 subtree (slow, diagnostic)', oid: '1.3.6.1.2.1' }
+] as const
+export type SnmpCapturePreset = (typeof SNMP_CAPTURE_PRESETS)[number]['value']
+
 /** Pagination defaults for the v1 API. */
 export const API_DEFAULT_PER_PAGE = 50
 export const API_MAX_PER_PAGE = 500

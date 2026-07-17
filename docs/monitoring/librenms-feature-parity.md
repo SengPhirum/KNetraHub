@@ -23,13 +23,13 @@ OS definitions) are in their own files, linked below.
 |---|---|---|---|---|---|---|---|---|---|
 | Add device (hostname/IP) | addhost | Create device by hostname or IP | `POST /devices` | `devices` | ✓ | Add Device modal | manual | **Complete** | |
 | SNMP v1/v2c | addhost | Community-based SNMP | `core/credentials.ts` | `devices`, `credential_profiles` | ✓ | ✓ | manual | **Complete** | |
-| SNMP v3 (all levels/protocols) | addhost | noAuthNoPriv/authNoPriv/authPriv, MD5/SHA-family, DES/AES-family | `snmp/engine.ts` | ✓ | ✓ | Settings tab (planned form) | manual | **Partially complete** | Engine + API complete; the Add-Device modal UI only exposes v1/v2c today — v3 devices must be added then edited via `PUT /devices/:id` |
+| SNMP v3 (all levels/protocols) | addhost | noAuthNoPriv/authNoPriv/authPriv, MD5/SHA-family, DES/AES-family | `snmp/engine.ts` | ✓ | ✓ | Add-Device modal + device Settings tab (full v3 forms) | manual | **Complete** | |
 | ICMP-only device | addhost force ping-only | `snmp_disabled` flag, no SNMP attempted | `devices.snmp_disabled` | ✓ | ✓ | ✓ (checkbox) | manual | **Complete** | |
-| Force-add (skip preflight) | force-add | Skip reachability check | — | — | — | — | none | **Blocked** | Device add doesn't currently preflight-check reachability at all (it queues discovery instead), so there is nothing to force past; a synchronous reachability check + force flag is unbuilt |
-| Poller group assignment | poller-group | Devices pinned to a poller group | `devices.poller_group` | ✓ | ✓ | — | manual | **Partially complete** | Column + dispatcher honor it; no UI picker yet |
-| Location | location | Device location + map grouping | `devices.location_id`, `locations` | ✓ | ✓ | Locations page (read); device edit missing picker | manual | **Partially complete** | Auto-derived from sysLocation; manual assignment via API only |
-| Display name / hardware / OS override | override_sysLocation etc. | Manual overrides survive rediscovery | `os_override`, `hardware_override`, `display_name` | ✓ | ✓ | — | manual | **Partially complete** | Backend respects overrides; no dedicated UI form field yet (API-only) |
-| Port association mode | port_association_mode | ifIndex/ifName/ifDescr/ifAlias | `devices.port_association_mode` | ✓ | ✓ | — | none | **Partially complete** | Column exists; reconciliation currently always keys on ifIndex — alternate modes not wired into `discovery/modules/ports.ts` |
+| Force-add (skip preflight) | force-add | Skip reachability check | `POST /devices` (`force=true`), `snmp/preflight.ts` | — | ✓ | ✓ (checkbox) | manual | **Complete** | Preflight: SNMP devices must answer a system-scalar GET (explicit credentials must work; with none given, every credential profile is tried in attempt order and the match is pinned); ICMP-only devices must answer a ping; `force=true` skips |
+| Poller group assignment | poller-group | Devices pinned to a poller group | `devices.poller_group` | ✓ | ✓ | Device Settings tab | manual | **Complete** | |
+| Location | location | Device location + map grouping | `devices.location_id`, `locations` | ✓ | ✓ | Locations page (read) + device Settings tab picker | manual | **Complete** | Auto-derived from sysLocation; manual assignment via Settings tab or API |
+| Display name / hardware / OS override | override_sysLocation etc. | Manual overrides survive rediscovery | `os_override`, `hardware_override`, `display_name` | ✓ | ✓ | Device Settings tab | manual | **Complete** | |
+| Port association mode | port_association_mode | ifIndex/ifName/ifDescr/ifAlias | `devices.port_association_mode` | ✓ | ✓ | Device Settings tab picker | none | **Partially complete** | Column + UI exist; reconciliation currently always keys on ifIndex — alternate modes not wired into `discovery/modules/ports.ts` |
 | Device dependency | dependency | Suppress alerts when parent is down | `device_dependencies` | ✓ | — | — | manual | **Partially complete** | Schema + alert-evaluation suppression implemented; no CRUD API/UI yet |
 | Maintenance | maintenance | Suppress alerts / skip polling for a window | `maintenance_windows`, `maintenance_targets` | ✓ | GET only | Maintenance list page (read-only) | manual | **Partially complete** | Evaluation logic (poll skip / alert suppression) fully implemented; create/edit API+UI not yet built |
 | Bulk add (CIDR) | discovery/scan | Add many devices from a CIDR | `POST /discovery/scan` | ✓ | ✓ | Discovery page | manual | **Complete** | Bounded to /20; excluded-host support; credential-profile selection |
@@ -55,7 +55,7 @@ status. Summary:
 | Suspect-empty-table detection | **Complete** | `reconcile()` `suspectEmpty` guard |
 | Table-based collection (sparse, string/compound index, non-sequential) | **Complete** | `snmp/engine.ts` `table()` preserves arbitrary index strings |
 | Counter processing (32/64-bit rollover, reboot, discontinuity, speed change) | **Complete** | `core/counters.ts`, unit-tested (16 tests) |
-| Diagnostic full-MIB-subtree walk mode | **Blocked** | Not implemented — no admin-triggered raw-walk capture UI/API |
+| Diagnostic full-MIB-subtree walk mode | **Complete** | `POST /devices/:id/capture` (get/walk, preset subtrees incl. full MIB-2, row-capped with partial results) + device **Capture** tab showing every raw varbind (OID, symbolic name, type, value, hex) with download |
 
 ## 3. SNMP engine
 
@@ -68,6 +68,8 @@ status. Summary:
 | IPv4/IPv6 transport | **Complete** | `udp4`/`udp6` |
 | TCP transport | **Blocked** | net-snmp / this engine is UDP-only |
 | Response validation + type conversion | **Complete** | `snmp/values.ts` |
+| Ad-hoc connectivity/query test | **Complete** | `POST /snmp/test` (`snmp/preflight.ts`): ICMP ping + system-scalar GET with parsed identity, detected OS, and raw varbinds; wired to the Add-Device "Test connection" button and the device Settings tab "Test now" |
+| Raw capture OID→name resolution | **Complete** | `snmp/mibNames.ts` (built from the engine's own OID tables; unit-tested) |
 | Debug tracing with secret redaction | **Partially complete** | `describeSnmpTarget()` never logs secrets; there is no dedicated verbose/diagnostic log-level toggle yet |
 
 ## 4. Health sensors

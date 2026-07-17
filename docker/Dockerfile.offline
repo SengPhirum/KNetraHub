@@ -1,0 +1,29 @@
+# Offline / degraded-network release path.
+#
+# The normal docker/Dockerfile builds the app inside the image, which needs
+# Docker Hub (node:22-alpine), npm (corepack + pnpm install) and the Alpine
+# CDN (apk) to be reachable. When those registries are down or blocked,
+# build the app on the host first, then package that .output into the
+# previous release image — which already carries node, ca-certificates,
+# iputils, the entrypoint and the healthcheck — so this build needs no
+# network at all (the base image is already in the local Docker store).
+#
+# Usage:
+#   node node_modules/nuxt/bin/nuxt.mjs build     # host build (or: pnpm build)
+#   DOCKERFILE=docker/Dockerfile.offline ./service.sh release
+#
+# Trade-off: each offline release stacks one ~30 MB .output layer on top of
+# the previous image. Return to the normal docker/Dockerfile as soon as the
+# network is healthy again to rebase onto a clean node:22-alpine.
+#
+# The build context is filtered by Dockerfile.offline.dockerignore (BuildKit
+# per-Dockerfile ignore) to just .output, overriding the root .dockerignore
+# which excludes it.
+
+ARG BASE_IMAGE=registry.kdsb.com.kh/knetrahub/app:latest
+FROM ${BASE_IMAGE}
+
+# Replace, not merge: stale hashed chunks from the previous release must not
+# linger next to the new build's files.
+RUN rm -rf /app/.output
+COPY .output /app/.output
