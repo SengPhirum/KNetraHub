@@ -602,7 +602,7 @@ function severityColor(sev: string): string {
               <div v-for="m in ov.mempools" :key="m.id">
                 <div class="mb-0.5 flex items-center justify-between text-xs">
                   <span class="truncate text-muted">{{ m.description }}</span>
-                  <span>{{ formatBytes(m.used_bytes) }} / {{ formatBytes(m.total_bytes) }} ({{ (m.usage_percent ?? 0).toFixed(0) }}%)</span>
+                  <span>{{ formatBytes(m.used_bytes) }} / {{ formatBytes(m.total_bytes) }} ({{ Number(m.usage_percent ?? 0).toFixed(0) }}%)</span>
                 </div>
                 <div class="h-1.5 overflow-hidden rounded bg-surface-2">
                   <div :class="['h-full', usageBarClass(m.usage_percent)]" :style="{ width: Math.min(100, m.usage_percent ?? 0) + '%' }" />
@@ -619,7 +619,7 @@ function severityColor(sev: string): string {
               <div v-for="s in ov.storage" :key="s.id">
                 <div class="mb-0.5 flex items-center justify-between text-xs">
                   <span class="truncate text-muted">{{ s.description }}</span>
-                  <span>{{ formatBytes(s.used_bytes) }} / {{ formatBytes(s.total_bytes) }} ({{ (s.usage_percent ?? 0).toFixed(0) }}%)</span>
+                  <span>{{ formatBytes(s.used_bytes) }} / {{ formatBytes(s.total_bytes) }} ({{ Number(s.usage_percent ?? 0).toFixed(0) }}%)</span>
                 </div>
                 <div class="h-1.5 overflow-hidden rounded bg-surface-2">
                   <div :class="['h-full', usageBarClass(s.usage_percent)]" :style="{ width: Math.min(100, s.usage_percent ?? 0) + '%' }" />
@@ -737,7 +737,7 @@ function severityColor(sev: string): string {
               </span>
               <span class="text-muted">
                 <template v-if="healthSub === 'processors'">{{ e.usage_percent != null ? Number(e.usage_percent).toFixed(0) + '%' : '—' }}</template>
-                <template v-else>{{ formatBytes(e.used_bytes) }} / {{ formatBytes(e.total_bytes) }} ({{ (e.usage_percent ?? 0).toFixed(0) }}%)</template>
+                <template v-else>{{ formatBytes(e.used_bytes) }} / {{ formatBytes(e.total_bytes) }} ({{ Number(e.usage_percent ?? 0).toFixed(0) }}%)</template>
               </span>
             </div>
             <div class="h-2 overflow-hidden rounded bg-surface-2">
@@ -794,7 +794,7 @@ function severityColor(sev: string): string {
                   {{ p.if_type || '—' }}<div v-if="p.mtu">MTU {{ p.mtu }}</div>
                 </td>
                 <td class="px-3 py-2 font-mono text-xs">{{ p.mac_address || '—' }}</td>
-                <td class="px-3 py-2 text-right text-xs">{{ ((p.in_errors_ps ?? 0) + (p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
+                <td class="px-3 py-2 text-right text-xs">{{ (Number(p.in_errors_ps ?? 0) + Number(p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
                 <td v-if="canManage" class="whitespace-nowrap px-3 py-2 text-right" @click.stop>
                   <UButton size="xs" variant="ghost" :icon="p.ignored ? 'i-lucide-bell' : 'i-lucide-bell-off'"
                     :title="p.ignored ? 'Re-enable alerts for this port' : 'Ignore (no alerts/events)'"

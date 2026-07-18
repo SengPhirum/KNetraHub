@@ -34,10 +34,13 @@ export function deviceStatusMeta(status?: string | null): StatusMeta {
   return DEVICE_STATUS_META[(status || 'pending').toLowerCase()] || DEVICE_STATUS_META.pending!
 }
 
-export function formatBits(bps?: number | null): string {
+// pg returns BIGINT/NUMERIC columns (speed_bps, *_bytes, uptime_seconds) as
+// strings — every formatter must coerce before doing number math.
+export function formatBits(bps?: number | string | null): string {
   if (bps == null) return '—'
+  let v = Number(bps)
+  if (!Number.isFinite(v)) return '—'
   const units = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps']
-  let v = bps
   let i = 0
   while (v >= 1000 && i < units.length - 1) {
     v /= 1000
@@ -46,10 +49,11 @@ export function formatBits(bps?: number | null): string {
   return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`
 }
 
-export function formatBytes(bytes?: number | null): string {
+export function formatBytes(bytes?: number | string | null): string {
   if (bytes == null) return '—'
+  let v = Number(bytes)
+  if (!Number.isFinite(v)) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-  let v = bytes
   let i = 0
   while (v >= 1024 && i < units.length - 1) {
     v /= 1024
@@ -58,11 +62,13 @@ export function formatBytes(bytes?: number | null): string {
   return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`
 }
 
-export function formatUptime(seconds?: number | null): string {
+export function formatUptime(seconds?: number | string | null): string {
   if (seconds == null) return '—'
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
+  const s = Number(seconds)
+  if (!Number.isFinite(s)) return '—'
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
   if (d > 0) return `${d}d ${h}h`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
