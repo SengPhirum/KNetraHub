@@ -42,7 +42,11 @@ export default defineEventHandler(async (event) => {
   )
 
   return {
-    device: { ...stripCredentials(device), ip: device.ip_text },
+    device: {
+      ...stripCredentials(device),
+      ip: device.ip_text,
+      device_type_effective: device.device_type_override || device.device_type || 'server'
+    },
     counts: counts.rows[0],
     availability: Object.fromEntries(availability.rows.map((r: any) => [r.duration, Number(r.availability_percent)])),
     last_poll: lastRun.rows[0] ?? null

@@ -105,10 +105,17 @@ definePollerModule({
              WHERE id = $1`,
             [pool.id, totalKb * 1024, usedKb * 1024, availKb * 1024, cachedKb * 1024, bufferKb * 1024, pct]
           )
+          // Byte-level series alongside percent: the device memory graph
+          // stacks used/buffers/cached the way LibreNMS renders it.
           await db.query(
-            `INSERT INTO monitoring.metrics (time, device_id, metric, entity_type, entity_id, value)
-             VALUES ($1,$2,'mempool_usage_percent','mempool',$3,$4)`,
-            [now, device.id, pool.id, pct]
+            `INSERT INTO monitoring.metrics (time, device_id, metric, entity_type, entity_id, value) VALUES
+               ($1,$2,'mempool_usage_percent','mempool',$3,$4),
+               ($1,$2,'mempool_used_bytes','mempool',$3,$5),
+               ($1,$2,'mempool_free_bytes','mempool',$3,$6),
+               ($1,$2,'mempool_cached_bytes','mempool',$3,$7),
+               ($1,$2,'mempool_buffered_bytes','mempool',$3,$8),
+               ($1,$2,'mempool_total_bytes','mempool',$3,$9)`,
+            [now, device.id, pool.id, pct, usedKb * 1024, availKb * 1024, cachedKb * 1024, bufferKb * 1024, totalKb * 1024]
           )
           record(`mempool.${pool.mempool_index}`, 'success')
           ok++
@@ -143,9 +150,12 @@ definePollerModule({
         [pool.id, size, used, size - used, pct]
       )
       await db.query(
-        `INSERT INTO monitoring.metrics (time, device_id, metric, entity_type, entity_id, value)
-         VALUES ($1,$2,'mempool_usage_percent','mempool',$3,$4)`,
-        [now, device.id, pool.id, pct]
+        `INSERT INTO monitoring.metrics (time, device_id, metric, entity_type, entity_id, value) VALUES
+           ($1,$2,'mempool_usage_percent','mempool',$3,$4),
+           ($1,$2,'mempool_used_bytes','mempool',$3,$5),
+           ($1,$2,'mempool_free_bytes','mempool',$3,$6),
+           ($1,$2,'mempool_total_bytes','mempool',$3,$7)`,
+        [now, device.id, pool.id, pct, used, size - used, size]
       )
       record(`mempool.${pool.mempool_index}`, 'success')
       ok++

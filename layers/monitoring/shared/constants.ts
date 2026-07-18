@@ -15,6 +15,16 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number]
 /** Protocol-level availability, tracked separately from overall status. */
 export type ProtoAvailability = 'up' | 'down' | 'unknown' | 'disabled'
 
+/**
+ * Device type taxonomy (LibreNMS-equivalent). Auto-mapped from the detected
+ * OS definition at discovery/scan time; a manual selection on create/edit is
+ * stored as an override that detection never clobbers.
+ */
+export const DEVICE_TYPES = [
+  'appliance', 'firewall', 'management', 'network', 'power', 'server', 'storage', 'wireless'
+] as const
+export type DeviceType = (typeof DEVICE_TYPES)[number]
+
 /** SNMP configuration shapes supported by the engine. */
 export const SNMP_VERSIONS = ['v1', 'v2c', 'v3'] as const
 export type SnmpVersion = (typeof SNMP_VERSIONS)[number]

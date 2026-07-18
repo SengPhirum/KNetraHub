@@ -11,11 +11,12 @@ Date: 2026-07-18 UTC
 
 ## Source
 
-- Commit: `6ebbf14`
+- Commit: `251bc58`
 - Previous tag: none
 
 ## Changes
 
+- Enhance Monitoring and update service.sh (251bc58)
 - Fix (6ebbf14)
 - feat(monitoring): implement CIDR discovery scans and candidate management (0cba75d)
 - docs(monitoring): module guides, API/CLI/troubleshooting guides, full parity matrices (5139116)

@@ -277,6 +277,53 @@ defineDiscoveryModule({
       }
     }
 
+    // ── UCD load averages + HOST-RESOURCES counters ──
+    // Present on virtually every net-snmp agent (Linux/BSD servers, many
+    // appliances) — guarantees Linux hosts get sensors even without
+    // lm-sensors/ENTITY-SENSOR support in snmpd.
+    const la = await snmp!.get([UCD.laLoad1, UCD.laLoad5, UCD.laLoad15])
+    if (la.ok && toNumber(la.value[UCD.laLoad1]) != null) {
+      record('ucdLaLoad', 'success', undefined, la.durationMs)
+      const laDefs: [string, string][] = [
+        [UCD.laLoad1, 'Load average (1 min)'],
+        [UCD.laLoad5, 'Load average (5 min)'],
+        [UCD.laLoad15, 'Load average (15 min)']
+      ]
+      for (const [oid, descr] of laDefs) {
+        const value = toNumber(la.value[oid])
+        if (value == null) continue
+        found.push({
+          sensor_class: 'load', sensor_oid: oid, sensor_index: '0',
+          description: descr, sensor_group: 'ucd', unit: '',
+          divisor: 1, multiplier: 1, current_value: value,
+          entity_ref: null, source: 'ucd-mib'
+        })
+      }
+    } else {
+      record('ucdLaLoad', la.ok ? 'unsupported' : la.outcome, la.ok ? 'no value' : la.error, la.durationMs)
+    }
+
+    const hrCounts = await snmp!.get([HR.hrSystemProcesses, HR.hrSystemNumUsers])
+    if (hrCounts.ok && (toNumber(hrCounts.value[HR.hrSystemProcesses]) != null || toNumber(hrCounts.value[HR.hrSystemNumUsers]) != null)) {
+      record('hrSystemCounts', 'success', undefined, hrCounts.durationMs)
+      const hrDefs: [string, string][] = [
+        [HR.hrSystemProcesses, 'Running processes'],
+        [HR.hrSystemNumUsers, 'Logged-in users']
+      ]
+      for (const [oid, descr] of hrDefs) {
+        const value = toNumber(hrCounts.value[oid])
+        if (value == null) continue
+        found.push({
+          sensor_class: 'count', sensor_oid: oid, sensor_index: '0',
+          description: descr, sensor_group: 'host-resources', unit: '',
+          divisor: 1, multiplier: 1, current_value: value,
+          entity_ref: null, source: 'host-resources-mib'
+        })
+      }
+    } else {
+      record('hrSystemCounts', hrCounts.ok ? 'unsupported' : hrCounts.outcome, hrCounts.ok ? 'no value' : hrCounts.error, hrCounts.durationMs)
+    }
+
     // ── UPS-MIB ──
     const ups = await snmp!.get([UPS.upsEstimatedChargeRemaining, UPS.upsEstimatedMinutesRemaining, UPS.upsBatteryTemperature, UPS.upsBatteryStatus, UPS.upsOutputSource])
     if (ups.ok && toNumber(ups.value[UPS.upsEstimatedChargeRemaining]) != null) {

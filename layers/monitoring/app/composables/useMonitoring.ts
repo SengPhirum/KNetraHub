@@ -73,6 +73,40 @@ export function usageBarClass(pct?: number | null): string {
   return p >= 90 ? 'bg-rose-500' : p >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
 }
 
+/** Device-type taxonomy → icon/label (see DEVICE_TYPES in shared/constants). */
+export const DEVICE_TYPE_META: Record<string, { label: string; icon: string }> = {
+  appliance: { label: 'Appliance', icon: 'i-lucide-box' },
+  firewall: { label: 'Firewall', icon: 'i-lucide-shield' },
+  management: { label: 'Management', icon: 'i-lucide-wrench' },
+  network: { label: 'Network', icon: 'i-lucide-network' },
+  power: { label: 'Power', icon: 'i-lucide-zap' },
+  server: { label: 'Server', icon: 'i-lucide-server' },
+  storage: { label: 'Storage', icon: 'i-lucide-hard-drive' },
+  wireless: { label: 'Wireless', icon: 'i-lucide-wifi' }
+}
+
+export function deviceTypeMeta(type?: string | null): { label: string; icon: string } {
+  return DEVICE_TYPE_META[(type || 'server').toLowerCase()] || DEVICE_TYPE_META.server!
+}
+
+/** Compact relative time: "3mo 1d ago". */
+export function timeAgo(iso?: string | Date | null): string {
+  if (!iso) return '—'
+  let s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  const units: Array<[string, number]> = [['y', 31536000], ['mo', 2592000], ['d', 86400], ['h', 3600], ['m', 60]]
+  const parts: string[] = []
+  for (const [label, span] of units) {
+    const v = Math.floor(s / span)
+    if (v > 0) {
+      parts.push(`${v}${label}`)
+      s -= v * span
+    }
+    if (parts.length === 2) break
+  }
+  return `${parts.join(' ')} ago`
+}
+
 export function useMonitoring() {
   const { hasApp, hasPermission } = useAuth()
   return {
@@ -83,9 +117,11 @@ export function useMonitoring() {
     canManage: computed(() => hasPermission('monitoring.manage')),
     canConfigure: computed(() => hasPermission('monitoring.configure')),
     deviceStatusMeta,
+    deviceTypeMeta,
     formatBits,
     formatBytes,
     formatUptime,
+    timeAgo,
     usageBarClass
   }
 }

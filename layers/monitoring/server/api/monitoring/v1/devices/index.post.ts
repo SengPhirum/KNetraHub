@@ -63,7 +63,8 @@ export default defineEventHandler(async (event) => {
         if (!snmp.ok) {
           badRequest(`SNMP preflight failed (${snmp.outcome}): ${snmp.error} — pass force=true to add anyway`)
         }
-        preflight = { snmp: { sys_name: snmp.system.sysName, detected_os: snmp.detected.os, duration_ms: snmp.durationMs } }
+        preflight = { snmp: { sys_name: snmp.system.sysName, detected_os: snmp.detected.os, detected_type: snmp.detected.device_type, duration_ms: snmp.durationMs } }
+        if (snmp.detected.device_type) values.device_type = snmp.detected.device_type
       } else {
         // No credentials given: try every saved profile in attempt order,
         // then the public/v2c default — mirroring discovery's candidate
@@ -81,10 +82,11 @@ export default defineEventHandler(async (event) => {
             if (cand.profileId != null) values.credential_profile_id = cand.profileId
             preflight = {
               snmp: {
-                sys_name: snmp.system.sysName, detected_os: snmp.detected.os, duration_ms: snmp.durationMs,
+                sys_name: snmp.system.sysName, detected_os: snmp.detected.os, detected_type: snmp.detected.device_type, duration_ms: snmp.durationMs,
                 matched_profile: cand.name ?? 'default (public/v2c)'
               }
             }
+            if (snmp.detected.device_type) values.device_type = snmp.detected.device_type
             matched = true
             break
           }

@@ -1,5 +1,5 @@
 import { encryptSecret } from '~~/server/utils/secretCrypto'
-import { SNMP_VERSIONS, SNMPV3_LEVELS, SNMP_AUTH_PROTOCOLS, SNMP_PRIV_PROTOCOLS } from '../../shared/constants'
+import { SNMP_VERSIONS, SNMPV3_LEVELS, SNMP_AUTH_PROTOCOLS, SNMP_PRIV_PROTOCOLS, DEVICE_TYPES } from '../../shared/constants'
 import { badRequest } from './monApi'
 
 /**
@@ -75,6 +75,14 @@ export function normalizeDeviceInput(body: any, isCreate: boolean): Record<strin
   if (body.v3_auth_password) out.v3_auth_password = encryptSecret(String(body.v3_auth_password))
   if (body.v3_priv_password) out.v3_priv_password = encryptSecret(String(body.v3_priv_password))
 
+  // Manual type choice is stored as an override so auto-detection at
+  // discovery/scan time never clobbers it; blank/null returns to auto.
+  if (body.device_type !== undefined) {
+    if (body.device_type && !DEVICE_TYPES.includes(body.device_type)) {
+      badRequest(`device_type must be one of ${DEVICE_TYPES.join(', ')} (or empty for auto)`)
+    }
+    out.device_type_override = body.device_type || null
+  }
   if (body.os_override !== undefined) out.os_override = body.os_override ? String(body.os_override) : null
   if (body.hardware_override !== undefined) out.hardware_override = body.hardware_override ? String(body.hardware_override) : null
   if (body.location_id !== undefined) out.location_id = body.location_id ? Number(body.location_id) : null

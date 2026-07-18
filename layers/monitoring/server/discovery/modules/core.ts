@@ -1,4 +1,4 @@
-import { defineDiscoveryModule, detectOs } from '../../core/registry'
+import { defineDiscoveryModule, detectOs, deviceTypeOf } from '../../core/registry'
 import { SYS } from '../../snmp/oids'
 import { toNumber, toStringValue } from '../../snmp/values'
 import { recordEvent } from '../../core/events'
@@ -64,12 +64,13 @@ defineDiscoveryModule({
          vendor = COALESCE($11, vendor),
          features = COALESCE($12, features),
          location_id = $13,
+         device_type = $14,
          snmp_status = 'up',
          updated_at = now()
        WHERE id = $1`,
       [device.id, sysDescr, sysObjectId, sysName, sysContact, sysLocation, uptimeSeconds,
         detected.os, parsed.version ?? null, parsed.hardware ?? null, detected.vendor ?? null,
-        parsed.features ?? null, locationId]
+        parsed.features ?? null, locationId, deviceTypeOf(detected)]
     )
 
     // Refresh in-memory device row for subsequent modules in this run.

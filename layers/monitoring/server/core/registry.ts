@@ -56,6 +56,8 @@ export interface OsDefinition {
   os: string
   text: string
   vendor?: string
+  /** Device-type taxonomy bucket (see DEVICE_TYPES); defaults to 'server'. */
+  deviceType?: string
   /** Match by sysObjectID prefix(es) — the strongest signal. */
   sysObjectIdPrefixes?: string[]
   /** And/or match by sysDescr regex. */
@@ -102,6 +104,11 @@ export function detectOs(sysObjectId: string | null, sysDescr: string | null): O
     }
   }
   return bestScore >= 0 && best ? best : getOs('generic')
+}
+
+/** Effective device-type bucket for an OS definition. */
+export function deviceTypeOf(def: OsDefinition): string {
+  return def.deviceType ?? 'server'
 }
 
 // ── Discovery + poller modules ───────────────────────────────────────────────

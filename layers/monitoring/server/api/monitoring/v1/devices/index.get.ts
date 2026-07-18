@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
   if (p.q) add(`(d.hostname ILIKE ? OR d.display_name ILIKE ? OR host(d.ip) ILIKE ? OR d.sys_name ILIKE ?)`, `%${p.q}%`)
   if (query.status) add(`d.status = ?`, String(query.status))
   if (query.os) add(`d.os = ?`, String(query.os))
+  if (query.device_type) add(`COALESCE(d.device_type_override, d.device_type, 'server') = ?`, String(query.device_type))
   if (query.location_id) add(`d.location_id = ?`, Number(query.location_id))
   if (query.poller_group != null) add(`d.poller_group = ?`, Number(query.poller_group))
   if (query.group_id) add(`d.id IN (SELECT device_id FROM monitoring.device_group_members WHERE group_id = ?)`, Number(query.group_id))
@@ -35,6 +36,8 @@ export default defineEventHandler(async (event) => {
             d.serial, d.status, d.status_reason, d.icmp_status, d.snmp_status, d.snmp_disabled,
             d.uptime_seconds, d.last_ping_ms, d.poller_group, d.disabled, d.ignored,
             d.last_polled_at, d.last_discovered_at, d.sys_name,
+            COALESCE(d.device_type_override, d.device_type, 'server') AS device_type,
+            (d.device_type_override IS NOT NULL) AS device_type_manual,
             l.name AS location,
             (SELECT count(*)::int FROM monitoring.ports WHERE device_id = d.id AND stale_since IS NULL) AS port_count,
             (SELECT count(*)::int FROM monitoring.sensors WHERE device_id = d.id AND stale_since IS NULL) AS sensor_count,

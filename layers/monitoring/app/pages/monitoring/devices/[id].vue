@@ -1,13 +1,19 @@
 <script setup lang="ts">
-// Device detail: tabbed view (overview, ports, health, processors, memory,
-// storage, inventory, events, alerts, data collection, capture, settings)
-// over real collected data.
-import { SNMP_CAPTURE_PRESETS } from '../../../../shared/constants'
+// Device detail — LibreNMS-style layout: header with mini usage graphs,
+// Overview (system facts + overall traffic + processor/memory/storage panels
+// + recent events), Graphs (day/week/month grids), Health (sensors +
+// processor/memory/storage sub-tabs), Ports (detail table with traffic
+// thumbnails), Logs (eventlog), Alerts, Latency (ICMP performance), plus the
+// KNetraHub-specific Data collection, Capture and Settings tabs.
+import { SNMP_CAPTURE_PRESETS, DEVICE_TYPES } from '../../../../shared/constants'
 
 const route = useRoute()
 const toast = useToast()
 const id = computed(() => route.params.id as string)
-const { canOperate, canManage, deviceStatusMeta, formatBits, formatBytes, formatUptime, usageBarClass } = useMonitoring()
+const {
+  canOperate, canManage, deviceStatusMeta, deviceTypeMeta,
+  formatBits, formatBytes, formatUptime, timeAgo, usageBarClass
+} = useMonitoring()
 
 const { data, status, refresh } = useAsyncData(`monDevice:${id.value}`,
   () => $fetch<any>(`/api/monitoring/v1/devices/${id.value}`),
@@ -42,30 +48,40 @@ async function updateCredentialProfile(value: string) {
   } finally { savingProfile.value = false }
 }
 
+const d = computed(() => data.value?.device)
+const deviceType = computed(() => d.value?.device_type_effective || 'server')
+
+// ── Tabs ──
 const tab = ref('overview')
-// One expanded row (inline graph) per entity tab at a time.
+const tabs = computed(() => {
+  const base: Array<[string, string, string]> = [
+    ['overview', 'Overview', 'i-lucide-eye'],
+    ['graphs', 'Graphs', 'i-lucide-bar-chart-3'],
+    ['health', 'Health', 'i-lucide-heart-pulse'],
+    ['ports', 'Ports', 'i-lucide-cable'],
+    ['inventory', 'Inventory', 'i-lucide-package'],
+    ['logs', 'Logs', 'i-lucide-file-text'],
+    ['alerts', 'Alerts', 'i-lucide-bell'],
+    ['latency', 'Latency', 'i-lucide-activity'],
+    ['data', 'Data collection', 'i-lucide-database']
+  ]
+  if (canOperate.value) base.push(['capture', 'Capture', 'i-lucide-radio'])
+  if (canManage.value) base.push(['settings', 'Settings', 'i-lucide-settings'])
+  return base
+})
+
+// One expanded row (inline graph) per entity list at a time.
 const expandedEntity = ref<number | null>(null)
 watch(tab, () => { expandedEntity.value = null })
 function toggleExpand(entityId: number) {
   expandedEntity.value = expandedEntity.value === entityId ? null : entityId
 }
-const tabs = computed(() => {
-  const base: Array<[string, string]> = [
-    ['overview', 'Overview'], ['ports', 'Ports'], ['health', 'Health'], ['processors', 'Processors'],
-    ['memory', 'Memory'], ['storage', 'Storage'], ['inventory', 'Inventory'], ['events', 'Events'],
-    ['alerts', 'Alerts'], ['data', 'Data collection']
-  ]
-  if (canOperate.value) base.push(['capture', 'Capture'])
-  if (canManage.value) base.push(['settings', 'Settings'])
-  return base
-})
 
-// Lazily load the active tab's sub-resource.
+// ── Lazily loaded per-tab sub-resources ──
 const subData = ref<any>({ items: [] })
 const subLoading = ref(false)
 const SUB_ENDPOINTS: Record<string, string> = {
-  ports: 'ports', health: 'sensors', processors: 'processors', memory: 'mempools',
-  storage: 'storage', inventory: 'inventory', events: 'events', alerts: 'alerts'
+  ports: 'ports', inventory: 'inventory', logs: 'events', alerts: 'alerts'
 }
 async function loadTab(t: string) {
   if (t === 'settings') {
@@ -73,6 +89,14 @@ async function loadTab(t: string) {
     loadLocations()
     loadDependencies()
     loadModuleSettings()
+    return
+  }
+  if (t === 'overview') {
+    loadOverview()
+    return
+  }
+  if (t === 'health') {
+    loadHealth()
     return
   }
   const ep = SUB_ENDPOINTS[t]
@@ -84,6 +108,87 @@ async function loadTab(t: string) {
 }
 watch(tab, (t) => loadTab(t))
 
+// ── Overview data (ports summary, entity panels, recent events) ──
+const ov = reactive<{ loaded: boolean; ports: any[]; processors: any[]; mempools: any[]; storage: any[]; events: any[] }>(
+  { loaded: false, ports: [], processors: [], mempools: [], storage: [], events: [] })
+async function loadOverview() {
+  try {
+    const [ports, processors, mempools, storage, events] = await Promise.all([
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/ports`),
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/processors`),
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/mempools`),
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/storage`),
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/events`)
+    ])
+    ov.ports = ports.items ?? []
+    ov.processors = processors.items ?? []
+    ov.mempools = mempools.items ?? []
+    ov.storage = storage.items ?? []
+    ov.events = (events.items ?? []).slice(0, 12)
+    ov.loaded = true
+  } catch { /* panels render empty */ }
+}
+onMounted(() => loadOverview())
+
+const portSummary = computed(() => {
+  const total = ov.ports.length
+  const up = ov.ports.filter((p) => p.oper_status === 'up').length
+  const disabled = ov.ports.filter((p) => p.admin_status === 'down' || p.disabled).length
+  return { total, up, down: total - up - disabled, disabled }
+})
+
+// ── Graphs tab ──
+const graphsSub = ref<'system' | 'availability' | 'poller'>('system')
+const PERIODS: Array<[string, string]> = [['-24h', '1 day'], ['-7d', '1 week'], ['-30d', '1 month']]
+const GRAPH_GROUPS: Record<string, Array<{ graph: any; title: string }>> = {
+  system: [
+    { graph: 'traffic', title: 'Overall Traffic' },
+    { graph: 'cpu', title: 'Processor Usage' },
+    { graph: 'memory', title: 'Memory Usage' },
+    { graph: 'storage', title: 'Storage Usage' }
+  ],
+  availability: [
+    { graph: 'availability', title: 'ICMP Availability' },
+    { graph: 'loss', title: 'Packet Loss' }
+  ],
+  poller: [
+    { graph: 'poller', title: 'Poll Duration' }
+  ]
+}
+
+// ── Health tab (sensors + processor/memory/storage sub-tabs) ──
+const healthSub = ref<'sensors' | 'processors' | 'memory' | 'storage'>('sensors')
+const HEALTH_ENDPOINTS: Record<string, string> = {
+  sensors: 'sensors', processors: 'processors', memory: 'mempools', storage: 'storage'
+}
+async function loadHealth() {
+  subLoading.value = true
+  expandedEntity.value = null
+  try {
+    subData.value = await $fetch<any>(`/api/monitoring/v1/devices/${id.value}/${HEALTH_ENDPOINTS[healthSub.value]}`)
+  } finally { subLoading.value = false }
+}
+watch(healthSub, () => { if (tab.value === 'health') loadHealth() })
+
+// ── Logs tab filters (client-side over the latest 500 events) ──
+const logSeverity = ref('all')
+const logType = ref('all')
+const logQ = ref('')
+const logTypeItems = computed(() => [
+  { value: 'all', label: 'All types' },
+  ...[...new Set((subData.value.items ?? []).map((e: any) => e.event_type))].sort()
+    .map((t) => ({ value: t as string, label: t as string }))
+])
+const logSeverityItems = [
+  { value: 'all', label: 'All severities' }, { value: 'info', label: 'Info' },
+  { value: 'warning', label: 'Warning' }, { value: 'error', label: 'Error' }
+]
+const filteredLogs = computed(() => (subData.value.items ?? []).filter((e: any) =>
+  (logSeverity.value === 'all' || e.severity === logSeverity.value)
+  && (logType.value === 'all' || e.event_type === logType.value)
+  && (!logQ.value || String(e.message ?? '').toLowerCase().includes(logQ.value.toLowerCase()))))
+
+// ── Poll / rediscover actions ──
 const actionRunning = ref<'poll' | 'discover' | null>(null)
 async function runAction(action: 'poll' | 'discover') {
   const label = action === 'poll' ? 'Poll' : 'Discovery'
@@ -101,7 +206,7 @@ async function runAction(action: 'poll' | 'discover') {
       await refresh()
       if (d.value?.[stampField] && d.value[stampField] !== stampBefore) {
         toast.add({ title: `${label} complete`, color: 'primary', icon: 'i-lucide-check-check' })
-        if (SUB_ENDPOINTS[tab.value]) await loadTab(tab.value)
+        await loadTab(tab.value)
         return
       }
     }
@@ -112,8 +217,6 @@ async function runAction(action: 'poll' | 'discover') {
     actionRunning.value = null
   }
 }
-
-const d = computed(() => data.value?.device)
 
 async function togglePortFlag(p: any, flag: 'ignored' | 'disabled') {
   try {
@@ -169,6 +272,10 @@ const privProtoItems = [
   { value: 'des', label: 'DES' }, { value: 'aes', label: 'AES-128' }, { value: 'aes256b', label: 'AES-256 (Blumenthal)' }, { value: 'aes256r', label: 'AES-256 (Reeder)' }
 ]
 const assocItems = ['ifIndex', 'ifName', 'ifDescr', 'ifAlias'].map((v) => ({ value: v, label: v }))
+const typeItems = computed(() => [
+  { value: '', label: `— auto (detected: ${deviceTypeMeta(d.value?.device_type).label}) —` },
+  ...DEVICE_TYPES.map((t) => ({ value: t, label: deviceTypeMeta(t).label }))
+])
 
 const settingsForm = reactive<Record<string, any>>({})
 const locations = ref<Array<{ value: number | null; label: string }>>([])
@@ -200,6 +307,7 @@ function initSettings() {
     v3_auth_password: '',
     v3_priv_protocol: dev.v3_priv_protocol || 'aes',
     v3_priv_password: '',
+    device_type: dev.device_type_override || '',
     os_override: dev.os_override || '',
     hardware_override: dev.hardware_override || '',
     location_id: dev.location_id,
@@ -253,8 +361,8 @@ async function loadModuleSettings() {
   } catch { /* panel hidden on failure */ }
 }
 function moduleState(phase: string, name: string): 'inherit' | 'on' | 'off' {
-  const ov = moduleOverrides.value.find((o: any) => o.phase === phase && o.module === name)
-  return ov ? (ov.enabled ? 'on' : 'off') : 'inherit'
+  const ov2 = moduleOverrides.value.find((o: any) => o.phase === phase && o.module === name)
+  return ov2 ? (ov2.enabled ? 'on' : 'off') : 'inherit'
 }
 async function setModuleState(phase: string, name: string, state: 'inherit' | 'on' | 'off') {
   try {
@@ -311,6 +419,10 @@ async function deleteDevice() {
     toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
   }
 }
+
+function severityColor(sev: string): string {
+  return sev === 'error' || sev === 'critical' ? 'text-rose-400' : sev === 'warning' ? 'text-amber-400' : 'text-muted'
+}
 </script>
 
 <template>
@@ -318,132 +430,372 @@ async function deleteDevice() {
     <div v-if="status === 'pending'" class="panel p-10 text-center text-muted">Loading…</div>
     <div v-else-if="!d" class="panel p-10 text-center text-muted">Device not found.</div>
     <div v-else>
-      <PageHeader :title="d.display_name || d.hostname" :subtitle="d.ip || d.hostname" icon="i-lucide-router">
-        <template #actions>
+      <!-- LibreNMS-style header: identity left, mini usage graphs right -->
+      <div class="panel mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-surface-2">
+            <UIcon :name="deviceTypeMeta(deviceType).icon" class="h-7 w-7 text-muted" />
+          </span>
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="truncate text-lg font-semibold">{{ d.display_name || d.hostname }}</h1>
+              <span :class="['inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs', deviceStatusMeta(d.status).badge]">
+                <span :class="['h-1.5 w-1.5 rounded-full', deviceStatusMeta(d.status).dot]" />
+                {{ deviceStatusMeta(d.status).label }}
+              </span>
+              <span class="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-faint">
+                {{ deviceTypeMeta(deviceType).label }}
+              </span>
+              <span v-if="d.status_reason" class="text-xs text-amber-400">{{ d.status_reason }}</span>
+            </div>
+            <div class="truncate text-sm text-muted">{{ d.location_name || d.ip || d.hostname }}</div>
+          </div>
+        </div>
+        <div class="ml-auto flex items-center gap-5">
+          <div class="hidden items-end gap-5 md:flex">
+            <MonSparkline :url="`/api/monitoring/v1/devices/${id}/graphs?graph=storage&from=-24h`"
+              :series="['value']" :colors="['#34d399']" label="Storage Usage" />
+            <MonSparkline :url="`/api/monitoring/v1/devices/${id}/graphs?graph=memory_percent&from=-24h`"
+              :series="['value']" :colors="['#f59e0b']" label="Memory Usage" />
+            <MonSparkline :url="`/api/monitoring/v1/devices/${id}/graphs?graph=cpu&from=-24h`"
+              :series="['value']" :colors="['#f43f5e']" label="Processor Usage" />
+          </div>
           <div class="flex items-center gap-2">
-            <span :class="['inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs', deviceStatusMeta(d.status).badge]">
-              <span :class="['h-1.5 w-1.5 rounded-full', deviceStatusMeta(d.status).dot]" />
-              {{ deviceStatusMeta(d.status).label }}
-            </span>
-            <span v-if="d.status_reason" class="text-xs text-amber-400">{{ d.status_reason }}</span>
             <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-refresh-cw" :loading="actionRunning === 'poll'"
               :disabled="!!actionRunning" @click="runAction('poll')">Poll now</UButton>
             <UButton v-if="canOperate" size="sm" variant="soft" icon="i-lucide-scan-line" :loading="actionRunning === 'discover'"
               :disabled="!!actionRunning" @click="runAction('discover')">Rediscover</UButton>
           </div>
-        </template>
-      </PageHeader>
+        </div>
+      </div>
 
       <div class="mb-4 flex flex-wrap gap-1 border-b border-hull">
-        <button v-for="[key, label] in tabs" :key="key"
-          :class="['px-3 py-2 text-sm', tab === key ? 'border-b-2 border-primary font-medium text-primary' : 'text-muted hover:text-default']"
-          @click="tab = key">{{ label }}</button>
+        <button v-for="[key, label, icon] in tabs" :key="key"
+          :class="['inline-flex items-center gap-1.5 px-3 py-2 text-sm', tab === key ? 'border-b-2 border-primary font-medium text-primary' : 'text-muted hover:text-default']"
+          @click="tab = key">
+          <UIcon :name="icon" class="h-4 w-4" />{{ label }}
+        </button>
       </div>
 
-      <!-- Overview -->
-      <div v-if="tab === 'overview'" class="grid gap-6 lg:grid-cols-3">
-        <div class="panel p-4 lg:col-span-2">
-          <h2 class="mb-3 font-semibold">System</h2>
-          <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <div class="flex justify-between"><dt class="text-muted">Hostname</dt><dd>{{ d.hostname }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Management IP</dt><dd class="font-mono text-xs">{{ d.ip || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">OS</dt><dd>{{ d.os }} {{ d.os_version }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Vendor</dt><dd>{{ d.vendor || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Hardware</dt><dd>{{ d.hardware || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Serial</dt><dd>{{ d.serial || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Uptime</dt><dd>{{ formatUptime(d.uptime_seconds) }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Location</dt><dd>{{ d.location_name || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">sysName</dt><dd>{{ d.sys_name || '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">ICMP / SNMP</dt><dd>{{ d.icmp_status }} / {{ d.snmp_status }}</dd></div>
-            <div class="flex justify-between">
-              <dt class="text-muted">SNMP credential</dt>
-              <dd class="text-right">
-                <span v-if="d.snmp_disabled" class="text-faint">ICMP-only</span>
-                <div v-else-if="canManage">
-                  <USelect v-model="selectedProfileId" :items="profileItems" size="xs" class="w-40"
-                    :disabled="savingProfile" @update:model-value="updateCredentialProfile" />
-                  <div v-if="d.snmp_community_set || d.v3_auth_password_set" class="mt-0.5 text-[11px] text-amber-400">
-                    device-specific settings also set — those win per-field
-                  </div>
-                  <div v-else-if="!profilesData?.items?.length" class="mt-0.5 text-[11px] text-faint">
-                    No profiles yet —
-                    <NuxtLink to="/monitoring/settings/credentials" class="underline">create one</NuxtLink>
-                  </div>
-                </div>
-                <template v-else>
-                  <span v-if="d.snmp_community_set || d.v3_auth_password_set">device-specific</span>
-                  <span v-else-if="d.credential_profile_name">{{ d.credential_profile_name }}</span>
-                  <span v-else class="text-amber-400">
-                    none —
-                    <NuxtLink to="/monitoring/settings/credentials" class="underline">add one</NuxtLink>
-                  </span>
-                </template>
-              </dd>
-            </div>
-            <div class="flex justify-between"><dt class="text-muted">Last polled</dt><dd class="text-xs">{{ d.last_polled_at ? new Date(d.last_polled_at).toLocaleString() : '—' }}</dd></div>
-            <div class="flex justify-between"><dt class="text-muted">Last discovered</dt><dd class="text-xs">{{ d.last_discovered_at ? new Date(d.last_discovered_at).toLocaleString() : '—' }}</dd></div>
-          </dl>
-        </div>
+      <!-- ═══ Overview ═══ -->
+      <div v-if="tab === 'overview'" class="grid gap-4 xl:grid-cols-2">
         <div class="space-y-4">
-          <div class="panel p-4">
-            <h2 class="mb-3 font-semibold">Entities</h2>
-            <dl class="space-y-1.5 text-sm">
-              <div class="flex justify-between"><dt class="text-muted">Ports</dt><dd>{{ data.counts.ports }}</dd></div>
-              <div class="flex justify-between"><dt class="text-muted">Sensors</dt><dd>{{ data.counts.sensors }}</dd></div>
-              <div class="flex justify-between"><dt class="text-muted">Processors</dt><dd>{{ data.counts.processors }}</dd></div>
-              <div class="flex justify-between"><dt class="text-muted">Memory pools</dt><dd>{{ data.counts.mempools }}</dd></div>
-              <div class="flex justify-between"><dt class="text-muted">Storage</dt><dd>{{ data.counts.storage }}</dd></div>
-              <div class="flex justify-between"><dt class="text-muted">Active alerts</dt><dd>{{ data.counts.active_alerts }}</dd></div>
+          <!-- System facts -->
+          <div class="panel overflow-hidden">
+            <div class="border-b border-hull bg-surface-2 px-4 py-2 text-sm font-medium">
+              {{ d.sys_descr || `${d.os} ${d.os_version || ''}` }}
+            </div>
+            <dl class="divide-y divide-hull text-sm">
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">System Name</dt><dd>{{ d.sys_name || d.hostname }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Resolved IP</dt><dd class="font-mono text-xs">{{ d.ip || '—' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Hardware</dt><dd>{{ d.hardware || 'Generic x86 64-bit' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Operating System</dt><dd>{{ d.os }} {{ d.os_version || '' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Device Type</dt>
+                <dd class="inline-flex items-center gap-1.5">
+                  <UIcon :name="deviceTypeMeta(deviceType).icon" class="h-3.5 w-3.5 text-muted" />
+                  {{ deviceTypeMeta(deviceType).label }}
+                  <span v-if="d.device_type_override" class="text-[10px] text-faint">(manual)</span>
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Object ID</dt><dd class="font-mono text-xs">{{ d.sys_object_id || '—' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Contact</dt><dd>{{ d.sys_contact || '—' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Serial</dt><dd>{{ d.serial || '—' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Device Added</dt><dd>{{ timeAgo(d.created_at) }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Last Discovered</dt><dd>{{ timeAgo(d.last_discovered_at) }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Last Polled</dt><dd>{{ timeAgo(d.last_polled_at) }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Uptime</dt><dd>{{ formatUptime(d.uptime_seconds) }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">Location</dt><dd>{{ d.location_name || '—' }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5"><dt class="text-muted">ICMP / SNMP</dt><dd>{{ d.icmp_status }} / {{ d.snmp_status }}</dd></div>
+              <div class="flex justify-between gap-4 px-4 py-1.5">
+                <dt class="text-muted">SNMP credential</dt>
+                <dd class="text-right">
+                  <span v-if="d.snmp_disabled" class="text-faint">ICMP-only</span>
+                  <div v-else-if="canManage">
+                    <USelect v-model="selectedProfileId" :items="profileItems" size="xs" class="w-40"
+                      :disabled="savingProfile" @update:model-value="updateCredentialProfile" />
+                    <div v-if="d.snmp_community_set || d.v3_auth_password_set" class="mt-0.5 text-[11px] text-amber-400">
+                      device-specific settings also set — those win per-field
+                    </div>
+                    <div v-else-if="!profilesData?.items?.length" class="mt-0.5 text-[11px] text-faint">
+                      No profiles yet —
+                      <NuxtLink to="/monitoring/settings/credentials" class="underline">create one</NuxtLink>
+                    </div>
+                  </div>
+                  <template v-else>
+                    <span v-if="d.snmp_community_set || d.v3_auth_password_set">device-specific</span>
+                    <span v-else-if="d.credential_profile_name">{{ d.credential_profile_name }}</span>
+                    <span v-else class="text-amber-400">
+                      none —
+                      <NuxtLink to="/monitoring/settings/credentials" class="underline">add one</NuxtLink>
+                    </span>
+                  </template>
+                </dd>
+              </div>
             </dl>
           </div>
+
+          <!-- Overall traffic -->
           <div class="panel p-4">
-            <h2 class="mb-3 font-semibold">Availability</h2>
-            <dl class="space-y-1.5 text-sm">
-              <div v-for="(pct, dur) in data.availability" :key="dur" class="flex justify-between">
-                <dt class="text-muted">{{ dur }}</dt><dd>{{ pct.toFixed(3) }}%</dd>
-              </div>
-              <div v-if="!Object.keys(data.availability).length" class="text-muted">Not yet computed.</div>
-            </dl>
+            <h2 class="mb-2 flex items-center gap-2 font-semibold"><UIcon name="i-lucide-arrow-down-up" class="h-4 w-4 text-muted" />Overall Traffic</h2>
+            <MonDeviceGraph :device-id="Number(id)" graph="traffic" :height="200" show-range />
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span class="rounded bg-surface-2 px-2 py-1">Total: <strong>{{ portSummary.total }}</strong></span>
+              <span class="rounded bg-emerald-500/10 px-2 py-1 text-emerald-400">Up: <strong>{{ portSummary.up }}</strong></span>
+              <span class="rounded bg-rose-500/10 px-2 py-1 text-rose-400">Down: <strong>{{ portSummary.down }}</strong></span>
+              <span class="rounded bg-sky-500/10 px-2 py-1 text-sky-400">Disabled: <strong>{{ portSummary.disabled }}</strong></span>
+            </div>
+            <div v-if="ov.ports.length" class="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
+              <button v-for="p in ov.ports" :key="p.id"
+                :class="['hover:underline', p.oper_status === 'up' ? 'text-primary' : 'text-rose-400']"
+                @click="tab = 'ports'">{{ p.if_name || p.if_descr }}</button>
+            </div>
+          </div>
+
+          <!-- Recent events -->
+          <div class="panel overflow-hidden">
+            <h2 class="flex items-center gap-2 border-b border-hull bg-surface-2 px-4 py-2 font-semibold">
+              <UIcon name="i-lucide-file-text" class="h-4 w-4 text-muted" />Recent Events
+            </h2>
+            <div v-if="!ov.events.length" class="px-4 py-6 text-center text-sm text-muted">No events yet.</div>
+            <table v-else class="w-full text-xs">
+              <tbody>
+                <tr v-for="e in ov.events" :key="e.id" class="border-t border-hull first:border-t-0">
+                  <td class="w-1 px-0 py-0">
+                    <div :class="['h-full min-h-[2rem] w-1', e.severity === 'error' ? 'bg-rose-500' : e.severity === 'warning' ? 'bg-amber-500' : 'bg-surface-2']" />
+                  </td>
+                  <td class="whitespace-nowrap px-3 py-1.5 text-faint">{{ new Date(e.created_at).toLocaleString() }}</td>
+                  <td class="px-3 py-1.5 text-muted">{{ e.event_type }}</td>
+                  <td class="px-3 py-1.5">{{ e.message }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="border-t border-hull px-4 py-2">
+              <button class="text-xs text-primary hover:underline" @click="tab = 'logs'">Full event log →</button>
+            </div>
           </div>
         </div>
-        <div class="panel p-4 lg:col-span-3">
-          <MonMetricChart kind="metric" metric="icmp_rtt_ms" :id="0" :device-id="Number(id)" unit="ms" title="ICMP latency" :height="180" />
+
+        <div class="space-y-4">
+          <!-- Processors -->
+          <div class="panel p-4">
+            <h2 class="mb-2 flex items-center gap-2 font-semibold"><UIcon name="i-lucide-cpu" class="h-4 w-4 text-muted" />Processors</h2>
+            <MonDeviceGraph :device-id="Number(id)" graph="cpu" :height="160" />
+            <div class="mt-3 space-y-2">
+              <div v-for="p in ov.processors" :key="p.id">
+                <div class="mb-0.5 flex items-center justify-between text-xs">
+                  <span class="truncate text-muted">{{ p.description }}</span>
+                  <span>{{ p.usage_percent != null ? Number(p.usage_percent).toFixed(0) + '%' : '—' }}</span>
+                </div>
+                <div class="h-1.5 overflow-hidden rounded bg-surface-2">
+                  <div :class="['h-full', usageBarClass(p.usage_percent)]" :style="{ width: Math.min(100, p.usage_percent ?? 0) + '%' }" />
+                </div>
+              </div>
+              <div v-if="ov.loaded && !ov.processors.length" class="text-xs text-muted">No processors discovered.</div>
+            </div>
+          </div>
+
+          <!-- Memory -->
+          <div class="panel p-4">
+            <h2 class="mb-2 flex items-center gap-2 font-semibold"><UIcon name="i-lucide-memory-stick" class="h-4 w-4 text-muted" />Memory</h2>
+            <MonDeviceGraph :device-id="Number(id)" graph="memory" :height="160" />
+            <div class="mt-3 space-y-2">
+              <div v-for="m in ov.mempools" :key="m.id">
+                <div class="mb-0.5 flex items-center justify-between text-xs">
+                  <span class="truncate text-muted">{{ m.description }}</span>
+                  <span>{{ formatBytes(m.used_bytes) }} / {{ formatBytes(m.total_bytes) }} ({{ (m.usage_percent ?? 0).toFixed(0) }}%)</span>
+                </div>
+                <div class="h-1.5 overflow-hidden rounded bg-surface-2">
+                  <div :class="['h-full', usageBarClass(m.usage_percent)]" :style="{ width: Math.min(100, m.usage_percent ?? 0) + '%' }" />
+                </div>
+              </div>
+              <div v-if="ov.loaded && !ov.mempools.length" class="text-xs text-muted">No memory pools discovered.</div>
+            </div>
+          </div>
+
+          <!-- Storage -->
+          <div class="panel p-4">
+            <h2 class="mb-2 flex items-center gap-2 font-semibold"><UIcon name="i-lucide-hard-drive" class="h-4 w-4 text-muted" />Storage</h2>
+            <div class="space-y-2">
+              <div v-for="s in ov.storage" :key="s.id">
+                <div class="mb-0.5 flex items-center justify-between text-xs">
+                  <span class="truncate text-muted">{{ s.description }}</span>
+                  <span>{{ formatBytes(s.used_bytes) }} / {{ formatBytes(s.total_bytes) }} ({{ (s.usage_percent ?? 0).toFixed(0) }}%)</span>
+                </div>
+                <div class="h-1.5 overflow-hidden rounded bg-surface-2">
+                  <div :class="['h-full', usageBarClass(s.usage_percent)]" :style="{ width: Math.min(100, s.usage_percent ?? 0) + '%' }" />
+                </div>
+              </div>
+              <div v-if="ov.loaded && !ov.storage.length" class="text-xs text-muted">No filesystems discovered.</div>
+            </div>
+          </div>
+
+          <!-- Entities + availability -->
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="panel p-4">
+              <h2 class="mb-3 font-semibold">Entities</h2>
+              <dl class="space-y-1.5 text-sm">
+                <div class="flex justify-between"><dt class="text-muted">Ports</dt><dd>{{ data.counts.ports }}</dd></div>
+                <div class="flex justify-between"><dt class="text-muted">Sensors</dt><dd>{{ data.counts.sensors }}</dd></div>
+                <div class="flex justify-between"><dt class="text-muted">Processors</dt><dd>{{ data.counts.processors }}</dd></div>
+                <div class="flex justify-between"><dt class="text-muted">Memory pools</dt><dd>{{ data.counts.mempools }}</dd></div>
+                <div class="flex justify-between"><dt class="text-muted">Storage</dt><dd>{{ data.counts.storage }}</dd></div>
+                <div class="flex justify-between"><dt class="text-muted">Active alerts</dt><dd>{{ data.counts.active_alerts }}</dd></div>
+              </dl>
+            </div>
+            <div class="panel p-4">
+              <h2 class="mb-3 font-semibold">Availability</h2>
+              <dl class="space-y-1.5 text-sm">
+                <div v-for="(pct, dur) in data.availability" :key="dur" class="flex justify-between">
+                  <dt class="text-muted">{{ dur }}</dt><dd>{{ pct.toFixed(3) }}%</dd>
+                </div>
+                <div v-if="!Object.keys(data.availability).length" class="text-muted">Not yet computed.</div>
+              </dl>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Ports -->
+      <!-- ═══ Graphs ═══ -->
+      <div v-else-if="tab === 'graphs'" class="space-y-4">
+        <div class="flex flex-wrap items-center gap-1 text-sm">
+          <span class="mr-1 font-semibold">Graphs »</span>
+          <button v-for="g in (['system', 'availability', 'poller'] as const)" :key="g"
+            :class="['rounded px-2.5 py-1 capitalize', graphsSub === g ? 'bg-primary/15 font-medium text-primary' : 'text-muted hover:text-default']"
+            @click="graphsSub = g">{{ g }}</button>
+        </div>
+        <div v-for="spec in GRAPH_GROUPS[graphsSub]" :key="spec.graph" class="panel p-4">
+          <h2 class="mb-3 font-semibold">{{ spec.title }}</h2>
+          <div class="grid gap-4 lg:grid-cols-3">
+            <div v-for="[range, label] in PERIODS" :key="range">
+              <div class="mb-1 text-xs font-medium uppercase tracking-wide text-faint">{{ label }}</div>
+              <MonDeviceGraph :device-id="Number(id)" :graph="spec.graph" :range="range" :height="150" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Health ═══ -->
+      <div v-else-if="tab === 'health'" class="space-y-4">
+        <div class="flex flex-wrap items-center gap-1 text-sm">
+          <span class="mr-1 font-semibold">Health »</span>
+          <button v-for="[key, label] in [['sensors', 'Sensors'], ['processors', 'Processor'], ['memory', 'Memory'], ['storage', 'Disk Usage']]" :key="key"
+            :class="['rounded px-2.5 py-1', healthSub === key ? 'bg-primary/15 font-medium text-primary' : 'text-muted hover:text-default']"
+            @click="healthSub = key as any">{{ label }}</button>
+        </div>
+
+        <!-- Sensors -->
+        <div v-if="healthSub === 'sensors'" class="panel overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
+              <tr><th class="px-3 py-2">Sensor</th><th class="px-3 py-2">Class</th><th class="px-3 py-2">Source</th>
+                <th class="px-3 py-2 text-right">Value</th><th class="px-3 py-2 text-right">Thresholds</th><th class="px-3 py-2">Status</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="subLoading"><td colspan="6" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+              <tr v-else-if="!subData.items.length">
+                <td colspan="6" class="px-3 py-6 text-center text-muted">
+                  No sensors discovered yet. Sensors come from ENTITY-SENSOR, LM-SENSORS, UPS and Printer MIBs plus
+                  UCD load averages and process/user counts — run a rediscovery after the next deploy to pick them up.
+                </td>
+              </tr>
+              <template v-for="s in subData.items" :key="s.id">
+                <tr class="cursor-pointer border-t border-hull hover:bg-surface-2/40" @click="toggleExpand(s.id)">
+                  <td class="px-3 py-2">
+                    <span class="inline-flex items-center gap-1">
+                      <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === s.id ? 'rotate-90' : '']" />
+                      {{ s.description }}
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 text-muted">{{ s.sensor_class }}</td>
+                  <td class="px-3 py-2 text-xs text-faint">{{ s.sensor_group || s.source }}</td>
+                  <td class="px-3 py-2 text-right">{{ s.current_value != null ? Number(s.current_value).toFixed(2) : '—' }} {{ s.unit }}</td>
+                  <td class="px-3 py-2 text-right text-xs text-faint">
+                    <span v-if="s.warn_high != null || s.crit_high != null">W:{{ s.warn_high ?? '—' }} C:{{ s.crit_high ?? '—' }}</span>
+                    <span v-else>—</span>
+                  </td>
+                  <td class="px-3 py-2"><span :class="s.status === 'critical' ? 'text-rose-400' : s.status === 'warning' ? 'text-amber-400' : 'text-emerald-400'">{{ s.status }}</span></td>
+                </tr>
+                <tr v-if="expandedEntity === s.id" class="border-t border-hull bg-surface-2/30">
+                  <td colspan="6" class="px-4 py-3">
+                    <MonMetricChart kind="sensor" :id="s.id" unit="raw" :title="`${s.description}${s.unit ? ` (${s.unit})` : ''}`" :height="200" />
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Processor / Memory / Disk usage -->
+        <div v-else class="panel divide-y divide-hull">
+          <div v-if="subLoading" class="px-4 py-6 text-center text-muted">Loading…</div>
+          <div v-else-if="!subData.items.length" class="px-4 py-6 text-center text-muted">None discovered.</div>
+          <div v-for="e in subData.items" :key="e.id" class="px-4 py-3">
+            <div class="mb-1 flex cursor-pointer items-center justify-between text-sm" @click="toggleExpand(e.id)">
+              <span class="inline-flex items-center gap-1">
+                <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === e.id ? 'rotate-90' : '']" />
+                {{ e.description }}
+              </span>
+              <span class="text-muted">
+                <template v-if="healthSub === 'processors'">{{ e.usage_percent != null ? Number(e.usage_percent).toFixed(0) + '%' : '—' }}</template>
+                <template v-else>{{ formatBytes(e.used_bytes) }} / {{ formatBytes(e.total_bytes) }} ({{ (e.usage_percent ?? 0).toFixed(0) }}%)</template>
+              </span>
+            </div>
+            <div class="h-2 overflow-hidden rounded bg-surface-2">
+              <div :class="['h-full', usageBarClass(e.usage_percent)]" :style="{ width: Math.min(100, e.usage_percent ?? 0) + '%' }" />
+            </div>
+            <div v-if="expandedEntity === e.id" class="mt-3">
+              <MonMetricChart kind="metric"
+                :metric="healthSub === 'processors' ? 'processor_usage' : healthSub === 'memory' ? 'mempool_usage_percent' : 'storage_usage_percent'"
+                :id="e.id" unit="percent" :title="`Usage — ${e.description}`" :height="180" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Ports (LibreNMS detail style) ═══ -->
       <div v-else-if="tab === 'ports'" class="panel overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
-            <tr><th class="px-3 py-2">Port</th><th class="px-3 py-2">Status</th><th class="px-3 py-2 text-right">Speed</th>
-              <th class="px-3 py-2 text-right">In</th><th class="px-3 py-2 text-right">Out</th>
-              <th class="px-3 py-2 text-right">In util</th><th class="px-3 py-2 text-right">Errors</th>
+            <tr><th class="px-3 py-2">Index</th><th class="px-3 py-2">Port</th><th class="px-3 py-2">Graph</th>
+              <th class="px-3 py-2">Traffic</th><th class="px-3 py-2">Speed</th><th class="px-3 py-2">Media</th>
+              <th class="px-3 py-2">MAC Address</th><th class="px-3 py-2 text-right">Errors</th>
               <th v-if="canManage" class="px-3 py-2" /></tr>
           </thead>
           <tbody>
-            <tr v-if="subLoading"><td :colspan="canManage ? 8 : 7" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+            <tr v-if="subLoading"><td :colspan="canManage ? 9 : 8" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
             <template v-for="p in subData.items" :key="p.id">
-              <tr class="cursor-pointer border-t border-hull hover:bg-surface-2/40" :class="p.disabled ? 'opacity-50' : ''"
+              <tr class="cursor-pointer border-t border-hull align-top hover:bg-surface-2/40" :class="p.disabled ? 'opacity-50' : ''"
                 @click="toggleExpand(p.id)">
+                <td class="px-3 py-2 text-muted">{{ p.if_index }}</td>
                 <td class="px-3 py-2">
-                  <span class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === p.id ? 'rotate-90' : '']" />
-                    {{ p.if_name || p.if_descr }}
+                  <span class="inline-flex items-center gap-1.5 font-medium">
+                    <UIcon name="i-lucide-tag" class="h-3.5 w-3.5"
+                      :class="p.oper_status === 'up' ? 'text-emerald-400' : p.admin_status === 'down' ? 'text-faint' : 'text-rose-400'" />
+                    <span :class="p.oper_status === 'up' ? '' : p.admin_status === 'down' ? 'text-faint' : 'text-rose-400'">{{ p.if_name || p.if_descr }}</span>
                   </span>
                   <div v-if="p.if_alias" class="text-xs text-faint">{{ p.if_alias }}</div>
+                  <div class="text-[10px] text-faint">
+                    {{ p.oper_status }}<span v-if="p.admin_status === 'down'"> (admin down)</span>
+                    <span v-if="p.disabled"> · not polled</span><span v-else-if="p.ignored"> · no alerts</span>
+                  </div>
                 </td>
                 <td class="px-3 py-2">
-                  <span :class="p.oper_status === 'up' ? 'text-emerald-400' : 'text-rose-400'">{{ p.oper_status }}</span>
-                  <span v-if="p.admin_status === 'down'" class="text-faint"> (admin down)</span>
-                  <span v-if="p.disabled" class="ml-1 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-faint">not polled</span>
-                  <span v-else-if="p.ignored" class="ml-1 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-faint">no alerts</span>
+                  <MonSparkline :url="`/api/monitoring/v1/metrics/query?kind=port&id=${p.id}&from=-24h`"
+                    :series="['in_bps', 'out_bps']" :colors="['#34d399', '#2496ED']" :width="110" :height="26" />
                 </td>
-                <td class="px-3 py-2 text-right text-muted">{{ formatBits(p.speed_bps) }}</td>
-                <td class="px-3 py-2 text-right">{{ formatBits(p.in_bps) }}</td>
-                <td class="px-3 py-2 text-right">{{ formatBits(p.out_bps) }}</td>
-                <td class="px-3 py-2 text-right">{{ p.in_util_percent != null ? p.in_util_percent.toFixed(1) + '%' : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ ((p.in_errors_ps ?? 0) + (p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
-                <td v-if="canManage" class="px-3 py-2 text-right whitespace-nowrap" @click.stop>
+                <td class="whitespace-nowrap px-3 py-2 text-xs">
+                  <div class="text-emerald-400">← {{ formatBits(p.in_bps) }}</div>
+                  <div class="text-sky-400">→ {{ formatBits(p.out_bps) }}</div>
+                </td>
+                <td class="whitespace-nowrap px-3 py-2 text-xs text-muted">
+                  {{ formatBits(p.speed_bps) }}<div v-if="p.duplex && p.duplex !== 'unknown'">{{ p.duplex }}</div>
+                </td>
+                <td class="whitespace-nowrap px-3 py-2 text-xs text-muted">
+                  {{ p.if_type || '—' }}<div v-if="p.mtu">MTU {{ p.mtu }}</div>
+                </td>
+                <td class="px-3 py-2 font-mono text-xs">{{ p.mac_address || '—' }}</td>
+                <td class="px-3 py-2 text-right text-xs">{{ ((p.in_errors_ps ?? 0) + (p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
+                <td v-if="canManage" class="whitespace-nowrap px-3 py-2 text-right" @click.stop>
                   <UButton size="xs" variant="ghost" :icon="p.ignored ? 'i-lucide-bell' : 'i-lucide-bell-off'"
                     :title="p.ignored ? 'Re-enable alerts for this port' : 'Ignore (no alerts/events)'"
                     @click="togglePortFlag(p, 'ignored')" />
@@ -453,7 +805,7 @@ async function deleteDevice() {
                 </td>
               </tr>
               <tr v-if="expandedEntity === p.id" class="border-t border-hull bg-surface-2/30">
-                <td :colspan="canManage ? 8 : 7" class="px-4 py-3">
+                <td :colspan="canManage ? 9 : 8" class="px-4 py-3">
                   <MonMetricChart kind="port" :id="p.id" unit="bps" :title="`Traffic — ${p.if_name || p.if_descr}`" :height="200" />
                 </td>
               </tr>
@@ -462,68 +814,7 @@ async function deleteDevice() {
         </table>
       </div>
 
-      <!-- Health sensors -->
-      <div v-else-if="tab === 'health'" class="panel overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
-            <tr><th class="px-3 py-2">Sensor</th><th class="px-3 py-2">Class</th><th class="px-3 py-2 text-right">Value</th>
-              <th class="px-3 py-2 text-right">Thresholds</th><th class="px-3 py-2">Status</th></tr>
-          </thead>
-          <tbody>
-            <tr v-if="subLoading"><td colspan="5" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
-            <template v-for="s in subData.items" :key="s.id">
-              <tr class="cursor-pointer border-t border-hull hover:bg-surface-2/40" @click="toggleExpand(s.id)">
-                <td class="px-3 py-2">
-                  <span class="inline-flex items-center gap-1">
-                    <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === s.id ? 'rotate-90' : '']" />
-                    {{ s.description }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 text-muted">{{ s.sensor_class }}</td>
-                <td class="px-3 py-2 text-right">{{ s.current_value != null ? s.current_value.toFixed(2) : '—' }} {{ s.unit }}</td>
-                <td class="px-3 py-2 text-right text-xs text-faint">
-                  <span v-if="s.warn_high != null || s.crit_high != null">W:{{ s.warn_high ?? '—' }} C:{{ s.crit_high ?? '—' }}</span>
-                  <span v-else>—</span>
-                </td>
-                <td class="px-3 py-2"><span :class="s.status === 'critical' ? 'text-rose-400' : s.status === 'warning' ? 'text-amber-400' : 'text-emerald-400'">{{ s.status }}</span></td>
-              </tr>
-              <tr v-if="expandedEntity === s.id" class="border-t border-hull bg-surface-2/30">
-                <td colspan="5" class="px-4 py-3">
-                  <MonMetricChart kind="sensor" :id="s.id" unit="raw" :title="`${s.description}${s.unit ? ` (${s.unit})` : ''}`" :height="200" />
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Processors / Memory / Storage (usage bars + expandable history) -->
-      <div v-else-if="['processors','memory','storage'].includes(tab)" class="panel divide-y divide-hull">
-        <div v-if="subLoading" class="px-4 py-6 text-center text-muted">Loading…</div>
-        <div v-else-if="!subData.items.length" class="px-4 py-6 text-center text-muted">None discovered.</div>
-        <div v-for="e in subData.items" :key="e.id" class="px-4 py-3">
-          <div class="mb-1 flex cursor-pointer items-center justify-between text-sm" @click="toggleExpand(e.id)">
-            <span class="inline-flex items-center gap-1">
-              <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === e.id ? 'rotate-90' : '']" />
-              {{ e.description }}
-            </span>
-            <span class="text-muted">
-              <template v-if="tab === 'processors'">{{ e.usage_percent != null ? e.usage_percent.toFixed(0) + '%' : '—' }}</template>
-              <template v-else>{{ formatBytes(e.used_bytes) }} / {{ formatBytes(e.total_bytes) }} ({{ (e.usage_percent ?? 0).toFixed(0) }}%)</template>
-            </span>
-          </div>
-          <div class="h-2 overflow-hidden rounded bg-surface-2">
-            <div :class="['h-full', usageBarClass(e.usage_percent)]" :style="{ width: Math.min(100, e.usage_percent ?? 0) + '%' }" />
-          </div>
-          <div v-if="expandedEntity === e.id" class="mt-3">
-            <MonMetricChart kind="metric"
-              :metric="tab === 'processors' ? 'processor_usage' : tab === 'memory' ? 'mempool_usage_percent' : 'storage_usage_percent'"
-              :id="e.id" unit="percent" :title="`Usage — ${e.description}`" :height="180" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Inventory -->
+      <!-- ═══ Inventory ═══ -->
       <div v-else-if="tab === 'inventory'" class="panel overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
@@ -543,25 +834,38 @@ async function deleteDevice() {
         </table>
       </div>
 
-      <!-- Events -->
-      <div v-else-if="tab === 'events'" class="panel overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
-            <tr><th class="px-3 py-2">Time</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Severity</th><th class="px-3 py-2">Message</th></tr>
-          </thead>
-          <tbody>
-            <tr v-if="subLoading"><td colspan="4" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
-            <tr v-for="e in subData.items" :key="e.id" class="border-t border-hull">
-              <td class="px-3 py-2 whitespace-nowrap text-xs text-faint">{{ new Date(e.created_at).toLocaleString() }}</td>
-              <td class="px-3 py-2 text-muted">{{ e.event_type }}</td>
-              <td class="px-3 py-2"><span :class="e.severity === 'error' ? 'text-rose-400' : e.severity === 'warning' ? 'text-amber-400' : 'text-muted'">{{ e.severity }}</span></td>
-              <td class="px-3 py-2">{{ e.message }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- ═══ Logs (eventlog) ═══ -->
+      <div v-else-if="tab === 'logs'" class="space-y-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <USelect v-model="logSeverity" :items="logSeverityItems" size="sm" class="w-40" />
+          <USelect v-model="logType" :items="logTypeItems" size="sm" class="w-52" />
+          <UInput v-model="logQ" placeholder="Search messages…" icon="i-lucide-search" size="sm" class="w-64" />
+          <span class="ml-auto text-xs text-muted">{{ filteredLogs.length }} entr{{ filteredLogs.length === 1 ? 'y' : 'ies' }}</span>
+        </div>
+        <div class="panel overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
+              <tr><th class="w-1 px-0" /><th class="px-3 py-2">Timestamp</th><th class="px-3 py-2">Type</th>
+                <th class="px-3 py-2">Severity</th><th class="px-3 py-2">Message</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="subLoading"><td colspan="5" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+              <tr v-else-if="!filteredLogs.length"><td colspan="5" class="px-3 py-6 text-center text-muted">No matching events.</td></tr>
+              <tr v-for="e in filteredLogs" :key="e.id" class="border-t border-hull">
+                <td class="w-1 px-0 py-0">
+                  <div :class="['h-full min-h-[2rem] w-1', e.severity === 'error' ? 'bg-rose-500' : e.severity === 'warning' ? 'bg-amber-500' : 'bg-surface-2']" />
+                </td>
+                <td class="whitespace-nowrap px-3 py-2 text-xs text-faint">{{ new Date(e.created_at).toLocaleString() }}</td>
+                <td class="px-3 py-2 text-muted">{{ e.event_type }}</td>
+                <td class="px-3 py-2"><span :class="severityColor(e.severity)">{{ e.severity }}</span></td>
+                <td class="px-3 py-2">{{ e.message }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <!-- Alerts -->
+      <!-- ═══ Alerts ═══ -->
       <div v-else-if="tab === 'alerts'" class="panel overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
@@ -569,6 +873,7 @@ async function deleteDevice() {
           </thead>
           <tbody>
             <tr v-if="subLoading"><td colspan="4" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+            <tr v-else-if="!subData.items.length"><td colspan="4" class="px-3 py-6 text-center text-muted">No alerts recorded.</td></tr>
             <tr v-for="a in subData.items" :key="a.id" class="border-t border-hull">
               <td class="px-3 py-2">{{ a.rule_name }}</td>
               <td class="px-3 py-2"><span :class="a.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'">{{ a.severity }}</span></td>
@@ -579,7 +884,29 @@ async function deleteDevice() {
         </table>
       </div>
 
-      <!-- Data collection -->
+      <!-- ═══ Latency (ICMP performance) ═══ -->
+      <div v-else-if="tab === 'latency'" class="space-y-4">
+        <div class="panel p-4">
+          <h2 class="mb-3 font-semibold">ICMP Performance — Latency</h2>
+          <div class="grid gap-4 lg:grid-cols-3">
+            <div v-for="[range, label] in PERIODS" :key="range">
+              <div class="mb-1 text-xs font-medium uppercase tracking-wide text-faint">{{ label }}</div>
+              <MonDeviceGraph :device-id="Number(id)" graph="latency" :range="range" :height="160" />
+            </div>
+          </div>
+        </div>
+        <div class="panel p-4">
+          <h2 class="mb-3 font-semibold">ICMP Performance — Packet Loss</h2>
+          <div class="grid gap-4 lg:grid-cols-3">
+            <div v-for="[range, label] in PERIODS" :key="range">
+              <div class="mb-1 text-xs font-medium uppercase tracking-wide text-faint">{{ label }}</div>
+              <MonDeviceGraph :device-id="Number(id)" graph="loss" :range="range" :height="160" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Data collection ═══ -->
       <div v-else-if="tab === 'data'" class="panel p-4">
         <h2 class="mb-3 font-semibold">Last poll run</h2>
         <div v-if="!data.last_poll" class="text-muted">No poll run recorded yet.</div>
@@ -596,7 +923,7 @@ async function deleteDevice() {
         </NuxtLink>
       </div>
 
-      <!-- Capture: ad-hoc raw SNMP query tool -->
+      <!-- ═══ Capture: ad-hoc raw SNMP query tool ═══ -->
       <div v-else-if="tab === 'capture'" class="space-y-4">
         <div class="panel p-4">
           <h2 class="mb-1 font-semibold">Raw SNMP capture</h2>
@@ -655,13 +982,16 @@ async function deleteDevice() {
         </div>
       </div>
 
-      <!-- Settings: full device configuration -->
+      <!-- ═══ Settings: full device configuration ═══ -->
       <div v-else-if="tab === 'settings'" class="space-y-4">
         <div class="panel p-4">
           <h2 class="mb-3 font-semibold">Identity</h2>
           <div class="grid gap-3 sm:grid-cols-2">
             <UFormField label="Display name"><UInput v-model="settingsForm.display_name" :placeholder="d.hostname" class="w-full" /></UFormField>
             <UFormField label="Management IP"><UInput v-model="settingsForm.ip" placeholder="10.0.0.1" class="w-full" /></UFormField>
+            <UFormField label="Device type" help="Auto-detected from the OS at discovery; pick one to override.">
+              <USelect v-model="settingsForm.device_type" :items="typeItems" class="w-full" />
+            </UFormField>
             <UFormField label="OS override"><UInput v-model="settingsForm.os_override" :placeholder="d.os" class="w-full" /></UFormField>
             <UFormField label="Hardware override"><UInput v-model="settingsForm.hardware_override" :placeholder="d.hardware || ''" class="w-full" /></UFormField>
             <UFormField label="Notes" class="sm:col-span-2"><UTextarea v-model="settingsForm.notes" :rows="2" class="w-full" /></UFormField>

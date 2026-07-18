@@ -5,7 +5,7 @@ import { SnmpClient, describeSnmpTarget, type ResolvedSnmpConfig } from './engin
 import { SYS } from './oids'
 import { resolveOidName } from './mibNames'
 import type { SnmpValue } from './values'
-import { detectOs } from '../core/registry'
+import { detectOs, deviceTypeOf } from '../core/registry'
 import type { CollectionOutcome } from '../../shared/constants'
 import type { InlineSnmpInput } from './inlineConfig'
 
@@ -62,7 +62,7 @@ export type SnmpTestResult =
         sysLocation: string | null
         uptimeSeconds: number | null
       }
-      detected: { os: string; text: string; vendor?: string }
+      detected: { os: string; text: string; vendor?: string; device_type?: string }
       raw: SnmpRawRow[]
     }
   | { ok: false; durationMs: number; target: string; outcome: CollectionOutcome; error: string }
@@ -108,7 +108,7 @@ export async function testSnmp(cfg: ResolvedSnmpConfig): Promise<SnmpTestResult>
         sysLocation: str(SYS.sysLocation),
         uptimeSeconds: typeof upTicks === 'number' ? Math.floor(upTicks / 100) : null
       },
-      detected: { os: os.os, text: os.text, ...(os.vendor ? { vendor: os.vendor } : {}) },
+      detected: { os: os.os, text: os.text, device_type: deviceTypeOf(os), ...(os.vendor ? { vendor: os.vendor } : {}) },
       raw: oids.map((oid) => ({ oid, name: resolveOidName(oid), ...serializeSnmpValue(res.value[oid] ?? null) }))
     }
   } catch (err) {

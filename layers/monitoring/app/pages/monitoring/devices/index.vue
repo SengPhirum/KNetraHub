@@ -1,11 +1,14 @@
 <script setup lang="ts">
-// Device inventory: filter by status/OS/text, add device, open detail.
-const { hasMonitoring, canManage, deviceStatusMeta, formatUptime } = useMonitoring()
+// Device inventory: filter by status/type/OS/text, add device, open detail.
+import { DEVICE_TYPES } from '../../../../shared/constants'
+
+const { hasMonitoring, canManage, deviceStatusMeta, deviceTypeMeta, formatUptime } = useMonitoring()
 const route = useRoute()
 const toast = useToast()
 
 const filters = reactive({
   status: (route.query.status as string) || 'all',
+  device_type: (route.query.device_type as string) || 'all',
   os: '',
   q: ''
 })
@@ -14,6 +17,7 @@ const page = ref(1)
 const query = computed(() => {
   const p = new URLSearchParams()
   if (filters.status && filters.status !== 'all') p.set('status', filters.status)
+  if (filters.device_type && filters.device_type !== 'all') p.set('device_type', filters.device_type)
   if (filters.os) p.set('os', filters.os)
   if (filters.q) p.set('q', filters.q)
   p.set('page', String(page.value))
@@ -90,10 +94,18 @@ const statusItems = [
   { value: 'degraded', label: 'Degraded' }, { value: 'maintenance', label: 'Maintenance' },
   { value: 'disabled', label: 'Disabled' }, { value: 'pending', label: 'Pending' }
 ]
+const typeFilterItems = [
+  { value: 'all', label: 'All device types' },
+  ...DEVICE_TYPES.map((t) => ({ value: t, label: deviceTypeMeta(t).label }))
+]
+const addTypeItems = [
+  { value: '', label: '— auto (detect from SNMP) —' },
+  ...DEVICE_TYPES.map((t) => ({ value: t, label: deviceTypeMeta(t).label }))
+]
 
 const addOpen = ref(false)
 const ADD_DEFAULTS = {
-  hostname: '', ip: '', snmp_disabled: false, force: false,
+  hostname: '', ip: '', snmp_disabled: false, force: false, device_type: '',
   credential_profile_id: null as number | null,
   snmp_version: 'v2c', snmp_community: '', snmp_port: null as number | null, snmp_context: '',
   v3_level: 'authPriv', v3_username: '', v3_auth_protocol: 'sha', v3_auth_password: '',
@@ -162,6 +174,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
     <div v-else class="space-y-4">
       <div class="flex flex-wrap items-center gap-2">
         <USelect v-model="filters.status" :items="statusItems" size="sm" class="w-44" />
+        <USelect v-model="filters.device_type" :items="typeFilterItems" size="sm" class="w-44" />
         <UInput v-model="filters.q" placeholder="Search hostname / IP…" icon="i-lucide-search" size="sm" class="w-64" />
         <UDropdownMenu v-if="canManage && selected.size" :items="bulkItems">
           <UButton size="sm" variant="soft" icon="i-lucide-layers" :loading="bulkRunning" trailing-icon="i-lucide-chevron-down">
@@ -177,14 +190,15 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
             <tr>
               <th v-if="canManage" class="w-8 px-3 py-2"><UCheckbox :model-value="allOnPageSelected" @update:model-value="toggleAllOnPage" /></th>
               <th class="px-3 py-2">Status</th><th class="px-3 py-2">Hostname</th>
+              <th class="px-3 py-2">Type</th>
               <th class="px-3 py-2">IP</th><th class="px-3 py-2">OS</th>
               <th class="px-3 py-2 text-right">Uptime</th><th class="px-3 py-2 text-right">Ports</th>
               <th class="px-3 py-2 text-right">Sensors</th><th class="px-3 py-2 text-right">Alerts</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="status === 'pending'"><td :colspan="canManage ? 9 : 8" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
-            <tr v-else-if="!data?.items?.length"><td :colspan="canManage ? 9 : 8" class="px-3 py-8 text-center text-muted">No devices. Add one to begin.</td></tr>
+            <tr v-if="status === 'pending'"><td :colspan="canManage ? 10 : 9" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
+            <tr v-else-if="!data?.items?.length"><td :colspan="canManage ? 10 : 9" class="px-3 py-8 text-center text-muted">No devices. Add one to begin.</td></tr>
             <tr v-for="d in data.items" :key="d.id" class="border-t border-hull hover:bg-surface-2/50">
               <td v-if="canManage" class="px-3 py-2"><UCheckbox :model-value="selected.has(d.id)" @update:model-value="toggleOne(d.id)" /></td>
               <td class="px-3 py-2">
@@ -199,6 +213,12 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
                   {{ d.display_name || d.hostname }}
                 </NuxtLink>
                 <div v-if="d.display_name" class="text-xs text-faint">{{ d.hostname }}</div>
+              </td>
+              <td class="px-3 py-2">
+                <span class="inline-flex items-center gap-1.5 text-xs text-muted" :title="d.device_type_manual ? 'manually set' : 'auto-detected'">
+                  <UIcon :name="deviceTypeMeta(d.device_type).icon" class="h-3.5 w-3.5" />
+                  {{ deviceTypeMeta(d.device_type).label }}
+                </span>
               </td>
               <td class="px-3 py-2 font-mono text-xs">{{ d.ip || '—' }}</td>
               <td class="px-3 py-2">{{ d.os }}<span v-if="d.os_version" class="text-faint"> {{ d.os_version }}</span></td>
@@ -229,6 +249,9 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
           </UFormField>
           <UFormField label="Management IP (optional)">
             <UInput v-model="addForm.ip" placeholder="10.0.0.1" class="w-full" />
+          </UFormField>
+          <UFormField label="Device type" help="Auto maps from the detected OS during scan/discovery; pick one to pin it.">
+            <USelect v-model="addForm.device_type" :items="addTypeItems" class="w-full" />
           </UFormField>
           <UCheckbox v-model="addForm.snmp_disabled" label="ICMP-only (no SNMP)" />
           <template v-if="!addForm.snmp_disabled">
@@ -293,7 +316,9 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
               <div v-if="!addForm.snmp_disabled" class="mt-1 flex items-start gap-2">
                 <span class="text-muted">SNMP:</span>
                 <span v-if="testResult.snmp?.ok" class="text-emerald-400">
-                  {{ testResult.snmp.system.sysName || 'ok' }} — {{ testResult.snmp.detected?.text }} ({{ testResult.snmp.durationMs }} ms)
+                  {{ testResult.snmp.system.sysName || 'ok' }} — {{ testResult.snmp.detected?.text }}
+                  <template v-if="testResult.snmp.detected?.device_type"> · type: {{ deviceTypeMeta(testResult.snmp.detected.device_type).label }}</template>
+                  ({{ testResult.snmp.durationMs }} ms)
                 </span>
                 <span v-else class="text-rose-400">{{ testResult.snmp?.outcome }}: {{ testResult.snmp?.error }}</span>
               </div>
