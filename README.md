@@ -250,7 +250,8 @@ node .output/server/index.mjs
 ### Deploying to Swarm
 Ship it as a swarm service, pinned to a manager node. Build and publish a versioned image:
 ```bash
-./service.sh release
+./service.sh build
+./service.sh push
 ```
 
 Deploy the published image:

@@ -26,7 +26,12 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const kind = String(query.kind ?? 'port')
   const id = Number(query.id)
-  if (!Number.isInteger(id) || id <= 0) badRequest('id is required')
+  const deviceId = query.device_id != null ? Number(query.device_id) : null
+  // Device-level series (entity_id = 0) are addressed by device_id instead.
+  const idOk = kind === 'metric' && deviceId
+    ? Number.isInteger(id) && id >= 0
+    : Number.isInteger(id) && id > 0
+  if (!idOk) badRequest('id is required')
   const from = parseFrom(String(query.from ?? '-24h'))
   const rangeMs = Date.now() - from.getTime()
   // Choose resolution: raw < 6h, 5m aggregate < 30d, 1h aggregate beyond.
@@ -62,12 +67,19 @@ export default defineEventHandler(async (event) => {
     return { kind, id, from: from.toISOString(), points: rows.rows }
   }
 
-  // generic metric series: id = entity_id, metric name required
+  // generic metric series: id = entity_id, metric name required; device_id
+  // scopes device-level series where entity_id is 0 for every device.
   const metric = String(query.metric ?? '')
   if (!metric) badRequest('metric name required for kind=metric')
+  const args: unknown[] = [id, metric, from]
+  let deviceFilter = ''
+  if (deviceId) {
+    args.push(deviceId)
+    deviceFilter = ` AND device_id = $${args.length}`
+  }
   const rows = await db.query(
-    `SELECT time, value FROM monitoring.metrics WHERE entity_id = $1 AND metric = $2 AND time >= $3 ORDER BY time`,
-    [id, metric, from]
+    `SELECT time, value FROM monitoring.metrics WHERE entity_id = $1 AND metric = $2 AND time >= $3${deviceFilter} ORDER BY time`,
+    args
   )
   return { kind, id, metric, from: from.toISOString(), points: rows.rows }
 })

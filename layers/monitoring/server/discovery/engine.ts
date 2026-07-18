@@ -140,7 +140,8 @@ export async function runDiscovery(deviceId: number, jobId: number | null = null
   )
 
   const durationMs = Date.now() - started
-  const intervalSec = Number(device.discovery_interval_seconds ?? (useRuntimeConfig().monitoring as any).discoveryIntervalSeconds ?? 21600)
+  const { getSettingNumber } = await import('../core/settings')
+  const intervalSec = Number(device.discovery_interval_seconds ?? await getSettingNumber(db, 'discovery_interval_seconds'))
   // Liveness (pending/up/down) is decided solely by the poll cycle's
   // availability module (real ICMP reachability) — discovery used to flip
   // status to 'up' unconditionally on completion, even for a host that never

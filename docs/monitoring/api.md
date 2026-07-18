@@ -55,15 +55,30 @@ authentication boundary; handlers additionally call
 | GET | `/alerts/templates` | viewer | Alert templates |
 | GET | `/logs/events` `/logs/syslog` `/logs/traps` `/logs/alerts` | viewer | Log streams |
 | GET | `/pollers` | viewer | Poller nodes + queue health |
-| GET | `/pollers/jobs` | viewer | Recent/failed/dead jobs (filter: state) |
+| GET | `/pollers/jobs` | viewer | Recent/failed/dead jobs (filter: state, type; accurate total) |
 | POST | `/pollers/jobs/:id/replay` | operator | Requeue a dead-letter job |
 | GET | `/data-quality/coverage` | viewer | Per-device collection completeness |
 | GET | `/data-quality/failures` | viewer | Recent failed collection attempts |
 | POST | `/discovery/scan` | operator | CIDR bulk-add + queue discovery |
-| GET | `/metrics/query` | viewer | Time-series for a graph (`kind=port\|sensor\|metric`, `id`, `from`) |
+| GET | `/metrics/query` | viewer | Time-series for a graph (`kind=port\|sensor\|metric`, `id`, `from`; `kind=metric` also takes `metric` and optional `device_id` for device-level series like `icmp_rtt_ms` where `id=0`) |
 | GET | `/system/status` | viewer | Dashboard summary counters |
 | GET | `/maintenance` | viewer | Maintenance windows |
 | GET | `/bills` | viewer | Traffic bills |
+| POST | `/devices/bulk` | operator/admin | Multi-select actions: `{ids, action: poll\|discover\|enable\|disable\|ignore\|unignore\|delete}` (poll/discover = operator, rest = admin) |
+| GET/PUT | `/devices/:id/dependencies` | viewer / admin | Parent devices (alert suppression); PUT `{parent_ids}` with cycle detection |
+| PUT | `/ports/:id` | admin | Port flags: `{disabled?, ignored?}` |
+| POST | `/locations`, PUT/DELETE `/locations/:id` | admin | Location CRUD |
+| POST | `/device-groups`, GET/PUT/DELETE `/device-groups/:id` | admin (GET viewer) | Group CRUD; `rules` tree = dynamic membership (recomputed on save + daily), `device_ids` = static members |
+| POST | `/maintenance`, GET/PUT/DELETE `/maintenance/:id` | operator (GET viewer) | Window CRUD with `targets` (device/group/location) and `recurrence` (daily/weekly/monthly) |
+| PUT/DELETE | `/alerts/rules/:id` | admin | Rule update (incl. `transport_ids`) / delete |
+| POST | `/alerts/templates`, PUT/DELETE `/alerts/templates/:id` | admin | Template CRUD (`is_default` is exclusive) |
+| PUT/DELETE | `/alerts/transports/:id` | admin | Transport update (omit `config` to keep stored secrets) / delete |
+| POST | `/services`, PUT/DELETE `/services/:id` | admin | Service-check CRUD (per-type param validation, no shell strings) |
+| POST | `/bills`, GET/PUT/DELETE `/bills/:id` | admin (GET viewer) | Bill CRUD; `port_ids` replaces port set; GET includes ports + period history |
+| GET/PUT | `/settings` | admin | DB-backed runtime settings (intervals, SNMP timeout/retries, retention) — override env without restart, effective ≤30s |
+| GET/PUT | `/module-settings` | viewer / admin | Discovery/poll module registry + per-scope overrides `{changes:[{scope, scope_ref?, phase, module, enabled\|null}]}` |
+| PUT | `/pollers/:id` | admin | Pause/resume a poller node (`{enabled}`) — paused nodes claim no jobs |
+| DELETE | `/pollers/:id` | admin | Remove a stopped node's record (refused while heartbeating) |
 
 ## Example: add a device and watch it converge
 

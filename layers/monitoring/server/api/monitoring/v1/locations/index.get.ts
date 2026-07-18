@@ -10,6 +10,6 @@ export default defineEventHandler(async (event) => {
        (SELECT count(*)::int FROM monitoring.devices WHERE location_id = l.id) AS device_count
      FROM monitoring.locations l`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY l.name LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY name LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })

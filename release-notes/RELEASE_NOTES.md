@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-17 UTC
+Date: 2026-07-18 UTC
 
 ## Docker Images
 
@@ -11,11 +11,12 @@ Date: 2026-07-17 UTC
 
 ## Source
 
-- Commit: `0cba75d`
+- Commit: `6ebbf14`
 - Previous tag: none
 
 ## Changes
 
+- Fix (6ebbf14)
 - feat(monitoring): implement CIDR discovery scans and candidate management (0cba75d)
 - docs(monitoring): module guides, API/CLI/troubleshooting guides, full parity matrices (5139116)
 - feat(monitoring): build LibreNMS-equivalent monitoring platform from scratch (9a6a30b)

@@ -35,11 +35,13 @@ export async function startDispatcher(): Promise<void> {
   const concurrency = Number(rc.workerConcurrency ?? 16)
   const version = (useRuntimeConfig().public as any)?.appVersion ?? 'dev'
 
+  // Note: `enabled` is deliberately NOT reset here — an operator pause
+  // (Pollers page) must survive a node restart.
   await db.query(
     `INSERT INTO monitoring.poller_nodes (id, poller_group, version, started_at, last_heartbeat_at, worker_concurrency)
      VALUES ($1,$2,$3,now(),now(),$4)
      ON CONFLICT (id) DO UPDATE SET poller_group = $2, version = $3, started_at = now(),
-       last_heartbeat_at = now(), worker_concurrency = $4, enabled = true`,
+       last_heartbeat_at = now(), worker_concurrency = $4`,
     [id, group, version, concurrency]
   )
 
@@ -92,8 +94,8 @@ async function scheduleDueWork(): Promise<void> {
     await enqueue(db, { type: 'poll', deviceId: Number(row.id), pollerGroup: Number(row.poller_group), dedupeKey: `poll:${row.id}`, priority: 50 })
   }
 
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
-  const downRetry = Number(rc.downRetrySeconds ?? 60)
+  const { getSettingNumber } = await import('../core/settings')
+  const downRetry = await getSettingNumber(db, 'down_retry_seconds')
   const dueDownRetries = await db.query(
     `SELECT id, poller_group FROM monitoring.devices
      WHERE NOT disabled AND status = 'down'
@@ -131,6 +133,10 @@ async function claimAndRun(): Promise<void> {
   if (capacity <= 0) return
 
   const db = getDb()
+  // Operator pause: a disabled node keeps heartbeating and scheduling
+  // (scheduling is idempotent across nodes) but claims no work.
+  const self = await db.query(`SELECT enabled FROM monitoring.poller_nodes WHERE id = $1`, [nodeId()])
+  if (self.rows[0] && self.rows[0].enabled === false) return
   const jobs = await claim(db, nodeId(), Number(rc.pollerGroup ?? 0), capacity)
   for (const job of jobs) {
     running++

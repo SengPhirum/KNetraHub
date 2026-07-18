@@ -21,6 +21,19 @@ export default defineEventHandler(async (event) => {
     `UPDATE monitoring.devices SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`,
     [id, ...Object.values(values)]
   )
+  // Disabling parks the device; re-enabling schedules an immediate poll+discovery.
+  if (values.disabled === true) {
+    await db.query(
+      `UPDATE monitoring.devices SET status = 'disabled', status_reason = 'disabled by operator' WHERE id = $1`,
+      [id]
+    )
+  } else if (values.disabled === false) {
+    await db.query(
+      `UPDATE monitoring.devices SET status = 'pending', status_reason = NULL,
+         next_poll_at = now(), next_discovery_at = now() WHERE id = $1 AND status = 'disabled'`,
+      [id]
+    )
+  }
   await auditMonitoring(user.username, 'device.update', String(id), `fields=${cols.join(',')}`)
   return { id, updated: cols }
 })

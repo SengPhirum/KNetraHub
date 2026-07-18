@@ -30,11 +30,11 @@ OS definitions) are in their own files, linked below.
 | Location | location | Device location + map grouping | `devices.location_id`, `locations` | ✓ | ✓ | Locations page (read) + device Settings tab picker | manual | **Complete** | Auto-derived from sysLocation; manual assignment via Settings tab or API |
 | Display name / hardware / OS override | override_sysLocation etc. | Manual overrides survive rediscovery | `os_override`, `hardware_override`, `display_name` | ✓ | ✓ | Device Settings tab | manual | **Complete** | |
 | Port association mode | port_association_mode | ifIndex/ifName/ifDescr/ifAlias | `devices.port_association_mode` | ✓ | ✓ | Device Settings tab picker | none | **Partially complete** | Column + UI exist; reconciliation currently always keys on ifIndex — alternate modes not wired into `discovery/modules/ports.ts` |
-| Device dependency | dependency | Suppress alerts when parent is down | `device_dependencies` | ✓ | — | — | manual | **Partially complete** | Schema + alert-evaluation suppression implemented; no CRUD API/UI yet |
-| Maintenance | maintenance | Suppress alerts / skip polling for a window | `maintenance_windows`, `maintenance_targets` | ✓ | GET only | Maintenance list page (read-only) | manual | **Partially complete** | Evaluation logic (poll skip / alert suppression) fully implemented; create/edit API+UI not yet built |
+| Device dependency | dependency | Suppress alerts when parent is down | `device_dependencies` | ✓ | GET/PUT `/devices/:id/dependencies` | Device Settings tab (parents picker) | build | **Complete** | Cycle detection on PUT; suppression in alert evaluation |
+| Maintenance | maintenance | Suppress alerts / skip polling for a window | `maintenance_windows`, `maintenance_targets` | ✓ | Full CRUD | Maintenance page (create/edit/delete, targets, recurrence) | build | **Complete** | Recurrence (daily/weekly/monthly) now honored by `isWindowActive()` in evaluation |
 | Bulk add (CIDR) | discovery/scan | Add many devices from a CIDR | `POST /discovery/scan` | ✓ | ✓ | Discovery page | manual | **Complete** | Bounded to /20; excluded-host support; credential-profile selection |
 | Bulk add (CSV) | bulk import | Import devices from CSV | — | — | — | — | none | **Blocked** | Not implemented |
-| Bulk operations (poll/rediscover/disable/delete) | bulk actions | Multi-select device actions | — | — | Per-device only | Per-device only | none | **Blocked** | Per-device poll/discover/delete exist; no multi-select bulk UI/API |
+| Bulk operations (poll/rediscover/disable/delete) | bulk actions | Multi-select device actions | `POST /devices/bulk` | — | ✓ (poll/discover/enable/disable/ignore/unignore/delete) | Devices page multi-select Actions menu | build | **Complete** | poll/discover need operator; the rest admin |
 | Device status model | device states | up/down/degraded/disabled/ignored/maintenance/pending | `devices.status` | ✓ | ✓ | ✓ (badges) | manual | **Complete** | |
 | Protocol-separated availability | icmp/snmp status | ICMP and SNMP tracked independently | `icmp_status`, `snmp_status` | ✓ | ✓ | Overview tab | manual | **Complete** | |
 
@@ -181,6 +181,7 @@ they require vendor-specific MIBs not yet mapped.
 | Dashboard CRUD API | **Blocked** | Schema ready; no `/dashboards` endpoints implemented yet |
 | Customizable widget canvas UI | **Blocked** | The Overview page (`/monitoring`) is a fixed, curated summary, not a drag-and-drop widget canvas |
 | Individual widgets (alerts, availability map, top devices/interfaces, custom graph, world map, …) | **Partially complete** | The data each widget needs is servable today via existing list/metrics endpoints; no widget framework consumes them yet |
+| Per-entity graphs on the device page | **Complete** | `MonMetricChart` (Chart.js): ICMP latency on Overview; expandable per-port traffic, per-sensor history, per-processor/mempool/storage usage — 6h/24h/7d/30d ranges via `/metrics/query` (continuous aggregates for long ranges) |
 
 ## 13. Maps & topology
 
@@ -200,8 +201,8 @@ they require vendor-specific MIBs not yet mapped.
 | 95th-percentile billing | **Complete** | rollover-safe delta-based percentile |
 | Multiple ports per bill | **Complete** | `bill_ports` |
 | Billing period / history | **Complete** | `bill_history` |
-| Billing CRUD API | **Blocked** | Read-only `GET /bills` exists; create/edit API not yet built |
-| Billing UI (graphs, alerts, CSV/PDF export) | **Partially complete** | List page exists; graphs/export/alerting on bills not implemented |
+| Billing CRUD API | **Complete** | `POST/PUT/DELETE /bills`, `GET /bills/:id` (ports + period history), port assignment via `port_ids` |
+| Billing UI (graphs, alerts, CSV/PDF export) | **Partially complete** | Full CRUD page with current-period usage; graphs/export/alerting on bills not implemented |
 
 ## 15. Configuration backup integrations
 
@@ -235,7 +236,7 @@ they require vendor-specific MIBs not yet mapped.
 | Versioned REST API under `/api/monitoring/v1` | **Complete** | see [`api.md`](./api.md) |
 | Pagination, sorting, filtering, search | **Complete** (pagination/filter) / **Partially complete** (sort — `listParams` supports it, most handlers don't yet expose a sortable column set) | |
 | Field selection | **Blocked** | Not implemented |
-| Bulk actions | **Partially complete** | Discovery-scan is bulk; generic bulk device actions are not |
+| Bulk actions | **Complete** | `POST /devices/bulk` (poll/discover/enable/disable/ignore/unignore/delete) + discovery-scan bulk import |
 | Consistent error model | **Complete** | H3 `createError` throughout |
 | Idempotency keys | **Blocked** | Not implemented |
 | API-token auth, scopes, expiry, revocation | **Complete** (portal-level; shared with Docker/IPAM) | `server/api/user/tokens/*` — not Monitoring-specific, reused as-is |
@@ -275,7 +276,7 @@ REST equivalent today.
 
 | Function | Status | Notes |
 |---|---|---|
-| Configurable retention (metrics/events/syslog/traps/job-runs) | **Complete** | `housekeeping.ts` + `NUXT_MONITORING_*_RETENTION_DAYS` |
+| Configurable retention (metrics/events/syslog/traps/job-runs) | **Complete** | `housekeeping.ts`; DB-backed overrides via `PUT /settings` (Settings UI) with `NUXT_MONITORING_*_RETENTION_DAYS` env fallback |
 | Continuous aggregates (5m/1h) | **Complete** | `0005_metrics.ts` |
 | Compression policy | **Complete** | on `port_metrics` (highest volume) |
 | Query optimization for overview/graphs/search | **Partially complete** | Indexes present on hot paths; no load-tested query plan review yet |

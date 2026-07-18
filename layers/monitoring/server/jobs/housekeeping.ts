@@ -9,16 +9,21 @@ import { trimFinishedJobs } from './queue'
  */
 export async function runHousekeeping(): Promise<void> {
   const db = getDb()
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
+  const { getSettingNumber } = await import('../core/settings')
+  const metricDays = await getSettingNumber(db, 'metric_retention_days')
+  const syslogDays = await getSettingNumber(db, 'syslog_retention_days')
+  const eventDays = await getSettingNumber(db, 'event_retention_days')
+  const trapDays = await getSettingNumber(db, 'trap_retention_days')
+  const jobRunDays = await getSettingNumber(db, 'job_run_retention_days')
 
   // ── Retention (SQL deletes; Timescale drop_chunks would also work) ──
   const retention: [string, string, number][] = [
-    ['monitoring.port_metrics', 'time', Number(rc.metricRetentionDays ?? 30)],
-    ['monitoring.sensor_metrics', 'time', Number(rc.metricRetentionDays ?? 30)],
-    ['monitoring.metrics', 'time', Number(rc.metricRetentionDays ?? 30)],
-    ['monitoring.service_results', 'time', Number(rc.metricRetentionDays ?? 30)],
-    ['monitoring.syslog', 'time', Number(rc.syslogRetentionDays ?? 30)],
-    ['monitoring.collection_attempts', 'time', Number(rc.jobRunRetentionDays ?? 7)]
+    ['monitoring.port_metrics', 'time', metricDays],
+    ['monitoring.sensor_metrics', 'time', metricDays],
+    ['monitoring.metrics', 'time', metricDays],
+    ['monitoring.service_results', 'time', metricDays],
+    ['monitoring.syslog', 'time', syslogDays],
+    ['monitoring.collection_attempts', 'time', jobRunDays]
   ]
   for (const [table, column, days] of retention) {
     try {
@@ -27,14 +32,14 @@ export async function runHousekeeping(): Promise<void> {
       console.error(`[monitoring:housekeeping] retention trim failed for ${table}`, err)
     }
   }
-  await db.query(`DELETE FROM monitoring.events WHERE created_at < now() - make_interval(days => $1)`, [Number(rc.eventRetentionDays ?? 90)])
-  await db.query(`DELETE FROM monitoring.traps WHERE received_at < now() - make_interval(days => $1)`, [Number(rc.trapRetentionDays ?? 30)])
-  await db.query(`DELETE FROM monitoring.poll_runs WHERE started_at < now() - make_interval(days => $1)`, [Number(rc.jobRunRetentionDays ?? 7)])
+  await db.query(`DELETE FROM monitoring.events WHERE created_at < now() - make_interval(days => $1)`, [eventDays])
+  await db.query(`DELETE FROM monitoring.traps WHERE received_at < now() - make_interval(days => $1)`, [trapDays])
+  await db.query(`DELETE FROM monitoring.poll_runs WHERE started_at < now() - make_interval(days => $1)`, [jobRunDays])
   // Only trim finished scans — never a still-running one, however old (a stuck
   // 'running' scan is a bug to investigate, not data to silently delete).
   await db.query(
     `DELETE FROM monitoring.discovery_scans WHERE status IN ('done','failed') AND created_at < now() - make_interval(days => $1)`,
-    [Number(rc.jobRunRetentionDays ?? 7)]
+    [jobRunDays]
   )
   await trimFinishedJobs(db, 2)
 
@@ -80,28 +85,8 @@ export async function runHousekeeping(): Promise<void> {
   }
 
   // ── Dynamic device-group membership refresh ──
-  const groups = await db.query(`SELECT id, rules FROM monitoring.device_groups WHERE rules IS NOT NULL`)
-  if (groups.rows.length) {
-    const { evaluateConditions } = await import('../alerting/conditions')
-    const allDevices = await db.query(`SELECT * FROM monitoring.devices`)
-    for (const group of groups.rows) {
-      const matching = allDevices.rows.filter((d: any) => {
-        try {
-          return evaluateConditions(group.rules, d)
-        } catch {
-          return false
-        }
-      })
-      await db.query(`DELETE FROM monitoring.device_group_members WHERE group_id = $1 AND dynamic`, [group.id])
-      for (const device of matching) {
-        await db.query(
-          `INSERT INTO monitoring.device_group_members (group_id, device_id, dynamic) VALUES ($1,$2,true)
-           ON CONFLICT DO NOTHING`,
-          [group.id, device.id]
-        )
-      }
-    }
-  }
+  const { refreshAllGroupMemberships } = await import('../core/deviceGroups')
+  await refreshAllGroupMemberships(db)
 
   console.log('[monitoring:housekeeping] done')
 }

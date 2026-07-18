@@ -1,12 +1,25 @@
 <script setup lang="ts">
 // Failed/dead/running jobs with dead-letter replay (operator tier).
+// Filters by state and job type; totals come from the server count.
 const { hasMonitoring, canOperate } = useMonitoring()
 const toast = useToast()
 const stateFilter = ref('all')
-const url = computed(() => `/api/monitoring/v1/pollers/jobs${stateFilter.value !== 'all' ? '?state=' + stateFilter.value : ''}`)
+const typeFilter = ref('all')
+const page = ref(1)
+const url = computed(() => {
+  const params = new URLSearchParams()
+  if (stateFilter.value !== 'all') params.set('state', stateFilter.value)
+  if (typeFilter.value !== 'all') params.set('type', typeFilter.value)
+  params.set('page', String(page.value))
+  params.set('per_page', '50')
+  return `/api/monitoring/v1/pollers/jobs?${params}`
+})
+watch([stateFilter, typeFilter], () => { page.value = 1 })
 const { data, status, refresh } = useAsyncData('monJobs',
   () => $fetch<any>(url.value),
-  { server: false, default: () => ({ items: [] }), watch: [url] })
+  { server: false, default: () => ({ items: [], total: 0 }), watch: [url] })
+const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0) / 50)))
+
 const replaying = ref<number | null>(null)
 async function replay(id: number) {
   replaying.value = id
@@ -23,6 +36,11 @@ const stateItems = [
   { value: 'running', label: 'Running' }, { value: 'failed', label: 'Failed' },
   { value: 'dead', label: 'Dead-letter' }, { value: 'done', label: 'Done' }
 ]
+const typeItems = [
+  { value: 'all', label: 'All types' }, { value: 'poll', label: 'poll' }, { value: 'discovery', label: 'discovery' },
+  { value: 'discovery_scan', label: 'discovery_scan' }, { value: 'services', label: 'services' },
+  { value: 'alerts', label: 'alerts' }, { value: 'billing', label: 'billing' }, { value: 'housekeeping', label: 'housekeeping' }
+]
 </script>
 
 <template>
@@ -30,23 +48,28 @@ const stateItems = [
     <PageHeader title="Jobs" subtitle="Durable queue — retries, backoff, dead-letter" icon="i-lucide-list-checks" />
     <div v-if="!hasMonitoring" class="panel p-10 text-center text-muted">No access.</div>
     <div v-else class="space-y-4">
-      <USelect v-model="stateFilter" :items="stateItems" size="sm" class="w-56" />
+      <div class="flex flex-wrap items-center gap-2">
+        <USelect v-model="stateFilter" :items="stateItems" size="sm" class="w-56" />
+        <USelect v-model="typeFilter" :items="typeItems" size="sm" class="w-44" />
+        <span class="ml-auto text-sm text-muted">{{ data?.total ?? 0 }} jobs</span>
+      </div>
       <div class="panel overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
             <tr><th class="px-3 py-2">ID</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Device</th>
               <th class="px-3 py-2">State</th><th class="px-3 py-2 text-right">Attempts</th>
-              <th class="px-3 py-2">Error</th><th class="px-3 py-2" /></tr>
+              <th class="px-3 py-2">Node</th><th class="px-3 py-2">Error</th><th class="px-3 py-2" /></tr>
           </thead>
           <tbody>
-            <tr v-if="status === 'pending'"><td colspan="7" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
-            <tr v-else-if="!data.items.length"><td colspan="7" class="px-3 py-8 text-center text-muted">No jobs in this state.</td></tr>
+            <tr v-if="status === 'pending'"><td colspan="8" class="px-3 py-8 text-center text-muted">Loading…</td></tr>
+            <tr v-else-if="!data.items.length"><td colspan="8" class="px-3 py-8 text-center text-muted">No jobs in this state.</td></tr>
             <tr v-for="j in data.items" :key="j.id" class="border-t border-hull">
               <td class="px-3 py-2 text-faint">#{{ j.id }}</td>
               <td class="px-3 py-2">{{ j.type }}</td>
               <td class="px-3 py-2"><NuxtLink v-if="j.device_id" :to="`/monitoring/devices/${j.device_id}`" class="text-primary hover:underline">{{ j.hostname }}</NuxtLink><span v-else>—</span></td>
               <td class="px-3 py-2" :class="j.state === 'dead' ? 'text-rose-400' : j.state === 'failed' ? 'text-amber-400' : 'text-muted'">{{ j.state }}</td>
               <td class="px-3 py-2 text-right text-muted">{{ j.attempts }}/{{ j.max_attempts }}</td>
+              <td class="px-3 py-2 text-xs text-faint">{{ j.locked_by || '—' }}</td>
               <td class="px-3 py-2 max-w-md truncate text-xs text-faint" :title="j.last_error">{{ j.last_error || '—' }}</td>
               <td class="px-3 py-2 text-right">
                 <UButton v-if="canOperate && ['pending','failed','dead'].includes(j.state)" size="xs" variant="soft"
@@ -55,6 +78,11 @@ const stateItems = [
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="totalPages > 1" class="flex items-center justify-center gap-2">
+        <UButton size="xs" :disabled="page <= 1" @click="page--">Prev</UButton>
+        <span class="text-sm text-muted">{{ page }} / {{ totalPages }}</span>
+        <UButton size="xs" :disabled="page >= totalPages" @click="page++">Next</UButton>
       </div>
     </div>
   </div>

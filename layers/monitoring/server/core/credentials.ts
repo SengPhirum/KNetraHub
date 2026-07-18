@@ -44,9 +44,20 @@ function buildConfig(device: DeviceRow, profile: Record<string, any> | null, rc:
  * the server, at use time — they never leave this module except inside the
  * SnmpClient.
  */
+/** runtimeConfig overlaid with DB-backed SNMP timeout/retry settings. */
+async function effectiveRc(db: Pool): Promise<Record<string, any>> {
+  const rc = useRuntimeConfig().monitoring as Record<string, any>
+  const { getSettingNumber } = await import('./settings')
+  return {
+    ...rc,
+    snmpTimeoutMs: await getSettingNumber(db, 'snmp_timeout_ms'),
+    snmpRetries: await getSettingNumber(db, 'snmp_retries')
+  }
+}
+
 export async function resolveSnmpConfig(db: Pool, device: DeviceRow): Promise<ResolvedSnmpConfig | null> {
   if (device.snmp_disabled) return null
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
+  const rc = await effectiveRc(db)
 
   let profile: Record<string, any> | null = null
   if (device.credential_profile_id != null) {
@@ -74,7 +85,7 @@ export interface SnmpCandidate {
  */
 export async function resolveSnmpCandidates(db: Pool, device: DeviceRow): Promise<SnmpCandidate[]> {
   if (device.snmp_disabled) return []
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
+  const rc = await effectiveRc(db)
 
   const hasOwnConfig = device.credential_profile_id != null ||
     !!device.snmp_version || !!(device.snmp_community as any) || !!(device.v3_username as any)

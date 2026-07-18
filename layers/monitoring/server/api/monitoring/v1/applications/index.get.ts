@@ -9,6 +9,6 @@ export default defineEventHandler(async (event) => {
   const inner = `SELECT a.id, a.app_type, a.instance, a.status, a.status_message, a.last_collected_at, a.device_id, d.hostname
      FROM monitoring.applications a JOIN monitoring.devices d ON d.id = a.device_id`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY d.hostname, a.app_type LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY hostname, app_type LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })

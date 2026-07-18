@@ -21,8 +21,8 @@ export async function runPoll(deviceId: number, jobId: number | null = null): Pr
   const device = devRes.rows[0] as DeviceRow | undefined
   if (!device) throw new Error(`device ${deviceId} not found`)
 
-  const rc = useRuntimeConfig().monitoring as Record<string, any>
-  const intervalSec = Number(device.poll_interval_seconds ?? rc.pollIntervalSeconds ?? 300)
+  const { getSettingNumber } = await import('../core/settings')
+  const intervalSec = Number(device.poll_interval_seconds ?? await getSettingNumber(db, 'poll_interval_seconds'))
 
   const maint = await activeMaintenance(db, deviceId)
   if (maint?.behavior === 'skip_polling') {

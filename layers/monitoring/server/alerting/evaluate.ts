@@ -15,8 +15,13 @@ const ENTITY_QUERIES: Record<string, string> = {
   device: `SELECT d.*, d.id AS device_id, 0 AS entity_id, l.name AS location
            FROM monitoring.devices d LEFT JOIN monitoring.locations l ON l.id = d.location_id
            WHERE NOT d.disabled AND NOT d.ignored`,
-  port: `SELECT p.*, p.id AS entity_id, d.id AS device_id, d.hostname, d.status AS device_status, d.os
+  port: `SELECT p.*, p.id AS entity_id, d.id AS device_id, d.hostname, d.status AS device_status, d.os,
+                m.in_bps, m.out_bps, m.in_util_percent, m.out_util_percent,
+                m.in_errors_ps, m.out_errors_ps, m.in_discards_ps, m.out_discards_ps
          FROM monitoring.ports p JOIN monitoring.devices d ON d.id = p.device_id
+         LEFT JOIN LATERAL (
+           SELECT * FROM monitoring.port_metrics WHERE port_id = p.id ORDER BY time DESC LIMIT 1
+         ) m ON true
          WHERE NOT d.disabled AND NOT d.ignored AND NOT p.disabled AND NOT p.ignored AND p.stale_since IS NULL`,
   sensor: `SELECT s.*, s.id AS entity_id, d.id AS device_id, d.hostname, d.status AS device_status, d.os
            FROM monitoring.sensors s JOIN monitoring.devices d ON d.id = s.device_id

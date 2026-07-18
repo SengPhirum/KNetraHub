@@ -43,6 +43,32 @@ function toggleOne(id: number) {
   selected.value = next
 }
 
+const bulkRunning = ref(false)
+async function runBulk(action: string) {
+  bulkRunning.value = true
+  try {
+    const res = await $fetch<any>('/api/monitoring/v1/devices/bulk', {
+      method: 'POST', body: { ids: [...selected.value], action }
+    })
+    toast.add({ title: `${action}: ${res.affected} device(s)`, color: 'primary', icon: 'i-lucide-check' })
+    if (action === 'enable' || action === 'disable' || action === 'ignore' || action === 'unignore') selected.value = new Set()
+    await refresh()
+  } catch (e: any) {
+    toast.add({ title: 'Bulk action failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { bulkRunning.value = false }
+}
+const bulkItems = computed(() => [[
+  { label: 'Poll now', icon: 'i-lucide-refresh-cw', onSelect: () => runBulk('poll') },
+  { label: 'Rediscover', icon: 'i-lucide-scan-line', onSelect: () => runBulk('discover') }
+], [
+  { label: 'Enable', icon: 'i-lucide-play', onSelect: () => runBulk('enable') },
+  { label: 'Disable', icon: 'i-lucide-pause', onSelect: () => runBulk('disable') },
+  { label: 'Ignore (no alerts)', icon: 'i-lucide-bell-off', onSelect: () => runBulk('ignore') },
+  { label: 'Un-ignore', icon: 'i-lucide-bell', onSelect: () => runBulk('unignore') }
+], [
+  { label: 'Delete…', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => { deleteConfirmOpen.value = true } }
+]])
+
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
 async function confirmBulkDelete() {
@@ -137,8 +163,11 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
       <div class="flex flex-wrap items-center gap-2">
         <USelect v-model="filters.status" :items="statusItems" size="sm" class="w-44" />
         <UInput v-model="filters.q" placeholder="Search hostname / IP…" icon="i-lucide-search" size="sm" class="w-64" />
-        <UButton v-if="canManage && selected.size" size="sm" color="error" variant="soft" icon="i-lucide-trash-2"
-          @click="deleteConfirmOpen = true">Delete selected ({{ selected.size }})</UButton>
+        <UDropdownMenu v-if="canManage && selected.size" :items="bulkItems">
+          <UButton size="sm" variant="soft" icon="i-lucide-layers" :loading="bulkRunning" trailing-icon="i-lucide-chevron-down">
+            Actions ({{ selected.size }})
+          </UButton>
+        </UDropdownMenu>
         <span class="ml-auto text-sm text-muted">{{ data?.total ?? 0 }} device{{ (data?.total ?? 0) === 1 ? '' : 's' }}</span>
       </div>
 

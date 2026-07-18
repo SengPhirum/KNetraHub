@@ -10,6 +10,6 @@ export default defineEventHandler(async (event) => {
      FROM monitoring.alert_log al JOIN monitoring.alerts a ON a.id = al.alert_id
      JOIN monitoring.alert_rules r ON r.id = a.rule_id LEFT JOIN monitoring.devices d ON d.id = a.device_id`
   const totalRes = await db.query(`SELECT count(*)::int AS c FROM (${inner}) t`)
-  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY al.at DESC LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
+  const rows = await db.query(`SELECT * FROM (${inner}) t ORDER BY at DESC LIMIT $1 OFFSET $2`, [p.perPage, p.offset])
   return listEnvelope(rows.rows, Number(totalRes.rows[0].c), p)
 })

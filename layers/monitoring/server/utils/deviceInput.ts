@@ -87,6 +87,8 @@ export function normalizeDeviceInput(body: any, isCreate: boolean): Record<strin
   if (body.poll_interval_seconds !== undefined) out.poll_interval_seconds = body.poll_interval_seconds ? Number(body.poll_interval_seconds) : null
   if (body.discovery_interval_seconds !== undefined) out.discovery_interval_seconds = body.discovery_interval_seconds ? Number(body.discovery_interval_seconds) : null
   if (body.notes !== undefined) out.notes = body.notes ? String(body.notes).slice(0, 4000) : null
+  if (body.disabled !== undefined) out.disabled = !!body.disabled
+  if (body.ignored !== undefined) out.ignored = !!body.ignored
 
   return out
 }

@@ -1,5 +1,6 @@
 # Deploy KNetraHub itself as a swarm service.
-#   ./service.sh release
+#   ./service.sh build
+#   ./service.sh push
 #   docker stack deploy -c docker/docker-compose.yml knetrahub
 # (or ./service.sh deploy to build locally + deploy in one step)
 #

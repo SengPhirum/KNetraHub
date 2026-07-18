@@ -43,6 +43,12 @@ async function updateCredentialProfile(value: string) {
 }
 
 const tab = ref('overview')
+// One expanded row (inline graph) per entity tab at a time.
+const expandedEntity = ref<number | null>(null)
+watch(tab, () => { expandedEntity.value = null })
+function toggleExpand(entityId: number) {
+  expandedEntity.value = expandedEntity.value === entityId ? null : entityId
+}
 const tabs = computed(() => {
   const base: Array<[string, string]> = [
     ['overview', 'Overview'], ['ports', 'Ports'], ['health', 'Health'], ['processors', 'Processors'],
@@ -65,6 +71,8 @@ async function loadTab(t: string) {
   if (t === 'settings') {
     initSettings()
     loadLocations()
+    loadDependencies()
+    loadModuleSettings()
     return
   }
   const ep = SUB_ENDPOINTS[t]
@@ -106,6 +114,15 @@ async function runAction(action: 'poll' | 'discover') {
 }
 
 const d = computed(() => data.value?.device)
+
+async function togglePortFlag(p: any, flag: 'ignored' | 'disabled') {
+  try {
+    await $fetch(`/api/monitoring/v1/ports/${p.id}`, { method: 'PUT', body: { [flag]: !p[flag] } })
+    p[flag] = !p[flag]
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
 
 // --- Capture tab: ad-hoc raw SNMP get/walk against this device. ---
 const presetItems = SNMP_CAPTURE_PRESETS.map((p) => ({ value: p.value, label: `${p.label} — ${p.oid}` }))
@@ -190,10 +207,69 @@ function initSettings() {
     port_association_mode: dev.port_association_mode || 'ifIndex',
     poll_interval_seconds: dev.poll_interval_seconds,
     discovery_interval_seconds: dev.discovery_interval_seconds,
-    notes: dev.notes || ''
+    notes: dev.notes || '',
+    disabled: !!dev.disabled,
+    ignored: !!dev.ignored
   })
   deviceTest.value = null
 }
+
+// --- Dependencies (alert suppression when every parent is down) ---
+const parentIds = ref<number[]>([])
+const depDevices = ref<Array<{ value: number; label: string }>>([])
+const savingDeps = ref(false)
+async function loadDependencies() {
+  try {
+    const [deps, all] = await Promise.all([
+      $fetch<any>(`/api/monitoring/v1/devices/${id.value}/dependencies`),
+      $fetch<any>('/api/monitoring/v1/devices?per_page=500')
+    ])
+    parentIds.value = (deps.parents ?? []).map((p: any) => p.id)
+    depDevices.value = (all.items ?? [])
+      .filter((dv: any) => dv.id !== Number(id.value))
+      .map((dv: any) => ({ value: dv.id, label: dv.display_name || dv.hostname }))
+  } catch { /* panel shows empty picker */ }
+}
+async function saveDependencies() {
+  savingDeps.value = true
+  try {
+    await $fetch(`/api/monitoring/v1/devices/${id.value}/dependencies`, {
+      method: 'PUT', body: { parent_ids: parentIds.value }
+    })
+    toast.add({ title: 'Dependencies updated', color: 'primary', icon: 'i-lucide-check' })
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { savingDeps.value = false }
+}
+
+// --- Per-device discovery/poll module overrides ---
+const moduleRegistry = ref<{ discovery: any[]; poll: any[] }>({ discovery: [], poll: [] })
+const moduleOverrides = ref<any[]>([])
+async function loadModuleSettings() {
+  try {
+    const res = await $fetch<any>(`/api/monitoring/v1/module-settings?scope=device&scope_ref=${id.value}`)
+    moduleRegistry.value = res.modules
+    moduleOverrides.value = res.overrides
+  } catch { /* panel hidden on failure */ }
+}
+function moduleState(phase: string, name: string): 'inherit' | 'on' | 'off' {
+  const ov = moduleOverrides.value.find((o: any) => o.phase === phase && o.module === name)
+  return ov ? (ov.enabled ? 'on' : 'off') : 'inherit'
+}
+async function setModuleState(phase: string, name: string, state: 'inherit' | 'on' | 'off') {
+  try {
+    await $fetch('/api/monitoring/v1/module-settings', {
+      method: 'PUT',
+      body: { changes: [{ scope: 'device', scope_ref: String(id.value), phase, module: name, enabled: state === 'inherit' ? null : state === 'on' }] }
+    })
+    await loadModuleSettings()
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+  }
+}
+const moduleStateItems = [
+  { value: 'inherit', label: 'inherit' }, { value: 'on', label: 'on' }, { value: 'off', label: 'off' }
+]
 
 async function loadLocations() {
   try {
@@ -330,6 +406,9 @@ async function deleteDevice() {
             </dl>
           </div>
         </div>
+        <div class="panel p-4 lg:col-span-3">
+          <MonMetricChart kind="metric" metric="icmp_rtt_ms" :id="0" :device-id="Number(id)" unit="ms" title="ICMP latency" :height="180" />
+        </div>
       </div>
 
       <!-- Ports -->
@@ -338,22 +417,47 @@ async function deleteDevice() {
           <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
             <tr><th class="px-3 py-2">Port</th><th class="px-3 py-2">Status</th><th class="px-3 py-2 text-right">Speed</th>
               <th class="px-3 py-2 text-right">In</th><th class="px-3 py-2 text-right">Out</th>
-              <th class="px-3 py-2 text-right">In util</th><th class="px-3 py-2 text-right">Errors</th></tr>
+              <th class="px-3 py-2 text-right">In util</th><th class="px-3 py-2 text-right">Errors</th>
+              <th v-if="canManage" class="px-3 py-2" /></tr>
           </thead>
           <tbody>
-            <tr v-if="subLoading"><td colspan="7" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
-            <tr v-for="p in subData.items" :key="p.id" class="border-t border-hull">
-              <td class="px-3 py-2">{{ p.if_name || p.if_descr }}<div v-if="p.if_alias" class="text-xs text-faint">{{ p.if_alias }}</div></td>
-              <td class="px-3 py-2">
-                <span :class="p.oper_status === 'up' ? 'text-emerald-400' : 'text-rose-400'">{{ p.oper_status }}</span>
-                <span v-if="p.admin_status === 'down'" class="text-faint"> (admin down)</span>
-              </td>
-              <td class="px-3 py-2 text-right text-muted">{{ formatBits(p.speed_bps) }}</td>
-              <td class="px-3 py-2 text-right">{{ formatBits(p.in_bps) }}</td>
-              <td class="px-3 py-2 text-right">{{ formatBits(p.out_bps) }}</td>
-              <td class="px-3 py-2 text-right">{{ p.in_util_percent != null ? p.in_util_percent.toFixed(1) + '%' : '—' }}</td>
-              <td class="px-3 py-2 text-right">{{ ((p.in_errors_ps ?? 0) + (p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
-            </tr>
+            <tr v-if="subLoading"><td :colspan="canManage ? 8 : 7" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+            <template v-for="p in subData.items" :key="p.id">
+              <tr class="cursor-pointer border-t border-hull hover:bg-surface-2/40" :class="p.disabled ? 'opacity-50' : ''"
+                @click="toggleExpand(p.id)">
+                <td class="px-3 py-2">
+                  <span class="inline-flex items-center gap-1">
+                    <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === p.id ? 'rotate-90' : '']" />
+                    {{ p.if_name || p.if_descr }}
+                  </span>
+                  <div v-if="p.if_alias" class="text-xs text-faint">{{ p.if_alias }}</div>
+                </td>
+                <td class="px-3 py-2">
+                  <span :class="p.oper_status === 'up' ? 'text-emerald-400' : 'text-rose-400'">{{ p.oper_status }}</span>
+                  <span v-if="p.admin_status === 'down'" class="text-faint"> (admin down)</span>
+                  <span v-if="p.disabled" class="ml-1 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-faint">not polled</span>
+                  <span v-else-if="p.ignored" class="ml-1 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-faint">no alerts</span>
+                </td>
+                <td class="px-3 py-2 text-right text-muted">{{ formatBits(p.speed_bps) }}</td>
+                <td class="px-3 py-2 text-right">{{ formatBits(p.in_bps) }}</td>
+                <td class="px-3 py-2 text-right">{{ formatBits(p.out_bps) }}</td>
+                <td class="px-3 py-2 text-right">{{ p.in_util_percent != null ? p.in_util_percent.toFixed(1) + '%' : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ ((p.in_errors_ps ?? 0) + (p.out_errors_ps ?? 0)).toFixed(2) }}/s</td>
+                <td v-if="canManage" class="px-3 py-2 text-right whitespace-nowrap" @click.stop>
+                  <UButton size="xs" variant="ghost" :icon="p.ignored ? 'i-lucide-bell' : 'i-lucide-bell-off'"
+                    :title="p.ignored ? 'Re-enable alerts for this port' : 'Ignore (no alerts/events)'"
+                    @click="togglePortFlag(p, 'ignored')" />
+                  <UButton size="xs" variant="ghost" :icon="p.disabled ? 'i-lucide-play' : 'i-lucide-pause'"
+                    :title="p.disabled ? 'Resume polling this port' : 'Stop polling this port'"
+                    @click="togglePortFlag(p, 'disabled')" />
+                </td>
+              </tr>
+              <tr v-if="expandedEntity === p.id" class="border-t border-hull bg-surface-2/30">
+                <td :colspan="canManage ? 8 : 7" class="px-4 py-3">
+                  <MonMetricChart kind="port" :id="p.id" unit="bps" :title="`Traffic — ${p.if_name || p.if_descr}`" :height="200" />
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -367,27 +471,42 @@ async function deleteDevice() {
           </thead>
           <tbody>
             <tr v-if="subLoading"><td colspan="5" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
-            <tr v-for="s in subData.items" :key="s.id" class="border-t border-hull">
-              <td class="px-3 py-2">{{ s.description }}</td>
-              <td class="px-3 py-2 text-muted">{{ s.sensor_class }}</td>
-              <td class="px-3 py-2 text-right">{{ s.current_value != null ? s.current_value.toFixed(2) : '—' }} {{ s.unit }}</td>
-              <td class="px-3 py-2 text-right text-xs text-faint">
-                <span v-if="s.warn_high != null || s.crit_high != null">W:{{ s.warn_high ?? '—' }} C:{{ s.crit_high ?? '—' }}</span>
-                <span v-else>—</span>
-              </td>
-              <td class="px-3 py-2"><span :class="s.status === 'critical' ? 'text-rose-400' : s.status === 'warning' ? 'text-amber-400' : 'text-emerald-400'">{{ s.status }}</span></td>
-            </tr>
+            <template v-for="s in subData.items" :key="s.id">
+              <tr class="cursor-pointer border-t border-hull hover:bg-surface-2/40" @click="toggleExpand(s.id)">
+                <td class="px-3 py-2">
+                  <span class="inline-flex items-center gap-1">
+                    <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === s.id ? 'rotate-90' : '']" />
+                    {{ s.description }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-muted">{{ s.sensor_class }}</td>
+                <td class="px-3 py-2 text-right">{{ s.current_value != null ? s.current_value.toFixed(2) : '—' }} {{ s.unit }}</td>
+                <td class="px-3 py-2 text-right text-xs text-faint">
+                  <span v-if="s.warn_high != null || s.crit_high != null">W:{{ s.warn_high ?? '—' }} C:{{ s.crit_high ?? '—' }}</span>
+                  <span v-else>—</span>
+                </td>
+                <td class="px-3 py-2"><span :class="s.status === 'critical' ? 'text-rose-400' : s.status === 'warning' ? 'text-amber-400' : 'text-emerald-400'">{{ s.status }}</span></td>
+              </tr>
+              <tr v-if="expandedEntity === s.id" class="border-t border-hull bg-surface-2/30">
+                <td colspan="5" class="px-4 py-3">
+                  <MonMetricChart kind="sensor" :id="s.id" unit="raw" :title="`${s.description}${s.unit ? ` (${s.unit})` : ''}`" :height="200" />
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
 
-      <!-- Processors / Memory / Storage (usage bars) -->
+      <!-- Processors / Memory / Storage (usage bars + expandable history) -->
       <div v-else-if="['processors','memory','storage'].includes(tab)" class="panel divide-y divide-hull">
         <div v-if="subLoading" class="px-4 py-6 text-center text-muted">Loading…</div>
         <div v-else-if="!subData.items.length" class="px-4 py-6 text-center text-muted">None discovered.</div>
         <div v-for="e in subData.items" :key="e.id" class="px-4 py-3">
-          <div class="mb-1 flex items-center justify-between text-sm">
-            <span>{{ e.description }}</span>
+          <div class="mb-1 flex cursor-pointer items-center justify-between text-sm" @click="toggleExpand(e.id)">
+            <span class="inline-flex items-center gap-1">
+              <UIcon name="i-lucide-chevron-right" :class="['h-3 w-3 text-faint transition-transform', expandedEntity === e.id ? 'rotate-90' : '']" />
+              {{ e.description }}
+            </span>
             <span class="text-muted">
               <template v-if="tab === 'processors'">{{ e.usage_percent != null ? e.usage_percent.toFixed(0) + '%' : '—' }}</template>
               <template v-else>{{ formatBytes(e.used_bytes) }} / {{ formatBytes(e.total_bytes) }} ({{ (e.usage_percent ?? 0).toFixed(0) }}%)</template>
@@ -395,6 +514,11 @@ async function deleteDevice() {
           </div>
           <div class="h-2 overflow-hidden rounded bg-surface-2">
             <div :class="['h-full', usageBarClass(e.usage_percent)]" :style="{ width: Math.min(100, e.usage_percent ?? 0) + '%' }" />
+          </div>
+          <div v-if="expandedEntity === e.id" class="mt-3">
+            <MonMetricChart kind="metric"
+              :metric="tab === 'processors' ? 'processor_usage' : tab === 'memory' ? 'mempool_usage_percent' : 'storage_usage_percent'"
+              :id="e.id" unit="percent" :title="`Usage — ${e.description}`" :height="180" />
           </div>
         </div>
       </div>
@@ -620,6 +744,40 @@ async function deleteDevice() {
             <div class="grid grid-cols-2 gap-3">
               <UFormField label="Poll interval (s)"><UInput v-model.number="settingsForm.poll_interval_seconds" type="number" placeholder="default" class="w-full" /></UFormField>
               <UFormField label="Discovery interval (s)"><UInput v-model.number="settingsForm.discovery_interval_seconds" type="number" placeholder="default" class="w-full" /></UFormField>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel p-4">
+          <h2 class="mb-3 font-semibold">Availability & alerting</h2>
+          <div class="space-y-2">
+            <UCheckbox v-model="settingsForm.disabled" label="Disabled — stop polling and discovery entirely" />
+            <UCheckbox v-model="settingsForm.ignored" label="Ignored — keep polling but exclude from alerting/availability" />
+          </div>
+          <div class="mt-4">
+            <UFormField label="Depends on (parent devices)"
+              description="When every parent is down, this device's alerts are suppressed as collateral">
+              <div class="flex items-center gap-2">
+                <USelectMenu v-model="parentIds" :items="depDevices" value-key="value" multiple searchable class="grow" placeholder="No parents" />
+                <UButton size="sm" variant="soft" :loading="savingDeps" @click="saveDependencies">Save</UButton>
+              </div>
+            </UFormField>
+          </div>
+        </div>
+
+        <div v-if="moduleRegistry.discovery.length || moduleRegistry.poll.length" class="panel p-4">
+          <h2 class="mb-1 font-semibold">Collection modules (this device)</h2>
+          <p class="mb-3 text-xs text-muted">Overrides for this device only — "inherit" follows group/OS/global settings. Applies from the next discovery/poll.</p>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div v-for="phase in ['discovery', 'poll']" :key="phase">
+              <h3 class="mb-1.5 text-xs font-semibold uppercase text-faint">{{ phase }}</h3>
+              <div class="space-y-1">
+                <div v-for="m in moduleRegistry[phase]" :key="m.name" class="flex items-center justify-between">
+                  <span class="text-sm">{{ m.name }}<span v-if="!m.default_enabled" class="ml-1 text-[10px] text-faint">(off by default)</span></span>
+                  <USelect :model-value="moduleState(phase, m.name)" :items="moduleStateItems" size="xs" class="w-24"
+                    @update:model-value="(v) => setModuleState(phase, m.name, v)" />
+                </div>
+              </div>
             </div>
           </div>
         </div>

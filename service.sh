@@ -8,6 +8,10 @@ log() {
   printf '[service] %s\n' "$*"
 }
 
+warn() {
+  printf '[service] WARNING: %s\n' "$*" >&2
+}
+
 fail() {
   printf '[service] ERROR: %s\n' "$*" >&2
   exit 1
@@ -63,7 +67,9 @@ usage() {
 Usage: ./service.sh <command> [options]
 
 Commands:
-  release [options]   Bump version, generate release notes, build + push Docker images
+  build [options]     Bump version, generate release notes, and build Docker images
+  push [options]      Push available local version and latest Docker images
+  release [options]   Deprecated alias for build (does not push)
   dev [options]       Run the local disposable Docker Swarm dev environment
   deploy              Build the app image locally and deploy the swarm stack
   qa [options]        Run smart read-only core QA and refresh documentation screenshots
@@ -72,8 +78,9 @@ Commands:
 Run './service.sh <command> --help' for command-specific options.
 
 Examples:
-  ./service.sh release            # rebuild + push the current version
-  ./service.sh release --new      # release a new (patch) version
+  ./service.sh build              # rebuild the current version locally
+  ./service.sh build --new        # build a new patch version locally
+  ./service.sh push               # push local current-version + latest images
   ./service.sh dev --full
   ./service.sh dev --reset
   ./service.sh deploy
@@ -81,33 +88,32 @@ Examples:
 EOF
 }
 
-# ── release: bump version, write release notes, build + push images ─────────
+# ── build/push: prepare locally, then publish existing images ───────────────
 
-usage_release() {
+usage_build() {
   cat <<'EOF'
-Usage: ./service.sh release [options]
+Usage: ./service.sh build [options]
 
-Build and publish KNetraHub to the local Docker registry.
+Build versioned KNetraHub Docker images locally.
 
 Default behavior:
   - keep the current package version (no bump)
   - generate release notes
   - build the app and agent Docker images
-  - push registry.kdsb.com.kh/knetrahub/app:<version> and :latest
-  - push registry.kdsb.com.kh/knetrahub/agent:<version> and :latest
+  - tag both images with the package version and latest
+  - do not push; run './service.sh push' separately
 
-To release a NEW version, pass --new (patch bump) or one of the explicit
+To build a NEW version, pass --new (patch bump) or one of the explicit
 bump/version options below.
 
 Options:
-  --new                   Release a new version (patch bump)
+  --new                   Build a new version (patch bump)
   --patch                 Bump patch version (same as --new)
   --minor                 Bump minor version
   --major                 Bump major version
   --bump patch|minor|major
   --version x.y.z         Set an exact version
   --no-bump               Keep the current package version (default)
-  --no-push               Build and tag locally without pushing
   --registry host         Docker registry host (default: registry.kdsb.com.kh)
   --image name            Image name inside the registry (default: knetrahub/app)
   --agent-image name      Agent image name inside the registry (default: knetrahub/agent)
@@ -127,12 +133,41 @@ Environment overrides:
                               docker/dev/certs/*.crt if present.
 
 Examples:
-  ./service.sh release                 # rebuild + push the current version
-  ./service.sh release --new           # new patch release
-  ./service.sh release --minor
-  ./service.sh release --version 1.2.0
-  ./service.sh release --no-push
-  ./service.sh release --tag-prefix v
+  ./service.sh build                 # rebuild the current version locally
+  ./service.sh build --new           # build a new patch version
+  ./service.sh build --minor
+  ./service.sh build --version 1.2.0
+  ./service.sh build --tag-prefix v
+EOF
+}
+
+usage_push() {
+  cat <<'EOF'
+Usage: ./service.sh push [options]
+
+Push the locally built KNetraHub images for the current package version.
+
+The app and agent :<version> and :latest tags are checked independently.
+Each local tag that exists is pushed. A missing tag produces a warning and is
+skipped without preventing other available tags from being pushed.
+
+Options:
+  --registry host         Docker registry host (default: registry.kdsb.com.kh)
+  --image name            Image name inside the registry (default: knetrahub/app)
+  --agent-image name      Agent image name inside the registry (default: knetrahub/agent)
+  --tag-prefix value      Prefix the version Docker tag, e.g. "v" for :v1.2.3
+  -h, --help              Show this help
+
+Environment overrides:
+  REGISTRY=registry.kdsb.com.kh
+  IMAGE_NAME=knetrahub/app
+  AGENT_IMAGE_NAME=knetrahub/agent
+  VERSION_TAG_PREFIX=
+
+Examples:
+  ./service.sh push
+  ./service.sh push --tag-prefix v
+  ./service.sh push --registry registry.example.com
 EOF
 }
 
@@ -191,7 +226,7 @@ for (const file of ['package.json', 'package-lock.json']) {
 NODE
 }
 
-cmd_release() {
+cmd_build() {
   local REGISTRY="${REGISTRY:-registry.kdsb.com.kh}"
   local IMAGE_NAME="${IMAGE_NAME:-knetrahub/app}"
   local AGENT_IMAGE_NAME="${AGENT_IMAGE_NAME:-}"
@@ -205,13 +240,12 @@ cmd_release() {
   # the dev swarm image uses (docker/dev/certs/), auto-detected below if unset.
   local NPM_CA_FILE="${NPM_CA_FILE:-}"
 
-  # No bump by default - a plain `release` rebuilds and republishes the
-  # current package version. Bumping only happens when explicitly requested
+  # No bump by default - a plain `build` rebuilds the current package version.
+  # Bumping only happens when explicitly requested
   # via --new / --patch / --minor / --major / --bump / --version.
   local BUMP=""
   local CUSTOM_VERSION=""
   local NO_BUMP="false"
-  local PUSH="true"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -243,7 +277,7 @@ cmd_release() {
         NO_BUMP="true"
         ;;
       --no-push)
-        PUSH="false"
+        warn "--no-push is no longer needed; the build command never pushes images"
         ;;
       --registry)
         [[ $# -ge 2 ]] || fail "--registry requires a value"
@@ -266,11 +300,11 @@ cmd_release() {
         shift
         ;;
       -h|--help)
-        usage_release
+        usage_build
         return 0
         ;;
       *)
-        fail "Unknown release option: $1"
+        fail "Unknown build option: $1"
         ;;
     esac
     shift
@@ -312,7 +346,7 @@ cmd_release() {
     write_version "${next_version}"
   else
     next_version="${current_version}"
-    log "Keeping current version ${next_version} (pass --new to release a new version)"
+    log "Keeping current version ${next_version} (pass --new to build a new version)"
   fi
 
   if [[ -z "${AGENT_IMAGE_NAME}" ]]; then
@@ -412,20 +446,95 @@ cmd_release() {
     -t "${agent_latest_image}" \
     ./agent
 
-  if [[ "${PUSH}" == "true" ]]; then
-    log "Pushing ${version_image}"
-    "${DOCKER_BIN}" push "${version_image}"
-    log "Pushing ${latest_image}"
-    "${DOCKER_BIN}" push "${latest_image}"
-    log "Pushing ${agent_version_image}"
-    "${DOCKER_BIN}" push "${agent_version_image}"
-    log "Pushing ${agent_latest_image}"
-    "${DOCKER_BIN}" push "${agent_latest_image}"
-  else
-    log "Skipping docker push because --no-push was provided"
+  log "Build ready locally: ${version_image} + ${agent_version_image}"
+  log "Run './service.sh push' to publish the version and latest tags"
+}
+
+cmd_push() {
+  local REGISTRY="${REGISTRY:-registry.kdsb.com.kh}"
+  local IMAGE_NAME="${IMAGE_NAME:-knetrahub/app}"
+  local AGENT_IMAGE_NAME="${AGENT_IMAGE_NAME:-}"
+  local VERSION_TAG_PREFIX="${VERSION_TAG_PREFIX:-}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --registry)
+        [[ $# -ge 2 ]] || fail "--registry requires a value"
+        REGISTRY="$2"
+        shift
+        ;;
+      --image)
+        [[ $# -ge 2 ]] || fail "--image requires a value"
+        IMAGE_NAME="$2"
+        shift
+        ;;
+      --agent-image)
+        [[ $# -ge 2 ]] || fail "--agent-image requires a value"
+        AGENT_IMAGE_NAME="$2"
+        shift
+        ;;
+      --tag-prefix)
+        [[ $# -ge 2 ]] || fail "--tag-prefix requires a value"
+        VERSION_TAG_PREFIX="$2"
+        shift
+        ;;
+      -h|--help)
+        usage_push
+        return 0
+        ;;
+      *)
+        fail "Unknown push option: $1"
+        ;;
+    esac
+    shift
+  done
+
+  local NODE_BIN DOCKER_BIN
+  NODE_BIN="$(resolve_command node)" || fail "Missing required command: node"
+  DOCKER_BIN="$(resolve_command docker)" || fail "Missing required command: docker"
+
+  local current_version
+  current_version="$("${NODE_BIN}" -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+  validate_version "${current_version}"
+
+  if [[ -z "${AGENT_IMAGE_NAME}" ]]; then
+    if [[ "${IMAGE_NAME}" == */app ]]; then
+      AGENT_IMAGE_NAME="${IMAGE_NAME%/app}/agent"
+    else
+      AGENT_IMAGE_NAME="${IMAGE_NAME}-agent"
+    fi
   fi
 
-  log "Release ready: ${version_image} + ${agent_version_image}"
+  local image="${REGISTRY}/${IMAGE_NAME}"
+  local agent_image="${REGISTRY}/${AGENT_IMAGE_NAME}"
+  local version_tag="${VERSION_TAG_PREFIX}${current_version}"
+  local images=(
+    "${image}:${version_tag}"
+    "${image}:latest"
+    "${agent_image}:${version_tag}"
+    "${agent_image}:latest"
+  )
+  local image_ref
+  local pushed=0
+  local skipped=0
+
+  for image_ref in "${images[@]}"; do
+    if ! "${DOCKER_BIN}" image inspect "${image_ref}" >/dev/null 2>&1; then
+      warn "Local Docker image not found: ${image_ref}; skipping"
+      ((skipped += 1))
+      continue
+    fi
+
+    log "Pushing ${image_ref}"
+    "${DOCKER_BIN}" push "${image_ref}"
+    ((pushed += 1))
+  done
+
+  if (( pushed == 0 )); then
+    warn "No local Docker images were available to push"
+  fi
+
+  log "Push complete: ${pushed} pushed, ${skipped} skipped"
 }
 
 # ── dev: local disposable Docker Swarm dev environment ───────────────────────
@@ -504,7 +613,8 @@ Builds the app image locally (tag: knetrahub:latest) from docker/Dockerfile
 and deploys docker/docker-compose.yml as the "knetrahub" swarm stack. Must
 run on a swarm manager node.
 
-For a versioned, registry-published release use './service.sh release' instead.
+For a versioned registry workflow, run './service.sh build' and then
+'./service.sh push' instead.
 EOF
 }
 
@@ -686,8 +796,15 @@ command="${1:-help}"
 [[ $# -gt 0 ]] && shift
 
 case "${command}" in
+  build)
+    cmd_build "$@"
+    ;;
+  push)
+    cmd_push "$@"
+    ;;
   release)
-    cmd_release "$@"
+    warn "The release command is deprecated; use './service.sh build' and then './service.sh push'"
+    cmd_build "$@"
     ;;
   dev)
     cmd_dev "$@"

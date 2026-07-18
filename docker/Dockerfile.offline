@@ -10,7 +10,7 @@
 #
 # Usage:
 #   node node_modules/nuxt/bin/nuxt.mjs build     # host build (or: pnpm build)
-#   DOCKERFILE=docker/Dockerfile.offline ./service.sh release
+#   DOCKERFILE=docker/Dockerfile.offline ./service.sh build
 #
 # Trade-off: each offline release stacks one ~30 MB .output layer on top of
 # the previous image. Return to the normal docker/Dockerfile as soon as the
