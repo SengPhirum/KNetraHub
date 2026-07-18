@@ -68,6 +68,10 @@ services:
       # NUXT_GITLAB_STACKS_PATH: "stacks"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Database backups (Admin > System > Maintenance) - persisted across
+      # redeploys; the app writes to /app/data/backups by default
+      # (override with NUXT_BACKUP_DIR).
+      - app-backups:/app/data/backups
     deploy:
       mode: replicated
       replicas: 1             # >=2 for rolling, zero-downtime updates
@@ -227,6 +231,7 @@ services:
 
 volumes:
   timescale-data:
+  app-backups:
 
 networks:
   net:

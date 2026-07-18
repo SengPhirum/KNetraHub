@@ -220,6 +220,12 @@ const ADMIN_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'System',
+    items: [
+      { label: 'Maintenance', to: '/admin/maintenance', icon: 'i-lucide-hard-hat', minRole: 'admin' }
+    ]
+  },
+  {
     label: 'Logs',
     items: [
       { label: 'Audit log',  to: '/audit',            icon: 'i-lucide-scroll-text', minRole: 'manager' },

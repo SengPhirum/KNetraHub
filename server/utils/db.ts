@@ -721,6 +721,22 @@ async function runMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_access_item ON ipmgt_vault_access_log(vault_item_id);
     CREATE INDEX IF NOT EXISTS idx_ipmgt_vault_access_at ON ipmgt_vault_access_log(accessed_at DESC);
 
+    -- Backup & restore activity trail (Admin > System > Maintenance). One row
+    -- per backup/restore/delete operation with its outcome - the page's
+    -- "Activity Log".
+    CREATE TABLE IF NOT EXISTS backup_log (
+      id TEXT PRIMARY KEY,
+      ts TEXT NOT NULL,
+      operation TEXT NOT NULL,      -- backup | restore | delete
+      target TEXT NOT NULL,         -- database (documents/index deliberately not implemented)
+      filename TEXT,
+      actor TEXT NOT NULL,
+      size_bytes BIGINT,
+      status TEXT NOT NULL,         -- success | failed
+      detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_backup_log_ts ON backup_log (ts DESC);
+
     -- SSO realm/group roles as of the user's last login, snapshotted for the
     -- User Authority report (audit review of who has access to what without
     -- requiring every user to be currently logged in).

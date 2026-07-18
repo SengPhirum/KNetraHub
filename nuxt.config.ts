@@ -163,6 +163,12 @@ export default defineNuxtConfig({
       retentionDays: Number(process.env.NUXT_METRICS_RETENTION_DAYS || 30)
     },
 
+    // Where database backups (Admin > System > Maintenance) are written.
+    // Mount a volume here in production or the files vanish on redeploy.
+    backups: {
+      dir: process.env.NUXT_BACKUP_DIR || ''
+    },
+
     // How many audit-log rows to retain. This is a compliance trail, not an
     // operational log, so the default is deliberately large - override for
     // your bank's retention policy (or a Timescale/archival job if you need

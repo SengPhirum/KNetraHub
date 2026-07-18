@@ -34,7 +34,9 @@ WORKDIR /app
 
 # iputils provides the full-featured `ping` binary the Network poller/discovery
 # shell out to (busybox ping output isn't reliably parsed by the ping library).
-RUN apk add --no-cache ca-certificates iputils
+# postgresql17-client provides pg_dump/pg_restore for Admin > System >
+# Maintenance backup & restore (matches the TimescaleDB pg17 server).
+RUN apk add --no-cache ca-certificates iputils postgresql17-client
 
 ENV NODE_ENV=production
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt

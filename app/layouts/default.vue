@@ -29,6 +29,42 @@ watch(user, async (u) => {
   }
 }, { immediate: true })
 
+// System maintenance state (Admin > System > Maintenance): notification
+// banner + maintenance-mode lockout. Polled at a slow cadence so an admin
+// flipping the switch reaches active sessions without a reload.
+const { state: sysMaint, fetchState: fetchSysMaint } = useSystemMaintenance()
+const bannerDismissed = ref('')
+onMounted(() => {
+  try { bannerDismissed.value = sessionStorage.getItem('knh-banner-dismissed') || '' } catch { /* private mode */ }
+})
+let sysMaintTimer: ReturnType<typeof setInterval> | null = null
+watch(user, (u) => {
+  if (u) {
+    fetchSysMaint()
+    if (!sysMaintTimer) sysMaintTimer = setInterval(fetchSysMaint, 60_000)
+  } else if (sysMaintTimer) {
+    clearInterval(sysMaintTimer)
+    sysMaintTimer = null
+  }
+}, { immediate: true })
+onBeforeUnmount(() => { if (sysMaintTimer) clearInterval(sysMaintTimer) })
+
+const showBanner = computed(() =>
+  !!user.value
+  && sysMaint.value?.banner.enabled === true
+  && !!sysMaint.value.banner.message
+  && bannerDismissed.value !== sysMaint.value.banner.message)
+function dismissBanner() {
+  const msg = sysMaint.value?.banner.message || ''
+  bannerDismissed.value = msg
+  try { sessionStorage.setItem('knh-banner-dismissed', msg) } catch { /* private mode */ }
+}
+
+// Maintenance lockout: non-admins get the maintenance page instead of the app
+// (the API additionally 503s for them — see server/middleware/maintenance.ts).
+const maintenanceLocked = computed(() =>
+  !!user.value && user.value.role !== 'admin' && sysMaint.value?.maintenance.enabled === true)
+
 const userMenu = computed(() => [
   [{ label: user.value?.displayName || '', type: 'label' as const }],
   [{ label: 'Preferences', icon: 'i-lucide-sliders-horizontal', to: '/preferences' }],
@@ -106,6 +142,24 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
 
 <template>
   <div class="min-h-dvh">
+    <!-- Maintenance-mode lockout: non-admins get this page instead of the app
+         (the API additionally rejects them server-side). -->
+    <div v-if="maintenanceLocked" class="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
+      <KNetraHubLogo variant="icon" class="mb-6 size-14" />
+      <UIcon name="i-lucide-hard-hat" class="mb-4 size-10 text-amber-400" />
+      <h1 class="mb-2 font-display text-2xl font-semibold text-foam">
+        {{ sysMaint?.maintenance.title || 'System under maintenance' }}
+      </h1>
+      <p class="mb-1 text-base text-(--color-muted)">
+        {{ sysMaint?.maintenance.subtitle || "We'll be back shortly" }}
+      </p>
+      <p class="mb-6 max-w-md text-sm text-faint whitespace-pre-line">
+        {{ sysMaint?.maintenance.description || 'The team is performing scheduled maintenance. Please check back later.' }}
+      </p>
+      <UButton color="neutral" variant="soft" icon="i-lucide-log-out" @click="logout()">Sign out</UButton>
+    </div>
+
+    <template v-else>
     <!-- Decorative animated "digital infrastructure & security" backdrop -
          portal home only. Calm, dense ops pages elsewhere stay free of motion. -->
     <div v-if="isHome" class="home-bg" aria-hidden="true">
@@ -163,6 +217,16 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
 
     <!-- Main column -->
     <div class="relative z-10 flex min-h-dvh flex-col" :class="{ 'lg:pl-64': !isHome }">
+      <!-- System notification banner (Admin > System > Maintenance > General):
+           a dismissible heads-up for every signed-in user, never blocks access. -->
+      <div v-if="showBanner" class="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 sm:px-6">
+        <UIcon name="i-lucide-megaphone" class="mt-0.5 size-4 shrink-0" />
+        <p class="min-w-0 flex-1 whitespace-pre-line">{{ sysMaint?.banner.message }}</p>
+        <button class="shrink-0 rounded p-0.5 transition-colors hover:bg-amber-500/15" aria-label="Dismiss notification" @click="dismissBanner">
+          <UIcon name="i-lucide-x" class="size-4" />
+        </button>
+      </div>
+
       <!-- top bar -->
       <header class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
         <UButton
@@ -199,6 +263,17 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
         </div>
 
         <div class="flex-1" />
+
+        <!-- Admins keep working during maintenance mode - surface that it's ON. -->
+        <UButton
+          v-if="sysMaint?.maintenance.enabled && can('admin')"
+          to="/admin/maintenance"
+          size="xs"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-hard-hat"
+          label="Maintenance mode ON"
+        />
 
         <ThemeModeControl compact />
 
@@ -269,6 +344,7 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
         </p>
       </footer>
     </div>
+    </template>
   </div>
 </template>
 
