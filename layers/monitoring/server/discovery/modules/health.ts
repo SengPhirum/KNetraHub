@@ -1,6 +1,6 @@
 import { defineDiscoveryModule } from '../../core/registry'
 import { reconcile } from '../../core/reconcile'
-import { HR, HR_STORAGE_TYPES, UCD, ENT_SENSOR, ENT_SENSOR_TYPES, ENT_SENSOR_SCALE, ENTITY, UPS, PRINTER } from '../../snmp/oids'
+import { HR, HR_STORAGE_TYPES, HR_DEVICE_TYPES, HR_DEVICE_STATUS, UCD, ENT_SENSOR, ENT_SENSOR_TYPES, ENT_SENSOR_SCALE, ENTITY, UPS, PRINTER } from '../../snmp/oids'
 import { toNumber, toStringValue } from '../../snmp/values'
 
 /**
@@ -459,6 +459,95 @@ defineDiscoveryModule({
       found
     })
     record('inventory-reconcile', 'success', `+${rec.inserted} ~${rec.updated} stale:${rec.markedStale}`)
+    return { status: 'success' }
+  }
+})
+
+/**
+ * Hardware inventory: HOST-RESOURCES-MIB hrDeviceTable (the LibreNMS
+ * "Inventory" tab) — processors, network interfaces, disks, coprocessors.
+ * Processor rows get hrProcessorLoad; network rows are matched to
+ * monitoring.ports (by name, then by the net-snmp index encoding
+ * hrDeviceIndex = 262144 + ifIndex) so the UI can link and graph them.
+ */
+defineDiscoveryModule({
+  name: 'hr-devices',
+  order: 45,
+  defaultEnabled: true,
+  requiresSnmp: true,
+  async run(ctx) {
+    const { db, device, snmp, record } = ctx
+    const res = await snmp!.table({
+      type: HR.hrDeviceType, descr: HR.hrDeviceDescr,
+      status: HR.hrDeviceStatus, errors: HR.hrDeviceErrors
+    })
+    if (!res.ok) {
+      record('hrDeviceTable', res.outcome, res.error, res.durationMs)
+      return { status: res.outcome === 'unsupported' ? 'unsupported' : 'failed', error: res.error }
+    }
+    record('hrDeviceTable', res.value.size ? 'success' : 'empty', `${res.value.size} devices`, res.durationMs)
+    if (!res.value.size) return { status: 'empty' }
+
+    // hrProcessorLoad is indexed by hrDeviceIndex → per-processor load
+    const loads = await snmp!.walk(HR.hrProcessorLoad)
+    const loadByIndex = new Map<string, number>()
+    if (loads.ok) {
+      for (const row of loads.value) {
+        const v = toNumber(row.value)
+        if (v != null) loadByIndex.set(row.index, v)
+      }
+    }
+
+    // Ports lookup for hrDeviceNetwork rows
+    const ports = await db.query(
+      `SELECT id, if_index, if_name, if_descr FROM monitoring.ports WHERE device_id = $1`,
+      [device.id]
+    )
+    const portByName = new Map<string, number>()
+    const portByIfIndex = new Map<number, number>()
+    for (const p of ports.rows) {
+      if (p.if_name) portByName.set(String(p.if_name).toLowerCase(), Number(p.id))
+      if (p.if_descr) portByName.set(String(p.if_descr).toLowerCase(), Number(p.id))
+      portByIfIndex.set(Number(p.if_index), Number(p.id))
+    }
+
+    const found: Record<string, unknown>[] = []
+    for (const [index, cols] of res.value) {
+      if (!/^\d+$/.test(index)) continue
+      const hrIndex = Number(index)
+      const typeOid = toStringValue(cols.type) ?? ''
+      const hrType = HR_DEVICE_TYPES[typeOid] ?? (typeOid ? 'hrDeviceOther' : null)
+      const descr = toStringValue(cols.descr) ?? ''
+
+      let portId: number | null = null
+      if (hrType === 'hrDeviceNetwork') {
+        // net-snmp prefixes network descrs with "network interface <name>"
+        const name = descr.replace(/^network interface\s+/i, '').trim()
+        portId = portByName.get(name.toLowerCase())
+          ?? portByName.get(descr.toLowerCase())
+          ?? (hrIndex > 262144 ? portByIfIndex.get(hrIndex - 262144) : undefined)
+          ?? null
+      }
+
+      found.push({
+        hr_index: hrIndex,
+        descr: descr || `Device ${index}`,
+        hr_type: hrType,
+        status: HR_DEVICE_STATUS[toNumber(cols.status) ?? 0] ?? null,
+        errors: toNumber(cols.errors),
+        load_percent: loadByIndex.get(index) ?? null,
+        port_id: portId
+      })
+    }
+
+    if (!found.length) return { status: 'empty' }
+    const rec = await reconcile({
+      db, table: 'monitoring.hr_devices', deviceId: device.id,
+      identityColumns: ['hr_index'],
+      updateColumns: ['descr', 'hr_type', 'status', 'errors', 'load_percent', 'port_id'],
+      found
+    })
+    record('hr-devices-reconcile', 'success', `+${rec.inserted} ~${rec.updated} stale:${rec.markedStale}`)
     return { status: 'success' }
   }
 })

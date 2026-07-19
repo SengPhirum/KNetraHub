@@ -51,6 +51,15 @@ definePollerModule({
          VALUES ($1, $2, 'processor_usage', 'processor', $3, $4)`,
         [now, device.id, proc.id, usage]
       )
+      // Keep the hrDevice inventory Load column current between discoveries
+      // (hrProcessorLoad is indexed by hrDeviceIndex).
+      if (proc.source === 'hr' && /^\d+$/.test(proc.proc_index)) {
+        await db.query(
+          `UPDATE monitoring.hr_devices SET load_percent = $3, updated_at = now()
+           WHERE device_id = $1 AND hr_index = $2`,
+          [device.id, Number(proc.proc_index), usage]
+        )
+      }
       record(`proc.${proc.proc_index}`, 'success')
     }
     return { status: 'success' }

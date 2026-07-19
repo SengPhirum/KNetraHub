@@ -19,6 +19,7 @@ registered via `defineDiscoveryModule()`.
 | storage | `storage` | `health.ts` | **Complete** | every hrStorage fixedDisk row |
 | sensors | `sensors` | `health.ts` | **Complete** | ENTITY-SENSOR + LM-SENSORS + UPS-MIB + Printer-MIB |
 | entity-physical | `entity-physical` | `health.ts` | **Complete** | full ENTITY-MIB tree |
+| hr-device | `hr-devices` | `health.ts` | **Complete** | hrDeviceTable + hrProcessorLoad; network rows matched to ports |
 | bgp | `bgp` | `routing.ts` | **Complete** | BGP4-MIB peer table |
 | ospf | `ospf` | `routing.ts` | **Complete** | OSPF-MIB general + neighbor table |
 | port-stack | — | — | **Blocked** | dot1dStackTable not implemented |

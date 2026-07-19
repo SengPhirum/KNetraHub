@@ -108,6 +108,15 @@ async function loadTab(t: string) {
 }
 watch(tab, (t) => loadTab(t))
 
+// hrDeviceNetwork descrs come as "network interface ens160" — show the bare
+// interface name (matched port name when we have one) like LibreNMS does.
+function hrDisplayDescr(h: any): string {
+  if (h.hr_type === 'hrDeviceNetwork') {
+    return h.port_name || h.port_descr || String(h.descr || '').replace(/^network interface\s+/i, '')
+  }
+  return h.descr || '—'
+}
+
 // ── Overview data (ports summary, entity panels, recent events) ──
 const ov = reactive<{ loaded: boolean; ports: any[]; processors: any[]; mempools: any[]; storage: any[]; events: any[] }>(
   { loaded: false, ports: [], processors: [], mempools: [], storage: [], events: [] })
@@ -814,24 +823,71 @@ function severityColor(sev: string): string {
         </table>
       </div>
 
-      <!-- ═══ Inventory ═══ -->
-      <div v-else-if="tab === 'inventory'" class="panel overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
-            <tr><th class="px-3 py-2">Class</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Model</th>
-              <th class="px-3 py-2">Serial</th><th class="px-3 py-2">HW / FW / SW</th></tr>
-          </thead>
-          <tbody>
-            <tr v-if="subLoading"><td colspan="5" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
-            <tr v-for="i in subData.items" :key="i.id" class="border-t border-hull">
-              <td class="px-3 py-2 text-muted">{{ i.class }}</td>
-              <td class="px-3 py-2">{{ i.name || i.descr }}</td>
-              <td class="px-3 py-2">{{ i.model || '—' }}</td>
-              <td class="px-3 py-2 font-mono text-xs">{{ i.serial || '—' }}</td>
-              <td class="px-3 py-2 text-xs text-faint">{{ [i.hardware_rev, i.firmware_rev, i.software_rev].filter(Boolean).join(' / ') || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- ═══ Inventory (hrDeviceTable, LibreNMS style) ═══ -->
+      <div v-else-if="tab === 'inventory'" class="space-y-4">
+        <h2 class="text-lg font-semibold">Inventory</h2>
+        <div class="panel overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
+              <tr><th class="px-3 py-2">Index</th><th class="px-3 py-2">Description</th><th class="px-3 py-2" />
+                <th class="px-3 py-2">Type</th><th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2 text-right">Errors</th><th class="px-3 py-2 text-right">Load</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="subLoading"><td colspan="7" class="px-3 py-6 text-center text-muted">Loading…</td></tr>
+              <tr v-else-if="!(subData.hr || []).length">
+                <td colspan="7" class="px-3 py-8 text-center text-muted">
+                  No hardware inventory collected yet.
+                  <span v-if="canOperate">Run <button class="text-blue-400 hover:underline" :disabled="!!actionRunning" @click="runAction('discover')">Rediscover</button> to walk the HOST-RESOURCES device table.</span>
+                </td>
+              </tr>
+              <tr v-for="h in subData.hr" :key="h.id" :class="['border-t border-hull', h.stale_since ? 'opacity-50' : '']">
+                <td class="px-3 py-2 text-muted">{{ h.hr_index }}</td>
+                <td class="px-3 py-2">
+                  <button v-if="h.port_id" class="text-blue-400 hover:underline" @click="tab = 'ports'">
+                    {{ hrDisplayDescr(h) }}
+                  </button>
+                  <template v-else>{{ hrDisplayDescr(h) }}</template>
+                </td>
+                <td class="px-3 py-2">
+                  <MonSparkline v-if="h.port_id" :url="`/api/monitoring/v1/metrics/query?kind=port&id=${h.port_id}&from=-24h`"
+                    :series="['in_bps', 'out_bps']" :colors="['#34d399', '#2496ED']" :width="110" :height="26" />
+                  <MonSparkline v-else-if="h.hr_type === 'hrDeviceProcessor'" :url="`/api/monitoring/v1/devices/${id}/graphs?graph=cpu&from=-24h`"
+                    :series="['value']" :colors="['#f43f5e']" :width="110" :height="26" />
+                </td>
+                <td class="px-3 py-2 text-muted">{{ h.hr_type || '—' }}</td>
+                <td class="px-3 py-2">
+                  <span :class="h.status === 'running' ? 'text-emerald-400' : h.status === 'down' || h.status === 'warning' ? 'text-amber-400' : 'text-faint'">
+                    {{ h.status || '—' }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-right text-muted">{{ h.errors ?? 0 }}</td>
+                <td class="px-3 py-2 text-right text-muted">{{ h.load_percent != null ? Number(h.load_percent) : '' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <template v-if="(subData.items || []).length">
+          <h2 class="pt-2 text-lg font-semibold">Physical inventory <span class="text-sm font-normal text-faint">(ENTITY-MIB)</span></h2>
+          <div class="panel overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
+                <tr><th class="px-3 py-2">Class</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Model</th>
+                  <th class="px-3 py-2">Serial</th><th class="px-3 py-2">HW / FW / SW</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="i in subData.items" :key="i.id" class="border-t border-hull">
+                  <td class="px-3 py-2 text-muted">{{ i.class }}</td>
+                  <td class="px-3 py-2">{{ i.name || i.descr }}</td>
+                  <td class="px-3 py-2">{{ i.model || '—' }}</td>
+                  <td class="px-3 py-2 font-mono text-xs">{{ i.serial || '—' }}</td>
+                  <td class="px-3 py-2 text-xs text-faint">{{ [i.hardware_rev, i.firmware_rev, i.software_rev].filter(Boolean).join(' / ') || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </div>
 
       <!-- ═══ Logs (eventlog) ═══ -->

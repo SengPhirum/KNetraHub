@@ -79,9 +79,38 @@ export const HR = {
   hrProcessorLoad: '1.3.6.1.2.1.25.3.3.1.2',
   hrDeviceType: '1.3.6.1.2.1.25.3.2.1.2',
   hrDeviceDescr: '1.3.6.1.2.1.25.3.2.1.3',
+  hrDeviceStatus: '1.3.6.1.2.1.25.3.2.1.5',
+  hrDeviceErrors: '1.3.6.1.2.1.25.3.2.1.6',
   hrSystemNumUsers: '1.3.6.1.2.1.25.1.5.0',
   hrSystemProcesses: '1.3.6.1.2.1.25.1.6.0'
 } as const
+
+/** hrDeviceType OID values (hrDeviceTypes subtree) → LibreNMS-style names. */
+export const HR_DEVICE_TYPES: Record<string, string> = {
+  '1.3.6.1.2.1.25.3.1.1': 'hrDeviceOther',
+  '1.3.6.1.2.1.25.3.1.2': 'hrDeviceUnknown',
+  '1.3.6.1.2.1.25.3.1.3': 'hrDeviceProcessor',
+  '1.3.6.1.2.1.25.3.1.4': 'hrDeviceNetwork',
+  '1.3.6.1.2.1.25.3.1.5': 'hrDevicePrinter',
+  '1.3.6.1.2.1.25.3.1.6': 'hrDeviceDiskStorage',
+  '1.3.6.1.2.1.25.3.1.10': 'hrDeviceVideo',
+  '1.3.6.1.2.1.25.3.1.11': 'hrDeviceAudio',
+  '1.3.6.1.2.1.25.3.1.12': 'hrDeviceCoprocessor',
+  '1.3.6.1.2.1.25.3.1.13': 'hrDeviceKeyboard',
+  '1.3.6.1.2.1.25.3.1.14': 'hrDeviceModem',
+  '1.3.6.1.2.1.25.3.1.15': 'hrDeviceParallelPort',
+  '1.3.6.1.2.1.25.3.1.16': 'hrDevicePointing',
+  '1.3.6.1.2.1.25.3.1.17': 'hrDeviceSerialPort',
+  '1.3.6.1.2.1.25.3.1.18': 'hrDeviceTape',
+  '1.3.6.1.2.1.25.3.1.19': 'hrDeviceClock',
+  '1.3.6.1.2.1.25.3.1.20': 'hrDeviceVolatileMemory',
+  '1.3.6.1.2.1.25.3.1.21': 'hrDeviceNonVolatileMemory'
+}
+
+/** hrDeviceStatus integer values. */
+export const HR_DEVICE_STATUS: Record<number, string> = {
+  1: 'unknown', 2: 'running', 3: 'warning', 4: 'testing', 5: 'down'
+}
 
 /** Storage-type OIDs worth keeping vs. skipping (hrStorageType values). */
 export const HR_STORAGE_TYPES = {

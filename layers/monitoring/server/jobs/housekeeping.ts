@@ -46,7 +46,7 @@ export async function runHousekeeping(): Promise<void> {
   // ── Stale entity purge (repeatedly-confirmed-absent only) ──
   for (const table of [
     'monitoring.ports', 'monitoring.sensors', 'monitoring.processors', 'monitoring.mempools',
-    'monitoring.storage', 'monitoring.inventory', 'monitoring.ipv4_addresses', 'monitoring.ipv6_addresses',
+    'monitoring.storage', 'monitoring.inventory', 'monitoring.hr_devices', 'monitoring.ipv4_addresses', 'monitoring.ipv6_addresses',
     'monitoring.arp_entries', 'monitoring.fdb_entries', 'monitoring.vlans', 'monitoring.bgp_peers',
     'monitoring.ospf_neighbors', 'monitoring.topology_links', 'monitoring.wireless_sensors'
   ]) {
