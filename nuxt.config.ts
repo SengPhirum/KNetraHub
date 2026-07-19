@@ -82,6 +82,23 @@ export default defineNuxtConfig({
       staleAfterMs: Number(process.env.NUXT_AGENT_STALE_MS || 20000)
     },
 
+    // Outbound email (SMTP). Env defaults; Admin > Configuration > Email can
+    // persist database overrides (the password is encrypted at rest).
+    smtp: {
+      enabled: process.env.NUXT_SMTP_ENABLED === 'true',
+      host: process.env.NUXT_SMTP_HOST || '',
+      port: Number(process.env.NUXT_SMTP_PORT || 587),
+      // none | starttls | ssl
+      encryption: process.env.NUXT_SMTP_ENCRYPTION || 'starttls',
+      username: process.env.NUXT_SMTP_USERNAME || '',
+      password: process.env.NUXT_SMTP_PASSWORD || '',
+      fromName: process.env.NUXT_SMTP_FROM_NAME || '',
+      fromAddress: process.env.NUXT_SMTP_FROM_ADDRESS || '',
+      replyTo: process.env.NUXT_SMTP_REPLY_TO || '',
+      // Trust self-signed certs on an internal relay (off by default).
+      allowInsecureTls: process.env.NUXT_SMTP_ALLOW_INSECURE_TLS === 'true'
+    },
+
     // Local accounts are always enabled as recovery access. These are env
     // defaults; Admin > Authentication can persist database overrides.
     localAuth: {
@@ -256,6 +273,9 @@ export default defineNuxtConfig({
     // --- Exposed to the client (safe values only) ---
     public: {
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'KNetraHub',
+      // Public base URL of this portal, used to build absolute links in
+      // outbound email (which has no request to derive a host from).
+      appUrl: process.env.NUXT_PUBLIC_APP_URL || '',
       appVersion,
       buildDate,
       staticDocs: isDocsBuild

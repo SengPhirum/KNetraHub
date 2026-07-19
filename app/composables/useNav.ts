@@ -211,6 +211,12 @@ const ADMIN_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Configuration',
+    items: [
+      { label: 'Email', to: '/admin/configuration/email', icon: 'i-lucide-mail', minRole: 'admin' }
+    ]
+  },
+  {
     label: 'Security',
     items: [
       { label: 'Users',          to: '/users',                icon: 'i-lucide-users',        minRole: 'admin' },
@@ -272,7 +278,8 @@ const PREFERENCES_GROUPS: NavGroup[] = [
  *  - in user preferences (/preferences/*): the sectioned preferences menu
  *    (General / Account / Security), open to any signed-in user;
  *  - at the portal level (admin pages: /admin/*, /users, /audit - not inside any
- *    app): the sectioned admin menu (General / Security / Logs), with NO Apps
+ *    app): the sectioned admin menu (General / Configuration / Security / System
+ *    / Logs), with NO Apps
  *    link (the sidebar logo links home);
  *  - always: Documentation, pinned to the bottom.
  * The home page (/) is full-page with no sidebar, so this isn't used there.
