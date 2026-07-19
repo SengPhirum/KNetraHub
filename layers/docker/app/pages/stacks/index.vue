@@ -17,6 +17,11 @@ useIntervalFn(() => {
 
 const stackSortOptions = [
   { label: 'Name', value: 'name' },
+  {
+    label: 'Status',
+    value: 'status',
+    getValue: (s: any) => (STATUS_RANK[stackStatus(s)] ?? 4)
+  },
   { label: 'Services', value: 'services' },
   { label: 'Running tasks', value: 'runningTasks' },
   { label: 'Desired tasks', value: 'desiredTasks' },
@@ -27,6 +32,7 @@ const stackSortOptions = [
   { label: 'Updated', value: 'updatedAt' },
   { label: 'Git tracked', value: 'inGit' }
 ]
+const STATUS_RANK: Record<string, number> = { failed: 0, partial: 1, defined: 2, deployed: 3 }
 const stackFilterOptions = [
   { key: 'inGit', label: 'Git tracked', getValue: (s: any) => s.inGit ? 'Yes' : 'No' },
   { key: 'tracked', label: 'History tracked', getValue: (s: any) => (s.inGit || s.inLocal) ? 'Yes' : 'No' }
@@ -39,7 +45,20 @@ const { items: filtered, search, sortBy, sortDir, sortOptions, filters, facets }
 
 function stackStatus(s: any) {
   if (!s.services) return 'defined'
-  return s.runningTasks >= s.desiredTasks && s.desiredTasks > 0 ? 'deployed' : 'partial'
+  if (s.status === 'failed' || s.failedTasks > 0 || s.issueTasks > 0) return 'failed'
+  return s.status || (s.runningTasks >= s.desiredTasks && s.desiredTasks > 0 ? 'deployed' : 'partial')
+}
+
+function stackDanger(s: any) {
+  return stackStatus(s) === 'failed'
+}
+
+function stackIssue(s: any) {
+  const failed = Number(s.failedTasks || 0)
+  const issue = Array.isArray(s.issues) ? s.issues[0] : ''
+  if (issue) return issue
+  if (failed) return `${failed} current ${failed === 1 ? 'task is' : 'tasks are'} failed`
+  return 'A service cannot reach its desired state'
 }
 
 const open = ref(false)
@@ -126,7 +145,8 @@ function onDeployed() {
               <tr
                 v-for="s in filtered"
                 :key="s.name"
-                class="cursor-pointer align-top transition hover:bg-surface-2/60"
+                class="cursor-pointer align-top transition"
+                :class="stackDanger(s) ? 'bg-down/10 hover:bg-down/15' : 'hover:bg-surface-2/60'"
                 tabindex="0"
                 role="link"
                 :aria-label="`Open stack ${s.name}`"
@@ -135,8 +155,8 @@ function onDeployed() {
               >
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-layers" class="size-4 shrink-0 text-beacon" />
-                    <span class="truncate font-medium text-foam">{{ s.name }}</span>
+                    <UIcon name="i-lucide-layers" class="size-4 shrink-0" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-beacon'" />
+                    <span class="truncate font-medium" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-foam'">{{ s.name }}</span>
                     <span v-if="s.inGit" class="inline-flex shrink-0 items-center gap-1 rounded bg-beacon/10 px-1.5 py-0.5 text-[10px] font-medium text-beacon ring-1 ring-beacon/20" title="Tracked in GitLab">
                       <UIcon name="i-lucide-git-branch" class="size-3" /> git
                     </span>
@@ -144,14 +164,15 @@ function onDeployed() {
                       <UIcon name="i-lucide-history" class="size-3" /> history
                     </span>
                   </div>
-                  <p v-if="s.services" class="mt-0.5 truncate font-mono text-xs text-faint">{{ s.runningTasks ?? 0 }}/{{ s.desiredTasks ?? 0 }} tasks running</p>
+                  <p v-if="stackDanger(s)" class="mt-0.5 max-w-md truncate text-xs text-(--color-down-ink)" :title="stackIssue(s)">{{ stackIssue(s) }}</p>
+                  <p v-else-if="s.services" class="mt-0.5 truncate font-mono text-xs text-faint">{{ s.runningTasks ?? 0 }}/{{ s.desiredTasks ?? 0 }} tasks running</p>
                   <p v-else-if="s.inGit || s.inLocal" class="mt-0.5 truncate text-xs text-faint">Defined in {{ s.inGit ? 'GitLab' : 'local history' }}, not currently deployed</p>
                 </td>
-                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.services }}</td>
-                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.networks }}</td>
-                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.volumes ?? 0 }}</td>
-                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.configs }}</td>
-                <td class="px-4 py-3 font-mono text-(--color-muted)">{{ s.secrets }}</td>
+                <td class="px-4 py-3 font-mono" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-(--color-muted)'">{{ s.services }}</td>
+                <td class="px-4 py-3 font-mono" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-(--color-muted)'">{{ s.networks }}</td>
+                <td class="px-4 py-3 font-mono" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-(--color-muted)'">{{ s.volumes ?? 0 }}</td>
+                <td class="px-4 py-3 font-mono" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-(--color-muted)'">{{ s.configs }}</td>
+                <td class="px-4 py-3 font-mono" :class="stackDanger(s) ? 'text-(--color-down-ink)' : 'text-(--color-muted)'">{{ s.secrets }}</td>
                 <td class="px-4 py-3 text-xs text-faint">{{ s.updatedAt ? relative(s.updatedAt) : '—' }}</td>
                 <td class="px-4 py-3"><StatusBadge :state="stackStatus(s)" /></td>
                 <td class="px-4 py-3 text-right">

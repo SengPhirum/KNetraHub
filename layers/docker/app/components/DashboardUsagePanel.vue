@@ -2,7 +2,7 @@
 defineProps<{
   title: string
   labels: string[]
-  datasets: { label: string; data: (number | null)[]; color?: string }[]
+  datasets: { label: string; data: (number | null)[]; color?: string; tooltip?: (string | null)[] }[]
   formatValue?: (n: number) => string
   yTitle?: string
   emptyLabel?: string

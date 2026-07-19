@@ -1,5 +1,6 @@
 import { readSession } from '../utils/auth'
-import { logActivity, logSystem, moduleForPath, describeAction, runLogHousekeeping } from '../utils/moduleLogs'
+import { nanoid } from 'nanoid'
+import { logActivity, logActionNotification, logSystem, moduleForPath, describeAction, runLogHousekeeping } from '../utils/moduleLogs'
 
 /**
  * Central user-activity capture: every authenticated state-changing API call
@@ -19,6 +20,28 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 // High-frequency machine-to-machine ingest - keep it out of the info trail
 // (it still shows in the debug trail when module debug is enabled).
 const INFO_EXCLUDED_PREFIXES = ['/api/agent/report']
+const ACTION_NOTIFICATION_EXCLUDED_PREFIXES = ['/api/agent/report']
+
+function notificationTarget(event: any, fallback?: string): string | undefined {
+  const supplied = getRequestHeader(event, 'x-knetra-action-target')?.trim()
+  return (supplied || fallback)?.slice(0, 160)
+}
+
+async function recordActionStage(event: any, stage: 'started' | 'succeeded' | 'failed', status?: number, detail?: string) {
+  const context = event.context?.actionNotification
+  if (!context || (stage !== 'started' && context.completed)) return
+  if (stage !== 'started') context.completed = true
+  await logActionNotification({
+    operationId: context.operationId,
+    actor: context.actor,
+    module: context.module,
+    action: context.action,
+    target: context.target,
+    stage,
+    status,
+    detail
+  })
+}
 
 function requestMeta(event: any) {
   const method = (event.method || event.node?.req?.method || 'GET').toUpperCase()
@@ -36,8 +59,23 @@ function clientIp(event: any): string | undefined {
 }
 
 export default defineNitroPlugin((nitro) => {
-  nitro.hooks.hook('request', (event) => {
+  nitro.hooks.hook('request', async (event) => {
     event.context.moduleLogStartedAt = Date.now()
+    try {
+      const { method, path, module } = requestMeta(event)
+      if (!path.startsWith('/api/') || !WRITE_METHODS.has(method) || path.startsWith('/api/auth/')) return
+      if (ACTION_NOTIFICATION_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix))) return
+      const user = await readSession(event).catch(() => null)
+      if (!user) return
+      const described = describeAction(method, path)
+      event.context.actionNotification = {
+        operationId: nanoid(), actor: user.username, module,
+        action: described.action, target: notificationTarget(event, described.target), completed: false
+      }
+      await recordActionStage(event, 'started')
+    } catch (err) {
+      console.error('[moduleLogs] action start capture failed', err)
+    }
   })
 
   // Failed requests: thrown errors (createError, dockerode, pg, ...) never
@@ -67,6 +105,7 @@ export default defineNitroPlugin((nitro) => {
 
       // Failed write attempts belong in the audit trail too - "who tried to
       // delete X and was refused" matters as much as who succeeded.
+      if (isWrite) await recordActionStage(event, 'failed', status, String(message))
       if (isWrite && user && !path.startsWith('/api/auth/')) {
         const { action, target } = describeAction(method, path)
         await logActivity({
@@ -105,6 +144,7 @@ export default defineNitroPlugin((nitro) => {
           `${user.username} ${action}${target ? ` "${target}"` : ''} -> ${status}`)
       }
 
+      await recordActionStage(event, status < 400 ? 'succeeded' : 'failed', status)
       await logActivity({
         module,
         actor: user.username,

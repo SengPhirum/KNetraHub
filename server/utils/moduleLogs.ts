@@ -45,6 +45,17 @@ export interface SystemEntry {
   detail?: string
 }
 
+export interface ActionNotificationEntry {
+  operationId: string
+  actor: string
+  module: LogModule
+  action: string
+  target?: string
+  stage: 'started' | 'succeeded' | 'failed'
+  status?: number
+  detail?: string
+}
+
 export interface ModuleDebugConfig {
   module: LogModule
   enabled: boolean
@@ -118,6 +129,17 @@ export async function logActivity(entry: Omit<ActivityEntry, 'id' | 'ts'>): Prom
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [nanoid(), new Date().toISOString(), entry.module, entry.actor, entry.role ?? null, entry.method,
       entry.path, entry.action, entry.target ?? null, entry.status ?? null, entry.ip ?? null, entry.detail ?? null]
+  )
+}
+
+export async function logActionNotification(entry: ActionNotificationEntry): Promise<void> {
+  await getDb().query(
+    `INSERT INTO action_notification_events
+       (id, operation_id, ts, actor, module, action, target, stage, status, detail)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [nanoid(), entry.operationId, new Date().toISOString(), entry.actor, entry.module,
+      entry.action, entry.target ?? null, entry.stage, entry.status ?? null,
+      entry.detail ? entry.detail.slice(0, 500) : null]
   )
 }
 
@@ -220,13 +242,13 @@ function clampInt(v: any, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
 
-export async function runLogHousekeeping(): Promise<{ activityRemoved: number; systemRemoved: number }> {
+export async function runLogHousekeeping(): Promise<{ activityRemoved: number; systemRemoved: number; actionNotificationRemoved: number }> {
   const cfg = await getLogHousekeeping()
   const db = getDb()
   let activityRemoved = 0
   let systemRemoved = 0
 
-  const trim = async (table: 'activity_log' | 'system_log', days: number, maxRows: number) => {
+  const trim = async (table: 'activity_log' | 'system_log' | 'action_notification_events', days: number, maxRows: number) => {
     let removed = 0
     if (days > 0) {
       const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
@@ -243,11 +265,13 @@ export async function runLogHousekeeping(): Promise<{ activityRemoved: number; s
 
   activityRemoved = await trim('activity_log', cfg.activityRetentionDays, cfg.activityMaxRows)
   systemRemoved = await trim('system_log', cfg.systemRetentionDays, cfg.systemMaxRows)
+  const actionNotificationRemoved = await trim('action_notification_events', Math.min(cfg.activityRetentionDays || 7, 7), Math.min(cfg.activityMaxRows, 25_000))
 
-  if (activityRemoved || systemRemoved) {
-    await logSystem('portal', 'info', 'log-housekeeping', `Trimmed ${activityRemoved} activity and ${systemRemoved} system entries`)
+  if (activityRemoved || systemRemoved || actionNotificationRemoved) {
+    await logSystem('portal', 'info', 'log-housekeeping',
+      `Trimmed ${activityRemoved} activity, ${systemRemoved} system, and ${actionNotificationRemoved} action-notification entries`)
   } else {
     await logSystem('portal', 'debug', 'log-housekeeping', 'Housekeeping ran - nothing to trim')
   }
-  return { activityRemoved, systemRemoved }
+  return { activityRemoved, systemRemoved, actionNotificationRemoved }
 }

@@ -3,11 +3,48 @@ import { getDb } from '~~/server/utils/db'
 import { getDockerDb } from '~~/server/utils/moduleDb'
 import { getUserPreferences } from '~~/server/utils/store'
 
-const RULE_TYPES: Record<string, string[]> = {
-  deployFailures: ['deploy_failed'],
-  nodeDown: ['node_down'],
-  replicasDegraded: ['replicas_degraded', 'service_down'],
-  diskUsage: ['disk_usage_threshold']
+const ALERT_SEVERITIES = {
+  criticalAlerts: 'critical',
+  warningAlerts: 'warning',
+  infoAlerts: 'info'
+} as const
+
+const ACTION_STAGES = {
+  actionStarted: 'started',
+  actionSucceeded: 'succeeded',
+  actionFailed: 'failed'
+} as const
+
+const ACTION_COPY: Record<string, { progress: string; complete: string; label: string }> = {
+  'create/run': { progress: 'starting', complete: 'completed', label: 'action' },
+  create: { progress: 'creating', complete: 'created', label: 'create' },
+  update: { progress: 'updating', complete: 'updated', label: 'update' },
+  delete: { progress: 'deleting', complete: 'deleted', label: 'delete' },
+  remove: { progress: 'removing', complete: 'removed', label: 'remove' },
+  redeploy: { progress: 'redeploying', complete: 'redeployed', label: 'redeploy' },
+  deploy: { progress: 'deploying', complete: 'deployed', label: 'deploy' },
+  rollback: { progress: 'rolling back', complete: 'rolled back', label: 'rollback' },
+  scale: { progress: 'scaling', complete: 'scaled', label: 'scale' },
+  sync: { progress: 'synchronizing', complete: 'synchronized', label: 'sync' },
+  test: { progress: 'testing', complete: 'tested', label: 'test' },
+  reset: { progress: 'resetting', complete: 'reset', label: 'reset' }
+}
+
+function actionCopy(action: string, target?: string | null, stage?: string, detail?: string | null) {
+  const [resource = 'Action', rawVerb = 'update'] = action.split(':').map((part) => part.trim())
+  const verb = rawVerb || 'update'
+  const copy = verb === 'create/run' && resource === 'stacks'
+    ? ACTION_COPY.deploy!
+    : ACTION_COPY[verb] || {
+    progress: `${verb.replace(/e$/, '')}ing`,
+    complete: `${verb} completed`,
+    label: verb
+  }
+  let subject = target || resource.replace(/-/g, ' ').replace(/s$/, '')
+  try { subject = decodeURIComponent(subject) } catch { /* keep the original target */ }
+  if (stage === 'started') return { title: `${subject} is ${copy.progress}`, message: `${copy.label} started.` }
+  if (stage === 'succeeded') return { title: `${subject} ${copy.complete} successfully`, message: `${copy.label} completed successfully.` }
+  return { title: `${subject} ${copy.label} failed`, message: detail || `${copy.label} did not complete.` }
 }
 
 export default defineEventHandler(async (event) => {
@@ -27,17 +64,17 @@ export default defineEventHandler(async (event) => {
   const events: Array<Record<string, any>> = []
 
   if (entitlements.docker) {
-    const enabledRuleTypes = Object.entries(RULE_TYPES)
+    const enabledSeverities = Object.entries(ALERT_SEVERITIES)
       .filter(([preference]) => Boolean((prefs.notifications as unknown as Record<string, unknown>)[preference]))
-      .flatMap(([, types]) => types)
+      .map(([, severity]) => severity)
 
-    if (enabledRuleTypes.length) {
+    if (enabledSeverities.length) {
       const { rows } = await getDockerDb().query(
         `SELECT id, rule_type, target, severity, message, fired_at
          FROM alert_events
-         WHERE fired_at >= $1 AND rule_type = ANY($2::text[])
+         WHERE fired_at >= $1 AND severity = ANY($2::text[])
          ORDER BY fired_at ASC LIMIT 100`,
-        [since, enabledRuleTypes]
+        [since, enabledSeverities]
       )
       events.push(...rows.map((row: any) => ({
         id: `alert:${row.id}`,
@@ -47,6 +84,30 @@ export default defineEventHandler(async (event) => {
         firedAt: row.fired_at
       })))
     }
+  }
+
+  const enabledActionStages = Object.entries(ACTION_STAGES)
+    .filter(([preference]) => Boolean((prefs.notifications as unknown as Record<string, unknown>)[preference]))
+    .map(([, stage]) => stage)
+
+  if (enabledActionStages.length) {
+    const { rows } = await getDb().query(
+      `SELECT id, operation_id, module, action, target, stage, status, detail, ts
+       FROM action_notification_events
+       WHERE actor = $1 AND ts >= $2 AND stage = ANY($3::text[])
+       ORDER BY ts ASC LIMIT 100`,
+      [user.username, since, enabledActionStages]
+    )
+    events.push(...rows.map((row: any) => {
+      const copy = actionCopy(row.action, row.target, row.stage, row.detail)
+      return {
+        id: `action:${row.id}`,
+        title: copy.title,
+        message: copy.message,
+        severity: row.stage === 'failed' ? (Number(row.status || 500) >= 500 ? 'critical' : 'warning') : 'info',
+        firedAt: row.ts
+      }
+    }))
   }
 
   if (prefs.notifications.newLogin) {

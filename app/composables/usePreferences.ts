@@ -1,9 +1,11 @@
 export interface NotificationPreferences {
   delivery: 'browser' | 'toast'
-  deployFailures: boolean
-  nodeDown: boolean
-  replicasDegraded: boolean
-  diskUsage: boolean
+  criticalAlerts: boolean
+  warningAlerts: boolean
+  infoAlerts: boolean
+  actionStarted: boolean
+  actionSucceeded: boolean
+  actionFailed: boolean
   newLogin: boolean
 }
 
@@ -28,10 +30,12 @@ export interface UserPreferences {
 
 const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
   delivery: 'browser',
-  deployFailures: true,
-  nodeDown: true,
-  replicasDegraded: true,
-  diskUsage: true,
+  criticalAlerts: true,
+  warningAlerts: false,
+  infoAlerts: false,
+  actionStarted: false,
+  actionSucceeded: false,
+  actionFailed: false,
   newLogin: false
 }
 

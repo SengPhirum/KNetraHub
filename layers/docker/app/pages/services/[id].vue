@@ -132,7 +132,10 @@ function onServiceSaved() {
 
 async function redeploy() {
   try {
-    await $fetch(`/api/services/${id}/redeploy`, { method: 'POST' })
+    await $fetch(`/api/services/${id}/redeploy`, {
+      method: 'POST',
+      headers: { 'x-knetra-action-target': name.value }
+    })
     toast.add({ title: 'Redeploying', color: 'primary', icon: 'i-lucide-refresh-cw' })
     setTimeout(refresh, 700)
   } catch (e: any) {
@@ -145,7 +148,10 @@ async function redeploy() {
 const removeOpen = ref(false)
 function remove() { removeOpen.value = true }
 async function confirmRemove(password: string) {
-  await $fetch(`/api/services/${id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/services/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-confirm-password': password, 'x-knetra-action-target': name.value }
+  })
   toast.add({ title: `Deleted ${name.value}`, color: 'primary' })
   navigateTo('/services')
 }

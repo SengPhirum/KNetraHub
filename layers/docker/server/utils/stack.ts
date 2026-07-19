@@ -18,6 +18,10 @@ export interface StackSummary {
   secrets: number
   runningTasks: number
   desiredTasks: number
+  failedTasks: number
+  issueTasks: number
+  issues: string[]
+  status: 'deployed' | 'partial' | 'failed'
   updatedAt: string | null
 }
 
@@ -45,6 +49,10 @@ export async function listStacks(): Promise<StackSummary[]> {
       secrets: 0,
       runningTasks: 0,
       desiredTasks: 0,
+      failedTasks: 0,
+      issueTasks: 0,
+      issues: [],
+      status: 'partial',
       updatedAt: null
     }).get(name)!
 
@@ -66,6 +74,10 @@ export async function listStacks(): Promise<StackSummary[]> {
       if (typeof replicas === 'number') e.desiredTasks += replicas
     }
     if (s.UpdatedAt && (!e.updatedAt || s.UpdatedAt > e.updatedAt)) e.updatedAt = s.UpdatedAt
+    const updateState = String(s.UpdateStatus?.State || '').toLowerCase()
+    if (['paused', 'rollback_paused'].includes(updateState)) {
+      e.issues.push(`${s.Spec?.Name || s.ID}: update ${updateState.replace('_', ' ')}`)
+    }
   }
   for (const n of networks) {
     const ns = n.Labels?.[STACK_LABEL]
@@ -83,6 +95,7 @@ export async function listStacks(): Promise<StackSummary[]> {
     const ns = sec.Spec?.Labels?.[STACK_LABEL]
     if (ns) ensure(ns).secrets++
   }
+  const latestTasks = new Map<string, any>()
   for (const t of tasks as any[]) {
     // Resolve the task's stack via its service first - container labels are
     // absent on tasks of stacks deployed by tools that only label the service.
@@ -92,6 +105,34 @@ export async function listStacks(): Promise<StackSummary[]> {
     if (globalServiceIds.has(t.ServiceID) && t.DesiredState !== 'shutdown' && t.Status?.State !== 'shutdown') {
       ensure(ns).desiredTasks++
     }
+    // Swarm retains historical failures. Only the newest task for a replica
+    // slot (or global-service node) describes the stack's current health.
+    const identity = `${t.ServiceID}:${t.Slot ?? t.NodeID ?? t.ID}`
+    const current = latestTasks.get(identity)
+    const version = Number(t.Version?.Index || 0)
+    const currentVersion = Number(current?.Version?.Index || 0)
+    if (!current || version >= currentVersion) latestTasks.set(identity, { ...t, __stack: ns })
+  }
+
+  for (const task of latestTasks.values()) {
+    const stack = map.get(task.__stack)
+    if (!stack) continue
+    const state = String(task.Status?.State || '').toLowerCase()
+    const error = String(task.Status?.Err || '').trim()
+    if (['failed', 'rejected', 'orphaned'].includes(state)) stack.failedTasks++
+    if (error && state !== 'running' && state !== 'shutdown' && state !== 'complete') {
+      stack.issueTasks++
+      stack.issues.push(error)
+    }
+  }
+
+  for (const stack of map.values()) {
+    stack.issues = [...new Set(stack.issues)].slice(0, 3)
+    stack.status = stack.failedTasks > 0 || stack.issueTasks > 0 || stack.issues.length > 0
+      ? 'failed'
+      : stack.runningTasks >= stack.desiredTasks && stack.desiredTasks > 0
+        ? 'deployed'
+        : 'partial'
   }
 
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))

@@ -14,7 +14,9 @@ export async function computeStacksList() {
     const ex = map.get(name)
     if (ex) return ex
     const created: StackSummary & { inGit: boolean; inLocal: boolean } = {
-      name, services: 0, networks: 0, volumes: 0, configs: 0, secrets: 0, runningTasks: 0, desiredTasks: 0, updatedAt: null, inGit: false, inLocal: false
+      name, services: 0, networks: 0, volumes: 0, configs: 0, secrets: 0,
+      runningTasks: 0, desiredTasks: 0, failedTasks: 0, issueTasks: 0,
+      issues: [], status: 'partial', updatedAt: null, inGit: false, inLocal: false
     }
     map.set(name, created)
     return created

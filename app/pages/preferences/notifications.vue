@@ -1,22 +1,42 @@
 <script setup lang="ts">
-// Preferences > Account > Notifications. Per-account notification preferences,
-// persisted with the rest of the user's preferences (user_preferences.data).
-// These are personal toggles for which events you want to hear about; team-wide
-// alert *delivery* is still configured per app (e.g. Dock > Settings > Alerts).
+import type { NotificationPreferences } from '~/composables/usePreferences'
+
+// Personal browser/toast delivery preferences. Team-wide alert generation and
+// external channels remain under Dock > Settings > Alerts.
 const { prefs, fetchPreferences, updatePreferences } = usePreferences()
 const toast = useToast()
 
-const local = reactive({ ...prefs.value.notifications })
-watch(() => prefs.value.notifications, (v) => Object.assign(local, v), { immediate: true })
+const local = reactive<NotificationPreferences>({ ...prefs.value.notifications })
+watch(() => prefs.value.notifications, (value) => Object.assign(local, value), { immediate: true })
 
-type NotificationEventKey = Exclude<keyof typeof local, 'delivery'>
-const items: { key: NotificationEventKey; label: string; description: string; icon: string }[] = [
-  { key: 'deployFailures',   label: 'Deploy failures',     description: 'A stack deploy, rollback, redeploy, image update, or scale fails.', icon: 'i-lucide-circle-x' },
-  { key: 'nodeDown',         label: 'Node down',           description: 'A swarm node stops reporting heartbeats.',                         icon: 'i-lucide-server-off' },
-  { key: 'replicasDegraded', label: 'Replicas degraded',   description: 'A service stays under its desired replica count.',                 icon: 'i-lucide-trending-down' },
-  { key: 'diskUsage',        label: 'Disk usage threshold', description: 'A node crosses its configured disk-usage threshold.',             icon: 'i-lucide-hard-drive' },
-  { key: 'newLogin',         label: 'New sign-in',         description: 'A new sign-in to your account (see Login activity).',              icon: 'i-lucide-log-in' }
+type ToggleKey = Exclude<keyof NotificationPreferences, 'delivery'>
+interface ToggleItem { key: ToggleKey; label: string; description: string; icon: string; critical?: boolean }
+
+const tabs = [
+  { label: 'Alerts', value: 'alerts', slot: 'alerts', icon: 'i-lucide-triangle-alert' },
+  { label: 'Actions', value: 'actions', slot: 'actions', icon: 'i-lucide-mouse-pointer-click' },
+  { label: 'Security', value: 'security', slot: 'security', icon: 'i-lucide-shield-check' }
 ]
+
+const alertItems: ToggleItem[] = [
+  { key: 'criticalAlerts', label: 'Critical alerts', description: 'Deploy failures, unavailable nodes, and other critical Docker alerts.', icon: 'i-lucide-circle-x', critical: true },
+  { key: 'warningAlerts', label: 'Warning alerts', description: 'Usage thresholds, degraded replicas, and other warning conditions.', icon: 'i-lucide-triangle-alert' },
+  { key: 'infoAlerts', label: 'Informational alerts', description: 'Successful deploys, recovery events, scaling, and other informational alerts.', icon: 'i-lucide-info' }
+]
+
+const actionItems: ToggleItem[] = [
+  { key: 'actionStarted', label: 'Action started', description: 'Notify when an operation begins, for example "api is redeploying".', icon: 'i-lucide-loader-circle' },
+  { key: 'actionSucceeded', label: 'Action completed', description: 'Notify when any state-changing action finishes successfully.', icon: 'i-lucide-circle-check' },
+  { key: 'actionFailed', label: 'Action failed', description: 'Notify when any state-changing action is rejected or fails.', icon: 'i-lucide-circle-x' }
+]
+
+const securityItems: ToggleItem[] = [
+  { key: 'newLogin', label: 'New sign-in', description: 'Notify when your account signs in (also recorded in Login activity).', icon: 'i-lucide-log-in' }
+]
+
+function setAll(items: ToggleItem[], enabled: boolean) {
+  for (const item of items) local[item.key] = enabled
+}
 
 const saving = ref(false)
 async function save() {
@@ -39,12 +59,15 @@ await fetchPreferences()
 
 <template>
   <div>
-    <PageHeader title="Notifications" subtitle="Choose which events you want to be notified about" icon="i-lucide-bell" />
+    <PageHeader title="Notifications" subtitle="Choose which alerts and action updates reach you" icon="i-lucide-bell" />
 
-    <div class="panel p-5 max-w-2xl">
+    <div class="panel max-w-3xl p-5">
       <div class="mb-4 border-b border-hull pb-4">
-        <p class="text-sm font-medium text-foam">Delivery method</p>
-        <p class="mb-3 text-xs text-(--color-muted)">Browser notifications are requested automatically. If permission is unavailable or denied, alerts fall back to in-app toast messages.</p>
+        <div class="flex items-center gap-2">
+          <p class="text-sm font-medium text-foam">Delivery method</p>
+          <UBadge color="error" variant="subtle" size="sm" label="Critical only by default" />
+        </div>
+        <p class="mb-3 mt-1 text-xs text-(--color-muted)">Browser notifications are requested automatically. When permission is denied or unavailable, every enabled event falls back to an in-app toast.</p>
         <USelect
           v-model="local.delivery"
           :items="[
@@ -57,18 +80,63 @@ await fetchPreferences()
         />
       </div>
 
-      <div class="divide-y divide-hull">
-        <div v-for="item in items" :key="item.key" class="flex items-center gap-3 py-3.5">
-          <UIcon :name="item.icon" class="size-4 shrink-0 text-beacon" />
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium text-foam">{{ item.label }}</p>
-            <p class="text-xs text-(--color-muted)">{{ item.description }}</p>
+      <UTabs :items="tabs" variant="link" :unmount-on-hide="false">
+        <template #alerts>
+          <div class="pt-3">
+            <div class="mb-1 flex items-center justify-end gap-1">
+              <UButton size="xs" color="neutral" variant="ghost" label="Enable all" @click="setAll(alertItems, true)" />
+              <UButton size="xs" color="neutral" variant="ghost" label="Disable all" @click="setAll(alertItems, false)" />
+            </div>
+            <div class="divide-y divide-hull">
+              <div v-for="item in alertItems" :key="item.key" class="flex items-center gap-3 py-3.5">
+                <UIcon :name="item.icon" class="size-4 shrink-0" :class="item.critical ? 'text-(--color-down-ink)' : 'text-beacon'" />
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-foam">{{ item.label }}</p>
+                  <p class="text-xs text-(--color-muted)">{{ item.description }}</p>
+                </div>
+                <USwitch v-model="local[item.key]" color="primary" />
+              </div>
+            </div>
           </div>
-          <USwitch v-model="local[item.key]" color="primary" />
-        </div>
-      </div>
+        </template>
 
-      <div class="flex justify-end border-t border-hull pt-4 mt-1">
+        <template #actions>
+          <div class="pt-3">
+            <div class="mb-1 flex items-center justify-between gap-3">
+              <p class="text-xs text-(--color-muted)">Covers every authenticated POST, PUT, PATCH, and DELETE action across enabled modules.</p>
+              <div class="flex shrink-0 items-center gap-1">
+                <UButton size="xs" color="neutral" variant="ghost" label="Enable all" @click="setAll(actionItems, true)" />
+                <UButton size="xs" color="neutral" variant="ghost" label="Disable all" @click="setAll(actionItems, false)" />
+              </div>
+            </div>
+            <div class="divide-y divide-hull">
+              <div v-for="item in actionItems" :key="item.key" class="flex items-center gap-3 py-3.5">
+                <UIcon :name="item.icon" class="size-4 shrink-0 text-beacon" />
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-foam">{{ item.label }}</p>
+                  <p class="text-xs text-(--color-muted)">{{ item.description }}</p>
+                </div>
+                <USwitch v-model="local[item.key]" color="primary" />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template #security>
+          <div class="divide-y divide-hull pt-3">
+            <div v-for="item in securityItems" :key="item.key" class="flex items-center gap-3 py-3.5">
+              <UIcon :name="item.icon" class="size-4 shrink-0 text-beacon" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-foam">{{ item.label }}</p>
+                <p class="text-xs text-(--color-muted)">{{ item.description }}</p>
+              </div>
+              <USwitch v-model="local[item.key]" color="primary" />
+            </div>
+          </div>
+        </template>
+      </UTabs>
+
+      <div class="mt-1 flex justify-end border-t border-hull pt-4">
         <UButton color="primary" label="Save preferences" icon="i-lucide-check" :loading="saving" @click="save" />
       </div>
     </div>

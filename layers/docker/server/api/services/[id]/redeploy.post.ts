@@ -5,7 +5,9 @@ import { fireAlert } from '~~/server/utils/alertNotify'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
   const id = getRouterParam(event, 'id')!
-  const result = await withServiceSpec(id, (spec) => {
+  let serviceName = id
+  const result = await withServiceSpec(id, (spec, current) => {
+    serviceName = current.Spec?.Name || id
     // Bumping ForceUpdate alone recreates tasks but reuses whatever image
     // digest is already pinned in the spec - it does NOT re-pull, so a
     // newly-pushed image under the same tag is never picked up. Strip any
@@ -16,7 +18,7 @@ export default defineEventHandler(async (event) => {
     if (container?.Image) container.Image = container.Image.split('@')[0]
     spec.TaskTemplate = { ...spec.TaskTemplate, ForceUpdate: (spec.TaskTemplate?.ForceUpdate || 0) + 1 }
   }).catch(async (err: any) => {
-    await fireAlert({ ruleType: 'deploy_failed', target: id, severity: 'critical', vars: { target: id, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
+    await fireAlert({ ruleType: 'deploy_failed', target: serviceName, severity: 'critical', vars: { target: serviceName, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
     throw err
   })
   const { info } = result

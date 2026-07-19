@@ -16,6 +16,9 @@ const TABS: Array<{ key: TabKey; label: string; icon: string; description: strin
 const activeTab = ref<TabKey>('general')
 const saving = ref(false)
 const loadingOptions = ref(false)
+function actionHeaders() {
+  return { 'x-knetra-action-target': props.data?.summary?.name || props.serviceId }
+}
 
 // ── General ────────────────────────────────────────────────────────────────
 const imageRepo = ref('')
@@ -232,26 +235,26 @@ async function save() {
     if (dirty('general', generalPayload)) {
       const g = generalPayload()
       if (g.image !== `${snapshot.general ? JSON.parse(snapshot.general).image : ''}`) {
-        calls.push(() => $fetch(`/api/services/${id}/image`, { method: 'POST', body: { image: g.image } }))
+        calls.push(() => $fetch(`/api/services/${id}/image`, { method: 'POST', headers: actionHeaders(), body: { image: g.image } }))
       }
       const initial = snapshot.general ? JSON.parse(snapshot.general) : {}
       if (mode.value === 'replicated' && g.replicas !== initial.replicas) {
-        calls.push(() => $fetch(`/api/services/${id}/scale`, { method: 'POST', body: { replicas: Number(g.replicas) } }))
+        calls.push(() => $fetch(`/api/services/${id}/scale`, { method: 'POST', headers: actionHeaders(), body: { replicas: Number(g.replicas) } }))
       }
       if (g.command !== initial.command) {
-        calls.push(() => $fetch(`/api/services/${id}/command`, { method: 'POST', body: { command: g.command } }))
+        calls.push(() => $fetch(`/api/services/${id}/command`, { method: 'POST', headers: actionHeaders(), body: { command: g.command } }))
       }
     }
-    if (dirty('network', networkPayload)) calls.push(() => $fetch(`/api/services/${id}/networks`, { method: 'POST', body: networkPayload() }))
-    if (dirty('ports', portsPayload)) calls.push(() => $fetch(`/api/services/${id}/ports`, { method: 'POST', body: portsPayload() }))
-    if (dirty('extraHosts', extraHostsPayload)) calls.push(() => $fetch(`/api/services/${id}/extra-hosts`, { method: 'POST', body: extraHostsPayload() }))
-    if (dirty('env', envPayload)) calls.push(() => $fetch(`/api/services/${id}/environment`, { method: 'POST', body: envPayload() }))
-    if (dirty('mounts', mountsPayload)) calls.push(() => $fetch(`/api/services/${id}/mounts`, { method: 'POST', body: mountsPayload() }))
-    if (dirty('configs', configsPayload)) calls.push(() => $fetch(`/api/services/${id}/configs`, { method: 'POST', body: configsPayload() }))
-    if (dirty('secrets', secretsPayload)) calls.push(() => $fetch(`/api/services/${id}/secrets`, { method: 'POST', body: secretsPayload() }))
-    if (dirty('resources', resourcesPayload)) calls.push(() => $fetch(`/api/services/${id}/resources`, { method: 'POST', body: resourcesPayload() }))
-    if (dirty('deployment', deploymentPayload)) calls.push(() => $fetch(`/api/services/${id}/deployment`, { method: 'POST', body: deploymentPayload() }))
-    if (dirty('logDriver', logDriverPayload)) calls.push(() => $fetch(`/api/services/${id}/log-driver`, { method: 'POST', body: logDriverPayload() }))
+    if (dirty('network', networkPayload)) calls.push(() => $fetch(`/api/services/${id}/networks`, { method: 'POST', headers: actionHeaders(), body: networkPayload() }))
+    if (dirty('ports', portsPayload)) calls.push(() => $fetch(`/api/services/${id}/ports`, { method: 'POST', headers: actionHeaders(), body: portsPayload() }))
+    if (dirty('extraHosts', extraHostsPayload)) calls.push(() => $fetch(`/api/services/${id}/extra-hosts`, { method: 'POST', headers: actionHeaders(), body: extraHostsPayload() }))
+    if (dirty('env', envPayload)) calls.push(() => $fetch(`/api/services/${id}/environment`, { method: 'POST', headers: actionHeaders(), body: envPayload() }))
+    if (dirty('mounts', mountsPayload)) calls.push(() => $fetch(`/api/services/${id}/mounts`, { method: 'POST', headers: actionHeaders(), body: mountsPayload() }))
+    if (dirty('configs', configsPayload)) calls.push(() => $fetch(`/api/services/${id}/configs`, { method: 'POST', headers: actionHeaders(), body: configsPayload() }))
+    if (dirty('secrets', secretsPayload)) calls.push(() => $fetch(`/api/services/${id}/secrets`, { method: 'POST', headers: actionHeaders(), body: secretsPayload() }))
+    if (dirty('resources', resourcesPayload)) calls.push(() => $fetch(`/api/services/${id}/resources`, { method: 'POST', headers: actionHeaders(), body: resourcesPayload() }))
+    if (dirty('deployment', deploymentPayload)) calls.push(() => $fetch(`/api/services/${id}/deployment`, { method: 'POST', headers: actionHeaders(), body: deploymentPayload() }))
+    if (dirty('logDriver', logDriverPayload)) calls.push(() => $fetch(`/api/services/${id}/log-driver`, { method: 'POST', headers: actionHeaders(), body: logDriverPayload() }))
 
     if (!calls.length) {
       open.value = false

@@ -19,7 +19,7 @@ ChartJS.register(LineController, LineElement, PointElement, LinearScale, Categor
 // date adapter dependency just for axis ticks.
 const props = defineProps<{
   labels: string[]
-  datasets: { label: string; data: (number | null)[]; color?: string }[]
+  datasets: { label: string; data: (number | null)[]; color?: string; tooltip?: (string | null)[] }[]
   formatValue?: (n: number) => string
   height?: number
   /** Fill the parent's height instead of a fixed pixel height - the parent
@@ -88,7 +88,8 @@ const chartOptions = computed(() => ({
       callbacks: {
         label: (ctx: any) => {
           const value = ctx.parsed.y
-          return `${ctx.dataset.label}: ${props.formatValue ? props.formatValue(value) : value}`
+          const detail = props.datasets[ctx.datasetIndex]?.tooltip?.[ctx.dataIndex]
+          return `${ctx.dataset.label}: ${detail || (props.formatValue ? props.formatValue(value) : value)}`
         }
       }
     }

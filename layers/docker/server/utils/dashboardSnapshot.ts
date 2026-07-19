@@ -182,7 +182,22 @@ export async function computeMetrics(range: string) {
   ])
 
   const serviceNames = new Map(services.map((service: any) => [service.ID, service.Spec?.Name || service.ID]))
+  const serviceReservations = new Map(services.map((service: any) => {
+    const resources = service.Spec?.TaskTemplate?.Resources?.Reservations || {}
+    const replicas = service.Spec?.Mode?.Replicated?.Replicas
+    const desired = typeof replicas === 'number'
+      ? replicas
+      : service.Spec?.Mode?.Global ? nodes.length : 1
+    return [service.ID, {
+      cpuNanos: Number(resources.NanoCPUs || 0) * desired,
+      memoryBytes: Number(resources.MemoryBytes || 0) * desired
+    }]
+  }))
   const nodeNames = new Map(nodes.map((node: any) => [node.ID, node.Description?.Hostname || node.ID]))
+  const nodeCapacity = new Map(nodes.map((node: any) => [node.ID, {
+    cpuNanos: Number(node.Description?.Resources?.NanoCPUs || 0),
+    memoryBytes: Number(node.Description?.Resources?.MemoryBytes || 0)
+  }]))
 
   let serviceRows: any[] = []
   let nodeRows: any[] = []
@@ -194,6 +209,7 @@ export async function computeMetrics(range: string) {
       db.query(
         `SELECT bucket,
                 service_id,
+                array_agg(DISTINCT node_id) AS node_ids,
                 sum(cpu_percent) AS cpu_percent,
                 sum(memory_used) AS memory_used,
                 sum(memory_limit) AS memory_limit
@@ -201,6 +217,7 @@ export async function computeMetrics(range: string) {
            SELECT time_bucket($1::interval, time) AS bucket,
                   service_id,
                   container_id,
+                  max(node_id) AS node_id,
                   avg(cpu_percent) AS cpu_percent,
                   avg(memory_used) AS memory_used,
                   avg(memory_limit) AS memory_limit
@@ -254,14 +271,30 @@ export async function computeMetrics(range: string) {
     sampledAt: new Date().toISOString(),
     range,
     bucket,
-    services: serviceRows.map((row: any) => ({
-      time: row.bucket,
-      serviceId: row.service_id,
-      serviceName: serviceNames.get(row.service_id) || row.service_id,
-      cpuPercent: Number(row.cpu_percent || 0),
-      memoryUsedBytes: Number(row.memory_used || 0),
-      memoryLimitBytes: Number(row.memory_limit || 0)
-    })),
+    services: serviceRows.map((row: any) => {
+      const reservation = serviceReservations.get(row.service_id) || { cpuNanos: 0, memoryBytes: 0 }
+      const nodeIds = Array.isArray(row.node_ids) ? row.node_ids.filter(Boolean) : []
+      const allocated = nodeIds.reduce((total: { cpuNanos: number; memoryBytes: number }, nodeId: string) => {
+        const capacity = nodeCapacity.get(nodeId)
+        if (capacity) {
+          total.cpuNanos += capacity.cpuNanos
+          total.memoryBytes += capacity.memoryBytes
+        }
+        return total
+      }, { cpuNanos: 0, memoryBytes: 0 })
+      return {
+        time: row.bucket,
+        serviceId: row.service_id,
+        serviceName: serviceNames.get(row.service_id) || row.service_id,
+        cpuPercent: Number(row.cpu_percent || 0),
+        memoryUsedBytes: Number(row.memory_used || 0),
+        memoryLimitBytes: Number(row.memory_limit || 0),
+        reservedCpuNanos: reservation.cpuNanos,
+        reservedMemoryBytes: reservation.memoryBytes,
+        nodeCpuNanos: allocated.cpuNanos,
+        nodeMemoryBytes: allocated.memoryBytes
+      }
+    }),
     nodes: nodeRows.map((row: any) => ({
       time: row.bucket,
       nodeId: row.node_id,
@@ -270,6 +303,8 @@ export async function computeMetrics(range: string) {
       cpuCores: Number(row.cpu_cores || 0),
       memoryUsedBytes: Number(row.memory_used || 0),
       memoryLimitBytes: Number(row.memory_limit || 0),
+      nodeCpuNanos: nodeCapacity.get(row.node_id)?.cpuNanos || 0,
+      nodeMemoryBytes: nodeCapacity.get(row.node_id)?.memoryBytes || Number(row.memory_limit || 0),
       memoryPercent: Number(row.memory_percent || 0)
     })),
     disk: diskRows.map((row: any) => ({

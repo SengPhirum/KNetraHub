@@ -11,11 +11,14 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `54a4d31`
+- Commit: `fcfbdf1`
 - Previous tag: none
 
 ## Changes
 
+- Enhance Docker dashboard, stack health, and notifications
+- Update release (fcfbdf1)
+- Add dynamic modules and isolated databases (48db433)
 - Fix log display (54a4d31)
 - Add environment badges and release workflow (98edb38)
 - Update (97e818b)

@@ -289,6 +289,7 @@ async function doDeploy() {
   try {
     const res: any = await $fetch('/api/stacks', {
       method: 'POST',
+      headers: { 'x-knetra-action-target': stackName.value },
       body: {
         name: stackName.value,
         compose: yamlText.value,

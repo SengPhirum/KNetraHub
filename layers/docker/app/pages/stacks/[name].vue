@@ -49,7 +49,7 @@ const syncing = ref(false)
 async function syncHistory() {
   syncing.value = true
   try {
-    const res: any = await $fetch(`/api/stacks/${name}/history/sync`, { method: 'POST' })
+    const res: any = await $fetch(`/api/stacks/${name}/history/sync`, { method: 'POST', headers: { 'x-knetra-action-target': name } })
     toast.add({ title: 'History synced with GitLab', description: `${res.pulled} pulled, ${res.pushed} pushed`, color: 'primary', icon: 'i-lucide-refresh-cw' })
     await refresh()
   } catch (e: any) {
@@ -205,7 +205,7 @@ async function viewCommit(id: string) {
 async function rollback(id: string) {
   if (!confirm(`Roll back "${name}" to version ${id.slice(0, 8)}? This records and redeploys the older version.`)) return
   try {
-    await $fetch(`/api/stacks/${name}/rollback`, { method: 'POST', body: { version: id } })
+    await $fetch(`/api/stacks/${name}/rollback`, { method: 'POST', headers: { 'x-knetra-action-target': name }, body: { version: id } })
     toast.add({ title: `Rolled back ${name}`, description: `to ${id.slice(0, 8)}`, color: 'primary', icon: 'i-lucide-history' })
     diffOpen.value = false
     refresh()
@@ -231,7 +231,7 @@ const criticalCopy = computed(() => criticalAction.value === 'untrack'
 function remove() { criticalAction.value = 'remove' }
 function deleteFromTracking() { criticalAction.value = 'untrack' }
 async function confirmCritical(password: string) {
-  const headers = { 'x-confirm-password': password }
+  const headers = { 'x-confirm-password': password, 'x-knetra-action-target': name }
   if (criticalAction.value === 'untrack') {
     await $fetch(`/api/stacks/${name}?git=true`, { method: 'DELETE', headers })
     toast.add({ title: `Deleted ${name} from version control`, color: 'primary' })

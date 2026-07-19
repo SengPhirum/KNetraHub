@@ -80,16 +80,46 @@ const nodeMetrics = computed<any[]>(() => metricData.value?.nodes || [])
 
 const memoryByService = computed(() =>
   buildUsageChart(serviceMetrics.value, 'serviceId', 'serviceName', 'memoryUsedBytes', {
-    transform: (value) => value / 1024 / 1024
+    transform: (value) => value / 1024 / 1024,
+    tooltip: (value, row) => {
+      const reserved = Number(row.reservedMemoryBytes || 0)
+      const allocated = reserved || Number(row.nodeMemoryBytes || row.memoryLimitBytes || 0)
+      const basis = reserved ? 'reserved' : 'node memory allocated'
+      return allocated
+        ? `${formatMiB(value)} / ${formatMiB(allocated / 1024 / 1024)} ${basis}`
+        : `${formatMiB(value)} / node memory allocated unavailable`
+    }
   })
 )
 const cpuByService = computed(() =>
   buildUsageChart(serviceMetrics.value, 'serviceId', 'serviceName', 'cpuPercent', {
-    transform: (value) => value / 100
+    transform: (value) => value / 100,
+    tooltip: (value, row) => {
+      const reserved = Number(row.reservedCpuNanos || 0)
+      const allocated = reserved || Number(row.nodeCpuNanos || 0)
+      const basis = reserved ? 'reserved' : 'node CPU allocated'
+      return allocated
+        ? `${formatVcpu(value)} vCPU / ${formatVcpu(allocated / 1e9)} vCPU ${basis}`
+        : `${formatVcpu(value)} vCPU / node CPU allocated unavailable`
+    }
   })
 )
-const memoryByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId', 'hostname', 'memoryPercent'))
-const cpuByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId', 'hostname', 'cpuPercent'))
+const memoryByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId', 'hostname', 'memoryPercent', {
+  tooltip: (value, row) => {
+    const allocated = Number(row.nodeMemoryBytes || row.memoryLimitBytes || 0)
+    return allocated
+      ? `${formatPercent(value)} of ${compactBytes(allocated)} node memory allocated`
+      : `${formatPercent(value)} of node memory allocated`
+  }
+}))
+const cpuByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId', 'hostname', 'cpuPercent', {
+  tooltip: (value, row) => {
+    const allocated = Number(row.nodeCpuNanos || 0)
+    return allocated
+      ? `${formatPercent(value)} of ${formatVcpu(allocated / 1e9)} vCPU node CPU allocated`
+      : `${formatPercent(value)} of node CPU allocated`
+  }
+}))
 
 function ratioPercent(used: number, total: number) {
   return total > 0 ? (used / total) * 100 : 0
@@ -129,7 +159,11 @@ function buildUsageChart(
   keyField: string,
   labelField: string,
   valueField: string,
-  options: { limit?: number; transform?: (value: number, row: any) => number } = {}
+  options: {
+    limit?: number
+    transform?: (value: number, row: any) => number
+    tooltip?: (value: number, row: any) => string
+  } = {}
 ) {
   const limit = options.limit ?? 8
   const times = Array.from(new Set(rows.map((row) => normalizedTime(row.time)).filter(Boolean))).sort()
@@ -151,16 +185,20 @@ function buildUsageChart(
 
   const datasets = keys.map((key, index) => {
     const values = new Map<string, number>()
+    const tooltips = new Map<string, string>()
     for (const row of rows) {
       if (String(row[keyField] || '') !== key) continue
       const time = normalizedTime(row.time)
       if (!time) continue
-      values.set(time, options.transform ? options.transform(Number(row[valueField] || 0), row) : Number(row[valueField] || 0))
+      const value = options.transform ? options.transform(Number(row[valueField] || 0), row) : Number(row[valueField] || 0)
+      values.set(time, value)
+      if (options.tooltip) tooltips.set(time, options.tooltip(value, row))
     }
 
     return {
       label: labels.get(key) || key,
       data: times.map((time) => values.get(time) ?? null),
+      tooltip: times.map((time) => tooltips.get(time) ?? null),
       color: chartPalette[index % chartPalette.length]
     }
   })

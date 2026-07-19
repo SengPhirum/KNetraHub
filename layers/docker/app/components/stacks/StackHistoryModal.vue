@@ -75,7 +75,7 @@ async function rollback(entry: HistoryEntry) {
   if (!confirm(`Roll back "${props.name}" to version ${entry.shortId}? This records and redeploys the older version.`)) return
   rollingBack.value = entry.id
   try {
-    await $fetch(`/api/stacks/${props.name}/rollback`, { method: 'POST', body: { version: entry.id } })
+    await $fetch(`/api/stacks/${props.name}/rollback`, { method: 'POST', headers: { 'x-knetra-action-target': props.name }, body: { version: entry.id } })
     toast.add({ title: `Rolled back ${props.name}`, description: `to ${entry.shortId}`, color: 'primary', icon: 'i-lucide-history' })
     viewing.value = null
     emit('changed')
@@ -90,7 +90,7 @@ async function rollback(entry: HistoryEntry) {
 async function syncWithGitlab() {
   syncing.value = true
   try {
-    const res = await $fetch<{ pulled: number; pushed: number }>(`/api/stacks/${props.name}/history/sync`, { method: 'POST' })
+    const res = await $fetch<{ pulled: number; pushed: number }>(`/api/stacks/${props.name}/history/sync`, { method: 'POST', headers: { 'x-knetra-action-target': props.name } })
     toast.add({ title: 'History synced with GitLab', description: `${res.pulled} pulled, ${res.pushed} pushed`, color: 'primary', icon: 'i-lucide-refresh-cw' })
     await load()
   } catch (e: any) {

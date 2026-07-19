@@ -107,7 +107,11 @@ function openScale(svc: any) {
 }
 async function doScale() {
   try {
-    await $fetch(`/api/services/${scaleTarget.value.id}/scale`, { method: 'POST', body: { replicas: Number(scaleValue.value) } })
+    await $fetch(`/api/services/${scaleTarget.value.id}/scale`, {
+      method: 'POST',
+      headers: { 'x-knetra-action-target': scaleTarget.value.name },
+      body: { replicas: Number(scaleValue.value) }
+    })
     toast.add({ title: `Scaled ${scaleTarget.value.name} to ${scaleValue.value}`, color: 'primary', icon: 'i-lucide-scaling' })
     scaleTarget.value = null
     refresh()
@@ -118,7 +122,10 @@ async function doScale() {
 
 async function redeploy(svc: any) {
   try {
-    await $fetch(`/api/services/${svc.id}/redeploy`, { method: 'POST' })
+    await $fetch(`/api/services/${svc.id}/redeploy`, {
+      method: 'POST',
+      headers: { 'x-knetra-action-target': svc.name }
+    })
     toast.add({ title: `Redeploying ${svc.name}`, color: 'primary', icon: 'i-lucide-refresh-cw' })
     refresh()
   } catch (e: any) {
@@ -138,7 +145,10 @@ async function confirmRemove(password: string) {
   const saved = [...(data.value ?? [])]
   data.value = saved.filter((s) => s.id !== svc.id)
   try {
-    await $fetch(`/api/services/${svc.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+    await $fetch(`/api/services/${svc.id}`, {
+      method: 'DELETE',
+      headers: { 'x-confirm-password': password, 'x-knetra-action-target': svc.name }
+    })
     toast.add({ title: `Removed ${svc.name}`, color: 'primary' })
   } catch (e) {
     data.value = saved

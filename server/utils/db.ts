@@ -193,6 +193,24 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
     CREATE INDEX IF NOT EXISTS idx_activity_log_module_ts ON activity_log (module, ts DESC);
     CREATE INDEX IF NOT EXISTS idx_activity_log_ts ON activity_log (ts DESC);
 
+    -- Short-lived, user-facing lifecycle events for browser/toast delivery.
+    -- Unlike activity_log (one final audit row), this records both action
+    -- start and completion so long-running operations can notify at each
+    -- stage without duplicating the audit trail.
+    CREATE TABLE IF NOT EXISTS action_notification_events (
+      id TEXT PRIMARY KEY,
+      operation_id TEXT NOT NULL,
+      ts TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      module TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target TEXT,
+      stage TEXT NOT NULL,
+      status INTEGER,
+      detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_action_notification_actor_ts ON action_notification_events (actor, ts);
+
     -- System/runtime events, stored separately from user activity by design
     -- (login failures, auto-redeploys, housekeeping runs, module errors).
     CREATE TABLE IF NOT EXISTS system_log (

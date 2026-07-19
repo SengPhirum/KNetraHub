@@ -33,10 +33,12 @@ export interface User {
 
 export interface NotificationPreferences {
   delivery: 'browser' | 'toast'
-  deployFailures: boolean
-  nodeDown: boolean
-  replicasDegraded: boolean
-  diskUsage: boolean
+  criticalAlerts: boolean
+  warningAlerts: boolean
+  infoAlerts: boolean
+  actionStarted: boolean
+  actionSucceeded: boolean
+  actionFailed: boolean
   newLogin: boolean
 }
 
@@ -62,10 +64,12 @@ export interface UserPreferences {
 
 export const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
   delivery: 'browser',
-  deployFailures: true,
-  nodeDown: true,
-  replicasDegraded: true,
-  diskUsage: true,
+  criticalAlerts: true,
+  warningAlerts: false,
+  infoAlerts: false,
+  actionStarted: false,
+  actionSucceeded: false,
+  actionFailed: false,
   newLogin: false
 }
 
@@ -361,7 +365,10 @@ function sanitizeNotifications(input: any): NotificationPreferences {
   const out: NotificationPreferences = { ...DEFAULT_NOTIFICATIONS }
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     if (input.delivery === 'browser' || input.delivery === 'toast') out.delivery = input.delivery
-    for (const key of ['deployFailures', 'nodeDown', 'replicasDegraded', 'diskUsage', 'newLogin'] as const) {
+    for (const key of [
+      'criticalAlerts', 'warningAlerts', 'infoAlerts',
+      'actionStarted', 'actionSucceeded', 'actionFailed', 'newLogin'
+    ] as const) {
       if (typeof input[key] === 'boolean') out[key] = input[key]
     }
   }

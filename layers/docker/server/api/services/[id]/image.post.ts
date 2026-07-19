@@ -7,11 +7,13 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const { image } = await readBody<{ image: string }>(event)
   let previousImage = ''
-  const { info } = await withServiceSpec(id, (spec) => {
+  let serviceName = id
+  const { info } = await withServiceSpec(id, (spec, current) => {
+    serviceName = current.Spec?.Name || id
     previousImage = (spec.TaskTemplate.ContainerSpec!.Image || '').split('@')[0]
     spec.TaskTemplate.ContainerSpec!.Image = image
   }).catch(async (err: any) => {
-    await fireAlert({ ruleType: 'deploy_failed', target: id, severity: 'critical', vars: { target: id, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
+    await fireAlert({ ruleType: 'deploy_failed', target: serviceName, severity: 'critical', vars: { target: serviceName, error: err?.statusMessage || err?.message || 'Unknown error', actor: user.username, time: new Date().toISOString() } })
     throw err
   })
   await audit({ actor: user.username, action: 'service.update-image', target: info.Spec.Name, detail: image })
