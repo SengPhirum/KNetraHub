@@ -58,6 +58,13 @@ export default defineNuxtConfig({
     // --- Server-only secrets (override with NUXT_* env vars in production) ---
     jwtSecret: process.env.NUXT_JWT_SECRET || 'change-me-in-production-please',
 
+    // Deployment environment mode: production | staging | development | testing
+    // (aliases prod/stg/sta/dev/test accepted). When set here (docker-compose),
+    // the admin UI cannot override it. Empty = admin setting from Settings >
+    // Appearance, else auto-detection from the serving domain. Non-production
+    // modes badge the logo/favicon/PWA icons with Dev / Test / STG corner tags.
+    envMode: process.env.NUXT_ENV_MODE || '',
+
     // Docker connection. Defaults to the local unix socket.
     docker: {
       socketPath: process.env.NUXT_DOCKER_SOCKET_PATH || '/var/run/docker.sock',

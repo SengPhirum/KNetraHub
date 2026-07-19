@@ -16,6 +16,12 @@ services:
     environment:
       NUXT_JWT_SECRET: "change-me-to-a-long-random-string"
       NUXT_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
+      # Deployment environment mode (production|staging|development|testing).
+      # Setting it here FIXES the mode - admins can't change it in the UI.
+      # Unset = admin-configurable (Settings -> Appearance), else auto-detected
+      # from the serving domain. Non-production modes stamp a Dev/Test/STG
+      # corner tag on the app logo, favicon, and PWA icons.
+      # NUXT_ENV_MODE: "staging"
       # Shared secret with the knetrahub-agent service below - keep them in
       # sync (or point both at the same Docker secret: this var also accepts
       # NUXT_AGENT_TOKEN_FILE, and the agent service accepts the equivalent

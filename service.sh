@@ -69,7 +69,7 @@ Usage: ./service.sh <command> [options]
 Commands:
   build [options]     Bump version, generate release notes, and build Docker images
   push [options]      Push available local version and latest Docker images
-  release [options]   Deprecated alias for build (does not push)
+  release [options]   Build and push images together (build then push)
   dev [options]       Run the local disposable Docker Swarm dev environment
   deploy              Build the app image locally and deploy the swarm stack
   qa [options]        Run smart read-only core QA and refresh documentation screenshots
@@ -81,6 +81,8 @@ Examples:
   ./service.sh build              # rebuild the current version locally
   ./service.sh build --new        # build a new patch version locally
   ./service.sh push               # push local current-version + latest images
+  ./service.sh release            # build + push the current version
+  ./service.sh release --new      # build + push a new patch version
   ./service.sh dev --full
   ./service.sh dev --reset
   ./service.sh deploy
@@ -168,6 +170,50 @@ Examples:
   ./service.sh push
   ./service.sh push --tag-prefix v
   ./service.sh push --registry registry.example.com
+EOF
+}
+
+usage_release() {
+  cat <<'EOF'
+Usage: ./service.sh release [options]
+
+Build and push KNetraHub Docker images in one step: runs the same work as
+`build` and then `push`. Accepts every `build` option; the
+registry/image/agent-image/tag-prefix options are forwarded to the push step
+as well so both halves target the same images.
+
+Default behavior:
+  - keep the current package version (no bump)
+  - generate release notes and build the app and agent images
+  - push the version and latest tags for both images
+
+Pass --new (patch bump) or an explicit bump/version option to release a NEW
+version.
+
+Options:
+  --new                   Release a new version (patch bump)
+  --patch                 Bump patch version (same as --new)
+  --minor                 Bump minor version
+  --major                 Bump major version
+  --bump patch|minor|major
+  --version x.y.z         Set an exact version
+  --no-bump               Keep the current package version (default)
+  --registry host         Docker registry host (default: registry.kdsb.com.kh)
+  --image name            Image name inside the registry (default: knetrahub/app)
+  --agent-image name      Agent image name inside the registry (default: knetrahub/agent)
+  --tag-prefix value      Prefix the version Docker tag, e.g. "v" for :v1.2.3
+  -h, --help              Show this help
+
+Environment overrides:
+  Same as build/push (REGISTRY, IMAGE_NAME, AGENT_IMAGE_NAME,
+  VERSION_TAG_PREFIX, DOCKERFILE, NPM_CA_FILE, ...).
+
+Examples:
+  ./service.sh release               # rebuild + push the current version
+  ./service.sh release --new         # build + push a new patch version
+  ./service.sh release --minor
+  ./service.sh release --version 1.2.0
+  ./service.sh release --tag-prefix v
 EOF
 }
 
@@ -537,6 +583,43 @@ cmd_push() {
   log "Push complete: ${pushed} pushed, ${skipped} skipped"
 }
 
+# ── release: build then push in one step ────────────────────────────────────
+
+cmd_release() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage_release
+    return 0
+  fi
+
+  # The registry/image/agent-image/tag-prefix options apply to push as well, so
+  # collect those (flag + value) here to forward to the push step. Every other
+  # option (bump/version/dockerfile/etc.) is build-only and reaches build via
+  # the untouched "$@".
+  local push_args=()
+  local expecting=""
+  local arg
+  for arg in "$@"; do
+    if [[ -n "${expecting}" ]]; then
+      push_args+=("${arg}")
+      expecting=""
+      continue
+    fi
+    case "${arg}" in
+      --registry|--image|--agent-image|--tag-prefix)
+        push_args+=("${arg}")
+        expecting="${arg}"
+        ;;
+    esac
+  done
+
+  # build runs first; set -e aborts the release (no push) if it fails. It also
+  # writes the resolved version into package.json, which push reads back, so the
+  # two halves always target the same version tag.
+  cmd_build "$@"
+  log "Build finished; pushing version and latest tags"
+  cmd_push ${push_args[@]+"${push_args[@]}"}
+}
+
 # ── dev: local disposable Docker Swarm dev environment ───────────────────────
 
 usage_dev() {
@@ -803,8 +886,7 @@ case "${command}" in
     cmd_push "$@"
     ;;
   release)
-    warn "The release command is deprecated; use './service.sh build' and then './service.sh push'"
-    cmd_build "$@"
+    cmd_release "$@"
     ;;
   dev)
     cmd_dev "$@"

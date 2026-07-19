@@ -1,4 +1,5 @@
 import { getAppearanceSettings } from '~~/server/utils/appearanceSettings'
+import { getEnvModeState } from '~~/server/utils/envModeState'
 
 // Default PWA icon set, baked into public/icons/ at build time. Used whenever
 // no admin-uploaded PWA icon override is set.
@@ -32,6 +33,18 @@ export default defineEventHandler(async (event) => {
   // is already the right thing to serve either way - no separate branch needed.
   const icon = appearance.pwaIconUrl
 
+  // Non-production deployments get icons with the environment corner tag
+  // ("Dev" / "Test" / "STG") composited on - served by /env-badged/* so the
+  // installed PWA is visually distinguishable from the production one.
+  const env = await getEnvModeState(event)
+  const badgedIcons = env.mode !== 'production'
+    ? [
+        { src: '/env-badged/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/env-badged/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/env-badged/maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    : null
+
   setResponseHeader(event, 'content-type', 'application/manifest+json')
 
   return {
@@ -45,12 +58,12 @@ export default defineEventHandler(async (event) => {
     background_color: '#ffffff',
     theme_color: appearance.primaryColor,
     categories: ['developer', 'productivity', 'utilities'],
-    icons: icon
+    icons: badgedIcons || (icon
       ? [
           { src: icon, sizes: '192x192', type: mimeFromDataUrl(icon), purpose: 'any' },
           { src: icon, sizes: '512x512', type: mimeFromDataUrl(icon), purpose: 'any' },
           { src: icon, sizes: '512x512', type: mimeFromDataUrl(icon), purpose: 'maskable' }
         ]
-      : DEFAULT_ICONS
+      : DEFAULT_ICONS)
   }
 })

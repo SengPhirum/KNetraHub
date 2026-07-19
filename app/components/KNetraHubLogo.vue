@@ -21,7 +21,20 @@ const props = withDefaults(defineProps<{
 })
 
 const { appearance } = useAppearance()
+const { badgeLabel } = useEnvMode()
 const uid = useId()
+
+const badgeTextClass = { sm: 'text-[8px]', md: 'text-[9px]', lg: 'text-[10px]' } as const
+// Corner tag: label from the environment mode (Dev/Test/STG), color from
+// appearance settings (admin-configurable, default red). Null in production.
+const envBadge = computed(() =>
+  badgeLabel.value ? { label: badgeLabel.value, color: appearance.value.envBadgeColor || '#DC2626' } : null)
+// The tag hugs the TOP-LEFT corner of the icon/image (the icon is always the
+// left-most part of the logo, so this stays put and close to the mark for the
+// icon, horizontal, and uploaded-override variants alike - never drifting out
+// to the app name or the far edge of a stretched container).
+const badgeClass = computed(() =>
+  `pointer-events-none absolute -left-1.5 -top-1.5 z-10 -rotate-12 select-none rounded-[3px] px-1 py-px font-display font-bold uppercase leading-none tracking-wide text-white shadow-md ${badgeTextClass[props.size]}`)
 
 const override = computed(() => {
   if (props.variant === 'icon') {
@@ -44,23 +57,30 @@ const overrideClass = computed(() =>
 </script>
 
 <template>
+  <!-- Single root so parent classes (e.g. login's mx-auto) still fall through.
+       The environment corner tag ("Dev"/"Test"/"STG", never in production) is
+       anchored to the icon/image itself inside each variant, not this wrapper,
+       so it always hugs the mark's top-left corner. -->
+  <div class="inline-flex max-w-full">
   <!-- Admin-uploaded override -->
-  <img
-    v-if="override"
-    :src="override.src"
-    :alt="alt"
-    :width="override.width"
-    :height="override.height"
-    class="block h-auto max-w-full select-none"
-    :class="overrideClass"
-    decoding="async"
-    draggable="false"
-    loading="eager"
-  >
+  <span v-if="override" class="relative inline-flex max-w-full">
+    <img
+      :src="override.src"
+      :alt="alt"
+      :width="override.width"
+      :height="override.height"
+      class="block h-auto max-w-full select-none"
+      :class="overrideClass"
+      decoding="async"
+      draggable="false"
+      loading="eager"
+    >
+    <span v-if="envBadge" :class="badgeClass" :style="{ backgroundColor: envBadge.color }">{{ envBadge.label }}</span>
+  </span>
 
   <!-- Built-in icon (Angkor ring + finial + digital eye on a beacon tile) -->
+  <span v-else-if="variant === 'icon'" class="relative inline-flex">
   <svg
-    v-else-if="variant === 'icon'"
     viewBox="0 0 512 512"
     :class="tileClass[size]"
     class="block select-none"
@@ -100,9 +120,12 @@ const overrideClass = computed(() =>
     <circle cx="256" cy="292" r="14" fill="#1d72bd" />
     <circle cx="245" cy="281" r="5" fill="#fff" />
   </svg>
+    <span v-if="envBadge" :class="badgeClass" :style="{ backgroundColor: envBadge.color }">{{ envBadge.label }}</span>
+  </span>
 
   <!-- Built-in horizontal wordmark (icon tile + text) -->
   <div v-else class="flex select-none items-center gap-2.5">
+    <span class="relative inline-flex shrink-0">
     <svg viewBox="0 0 512 512" :class="tileClass[size]" class="block shrink-0" role="img" :aria-label="alt">
       <defs>
         <linearGradient :id="`knw-${uid}`" x1="0" y1="0" x2="1" y2="1">
@@ -134,6 +157,8 @@ const overrideClass = computed(() =>
       <circle cx="256" cy="292" r="14" fill="#1d72bd" />
       <circle cx="245" cy="281" r="5" fill="#fff" />
     </svg>
+      <span v-if="envBadge" :class="badgeClass" :style="{ backgroundColor: envBadge.color }">{{ envBadge.label }}</span>
+    </span>
     <span class="flex min-w-0 flex-col">
       <span
         class="font-display font-semibold leading-none tracking-tight"
@@ -147,5 +172,6 @@ const overrideClass = computed(() =>
         style="color: var(--color-muted)"
       >{{ caption }}</span>
     </span>
+  </div>
   </div>
 </template>

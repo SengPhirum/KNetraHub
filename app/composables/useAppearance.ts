@@ -5,9 +5,11 @@ export interface AppearanceSettings {
   logoIconUrl: string
   faviconUrl: string
   pwaIconUrl: string
+  envBadgeColor: string
 }
 
 export const DEFAULT_PRIMARY_COLOR = '#2496ED'
+export const DEFAULT_ENV_BADGE_COLOR = '#DC2626'
 
 function defaults(): AppearanceSettings {
   return {
@@ -16,7 +18,8 @@ function defaults(): AppearanceSettings {
     logoHorizontalUrl: '',
     logoIconUrl: '',
     faviconUrl: '',
-    pwaIconUrl: ''
+    pwaIconUrl: '',
+    envBadgeColor: DEFAULT_ENV_BADGE_COLOR
   }
 }
 
@@ -56,7 +59,8 @@ export function useAppearance() {
       logoHorizontalUrl: data.logoHorizontalUrl,
       logoIconUrl: data.logoIconUrl,
       faviconUrl: data.faviconUrl,
-      pwaIconUrl: data.pwaIconUrl
+      pwaIconUrl: data.pwaIconUrl,
+      envBadgeColor: data.envBadgeColor
     }
     overridden.value = true
     return data

@@ -11,11 +11,13 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `9687c02`
+- Commit: `97e818b`
 - Previous tag: none
 
 ## Changes
 
+- Update (97e818b)
+- feat(ipmgt): scan review dialog with hostnames, labeled address map, visual rack diagrams (91f485c)
 - Update (9687c02)
 - feat(monitoring): hrDevice hardware inventory tab with port links and sparklines (74d6f70)
 - Update (475bbb2)

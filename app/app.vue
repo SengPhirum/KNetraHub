@@ -6,7 +6,8 @@ const config = useRuntimeConfig()
 const staticDocs = config.public.staticDocs
 
 const { appearance, htmlStyle, fetchAppearance } = useAppearance()
-if (!staticDocs) await fetchAppearance()
+const { envMode, fetchEnvMode } = useEnvMode()
+if (!staticDocs) await Promise.all([fetchAppearance(), fetchEnvMode()])
 
 // Docs builds are served under a subpath (e.g. /knetrahub/ on GitHub Pages),
 // so built-in asset hrefs must carry the configured baseURL. In the normal
@@ -25,6 +26,19 @@ function mimeFromDataUrl(url: string): string | undefined {
 // server/utils/appearanceSettings.ts) works directly as a <link> href - no
 // dedicated image-serving route needed, same as the logo overrides.
 const faviconLinks = computed(() => {
+  // Non-production environment mode: favicon + touch icon switch to the
+  // server-composited variants carrying the mode's corner tag ("Dev"/"Test"/
+  // "STG"), so every browser tab and home-screen icon is distinguishable
+  // from production at a glance. See server/routes/env-badged/[file].get.ts.
+  if (!staticDocs && envMode.value.mode !== 'production') {
+    return [
+      { rel: 'icon', href: '/env-badged/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+      { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/env-badged/favicon-32x32.png' },
+      { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/env-badged/favicon-16x16.png' },
+      { rel: 'apple-touch-icon', sizes: '180x180', href: '/env-badged/apple-touch-icon.png' },
+      { rel: 'manifest', href: '/manifest.webmanifest' }
+    ]
+  }
   const favicon = appearance.value.faviconUrl
   const appIcon = appearance.value.pwaIconUrl
   const links: any[] = favicon

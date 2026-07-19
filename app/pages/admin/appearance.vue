@@ -6,6 +6,49 @@ definePageMeta({ middleware: 'admin' })
 const toast = useToast()
 const { appearance, overridden: appearanceOverridden, previewAppearance, saveAppearance, resetAppearance, fetchAppearance } = useAppearance()
 
+// ── Environment mode ──────────────────────────────────────────────────────
+// Fixed via NUXT_ENV_MODE (docker-compose) > admin choice here > auto-detected
+// from the serving domain. Non-production modes tag every logo/icon with a
+// corner badge (Dev / Test / STG).
+const { envMode, saveEnvMode } = useEnvMode()
+const savingEnvMode = ref(false)
+// USelect (Reka UI) forbids an empty-string item value, so the "auto-detect"
+// choice uses an 'auto' sentinel here and is mapped back to '' (clear the
+// stored override) when saved.
+const envModeChoice = ref<string>('auto')
+watch(() => envMode.value.adminMode, (v) => { envModeChoice.value = v || 'auto' }, { immediate: true })
+
+const ENV_MODE_ITEMS = [
+  { value: 'auto', label: 'Auto-detect from domain' },
+  { value: 'production', label: 'Production (no badge)' },
+  { value: 'staging', label: 'Staging - "STG" badge' },
+  { value: 'development', label: 'Development - "Dev" badge' },
+  { value: 'testing', label: 'Testing - "Test" badge' }
+]
+
+const envSourceText = computed(() => {
+  if (envMode.value.locked) return 'Fixed by NUXT_ENV_MODE in the deployment configuration (docker-compose) - remove that variable and redeploy to manage it here.'
+  if (envMode.value.source === 'admin') return 'Set by an administrator on this page.'
+  return 'Auto-detected from the serving domain (staging/stg/sta → Staging, development/dev → Development, testing/test → Testing, anything else → Production).'
+})
+
+const BADGE_PRESET_COLORS = ['#DC2626', '#EA580C', '#D97706', '#CA8A04', '#16A34A', '#0D9488', '#2563EB', '#7C3AED', '#DB2777', '#0F172A']
+
+async function saveEnvModeSetting() {
+  savingEnvMode.value = true
+  try {
+    // Badge color is stored with appearance (it's branding); persist it
+    // alongside the mode so this one Save button covers the whole section.
+    await saveAppearance({ envBadgeColor: appearance.value.envBadgeColor })
+    if (!envMode.value.locked) await saveEnvMode(envModeChoice.value === 'auto' ? '' : (envModeChoice.value as any))
+    toast.add({ title: 'Environment settings saved', description: 'Logo and icon badges update for every user.', color: 'primary', icon: 'i-lucide-check' })
+  } catch (e: any) {
+    toast.add({ title: 'Save failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally {
+    savingEnvMode.value = false
+  }
+}
+
 function sourceLabel(overridden?: boolean) {
   return overridden ? 'DB override' : 'Env default'
 }
@@ -214,6 +257,76 @@ async function resetAppearanceToDefaults() {
             </p>
           </div>
         </div>
+      </section>
+
+      <section class="panel p-5 space-y-4 xl:col-span-2">
+        <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <h3 class="font-display text-sm font-semibold text-foam flex items-center gap-2">
+              <UIcon name="i-lucide-tag" class="size-4 text-beacon" />
+              Environment mode
+            </h3>
+            <p class="mt-1 text-xs text-(--color-muted)">
+              Non-production modes stamp a corner tag across the top-right of the app logo, browser favicon, and installed-app (PWA) icons —
+              <span class="font-semibold">Dev</span>, <span class="font-semibold">Test</span>, or <span class="font-semibold">STG</span> — so nobody mistakes a staging console for production. Production shows no tag.
+            </p>
+          </div>
+          <UBadge
+            :color="envMode.mode === 'production' ? 'neutral' : 'primary'"
+            variant="subtle"
+            :label="`Current: ${envMode.mode}${envMode.locked ? ' (locked)' : envMode.source === 'auto' ? ' (auto)' : ''}`"
+            class="self-start capitalize"
+          />
+        </header>
+
+        <p class="text-xs text-(--color-muted)">
+          <UIcon :name="envMode.locked ? 'i-lucide-lock' : 'i-lucide-info'" class="mr-1 inline size-3.5 align-[-2px]" />{{ envSourceText }}
+        </p>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <UFormField label="Mode" :description="envMode.locked ? 'Managed by the deployment configuration.' : 'Leave on auto-detect unless this deployment needs a fixed mode.'">
+            <USelect v-model="envModeChoice" :items="ENV_MODE_ITEMS" value-key="value" label-key="label" :disabled="envMode.locked" class="w-full sm:w-72" />
+          </UFormField>
+
+          <UFormField label="Badge color" description="Ribbon color for the Dev / Test / STG corner tag. Applies to every non-production mode.">
+            <div class="flex flex-wrap items-center gap-3">
+              <input v-model="appearance.envBadgeColor" type="color" class="size-10 cursor-pointer rounded border border-hull bg-transparent p-0.5">
+              <UInput v-model="appearance.envBadgeColor" class="w-32 font-mono" placeholder="#DC2626" />
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="c in BADGE_PRESET_COLORS"
+                  :key="c"
+                  type="button"
+                  class="size-6 rounded-full ring-1 ring-hull transition hover:scale-110"
+                  :style="{ background: c }"
+                  :aria-label="c"
+                  @click="appearance.envBadgeColor = c"
+                />
+              </div>
+            </div>
+          </UFormField>
+        </div>
+
+        <!-- Live badge preview: the logo carries the current mode + color -->
+        <div class="flex flex-wrap items-center gap-4 rounded-lg border border-hull bg-ink px-4 py-3">
+          <KNetraHubLogo variant="icon" size="lg" />
+          <div class="text-xs text-(--color-muted)">
+            <p class="font-medium text-foam">Badge preview</p>
+            <p>{{ envMode.mode === 'production' ? 'Production — no badge shown.' : `Non-production (${envMode.mode}) — logo, favicon, and PWA icons carry the “${envMode.label}” tag.` }}</p>
+          </div>
+          <UButton
+            class="ml-auto"
+            color="primary"
+            label="Save"
+            icon="i-lucide-save"
+            :loading="savingEnvMode"
+            @click="saveEnvModeSetting"
+          />
+        </div>
+
+        <p class="text-[11px] text-faint">
+          Already-installed PWAs keep their icon until reinstalled — browsers snapshot manifest icons at install time. Tabs and new installs pick the tagged icons up immediately.
+        </p>
       </section>
     </div>
   </div>
