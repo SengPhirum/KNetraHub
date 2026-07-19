@@ -11,11 +11,12 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `74d6f70`
+- Commit: `9687c02`
 - Previous tag: none
 
 ## Changes
 
+- Update (9687c02)
 - feat(monitoring): hrDevice hardware inventory tab with port links and sparklines (74d6f70)
 - Update (475bbb2)
 - feat(admin): System Maintenance page with banner, maintenance mode, and DB backup/restore (d160dc8)
