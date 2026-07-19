@@ -11,11 +11,12 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `081b273`
+- Commit: `face798`
 - Previous tag: none
 
 ## Changes
 
+- Fix dashboard docker show incorrect graph tooltip text (face798)
 - Enhance Docker monitoring and notifications (081b273)
 - Update release (fcfbdf1)
 - Add dynamic modules and isolated databases (48db433)
