@@ -11,12 +11,12 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `fcfbdf1`
+- Commit: `081b273`
 - Previous tag: none
 
 ## Changes
 
-- Enhance Docker dashboard, stack health, and notifications
+- Enhance Docker monitoring and notifications (081b273)
 - Update release (fcfbdf1)
 - Add dynamic modules and isolated databases (48db433)
 - Fix log display (54a4d31)

@@ -182,8 +182,8 @@ export async function computeMetrics(range: string) {
   ])
 
   const serviceNames = new Map(services.map((service: any) => [service.ID, service.Spec?.Name || service.ID]))
-  const serviceReservations = new Map(services.map((service: any) => {
-    const resources = service.Spec?.TaskTemplate?.Resources?.Reservations || {}
+  const serviceLimits = new Map(services.map((service: any) => {
+    const resources = service.Spec?.TaskTemplate?.Resources?.Limits || {}
     const replicas = service.Spec?.Mode?.Replicated?.Replicas
     const desired = typeof replicas === 'number'
       ? replicas
@@ -272,7 +272,7 @@ export async function computeMetrics(range: string) {
     range,
     bucket,
     services: serviceRows.map((row: any) => {
-      const reservation = serviceReservations.get(row.service_id) || { cpuNanos: 0, memoryBytes: 0 }
+      const limit = serviceLimits.get(row.service_id) || { cpuNanos: 0, memoryBytes: 0 }
       const nodeIds = Array.isArray(row.node_ids) ? row.node_ids.filter(Boolean) : []
       const allocated = nodeIds.reduce((total: { cpuNanos: number; memoryBytes: number }, nodeId: string) => {
         const capacity = nodeCapacity.get(nodeId)
@@ -289,8 +289,8 @@ export async function computeMetrics(range: string) {
         cpuPercent: Number(row.cpu_percent || 0),
         memoryUsedBytes: Number(row.memory_used || 0),
         memoryLimitBytes: Number(row.memory_limit || 0),
-        reservedCpuNanos: reservation.cpuNanos,
-        reservedMemoryBytes: reservation.memoryBytes,
+        limitCpuNanos: limit.cpuNanos,
+        limitMemoryBytes: limit.memoryBytes,
         nodeCpuNanos: allocated.cpuNanos,
         nodeMemoryBytes: allocated.memoryBytes
       }

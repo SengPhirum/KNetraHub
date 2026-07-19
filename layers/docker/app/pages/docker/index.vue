@@ -82,12 +82,12 @@ const memoryByService = computed(() =>
   buildUsageChart(serviceMetrics.value, 'serviceId', 'serviceName', 'memoryUsedBytes', {
     transform: (value) => value / 1024 / 1024,
     tooltip: (value, row) => {
-      const reserved = Number(row.reservedMemoryBytes || 0)
-      const allocated = reserved || Number(row.nodeMemoryBytes || row.memoryLimitBytes || 0)
-      const basis = reserved ? 'reserved' : 'node memory allocated'
+      const limit = Number(row.limitMemoryBytes || 0)
+      const allocated = limit || Number(row.nodeMemoryBytes || row.memoryLimitBytes || 0)
+      const basis = limit ? '( Resource Limit )' : '(Node allocated)'
       return allocated
         ? `${formatMiB(value)} / ${formatMiB(allocated / 1024 / 1024)} ${basis}`
-        : `${formatMiB(value)} / node memory allocated unavailable`
+        : `${formatMiB(value)} / unavailable (Node allocated)`
     }
   })
 )
@@ -95,12 +95,12 @@ const cpuByService = computed(() =>
   buildUsageChart(serviceMetrics.value, 'serviceId', 'serviceName', 'cpuPercent', {
     transform: (value) => value / 100,
     tooltip: (value, row) => {
-      const reserved = Number(row.reservedCpuNanos || 0)
-      const allocated = reserved || Number(row.nodeCpuNanos || 0)
-      const basis = reserved ? 'reserved' : 'node CPU allocated'
+      const limit = Number(row.limitCpuNanos || 0)
+      const allocated = limit || Number(row.nodeCpuNanos || 0)
+      const basis = limit ? '( Resource Limit )' : '( Node allocated )'
       return allocated
         ? `${formatVcpu(value)} vCPU / ${formatVcpu(allocated / 1e9)} vCPU ${basis}`
-        : `${formatVcpu(value)} vCPU / node CPU allocated unavailable`
+        : `${formatVcpu(value)} vCPU / unavailable ( Node allocated )`
     }
   })
 )
@@ -108,16 +108,16 @@ const memoryByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId',
   tooltip: (value, row) => {
     const allocated = Number(row.nodeMemoryBytes || row.memoryLimitBytes || 0)
     return allocated
-      ? `${formatPercent(value)} of ${compactBytes(allocated)} node memory allocated`
-      : `${formatPercent(value)} of node memory allocated`
+      ? `${formatPercent(value)} of ${compactBytes(allocated)}`
+      : formatPercent(value)
   }
 }))
 const cpuByNode = computed(() => buildUsageChart(nodeMetrics.value, 'nodeId', 'hostname', 'cpuPercent', {
   tooltip: (value, row) => {
     const allocated = Number(row.nodeCpuNanos || 0)
     return allocated
-      ? `${formatPercent(value)} of ${formatVcpu(allocated / 1e9)} vCPU node CPU allocated`
-      : `${formatPercent(value)} of node CPU allocated`
+      ? `${formatPercent(value)} of ${formatVcpu(allocated / 1e9)} vCPU`
+      : formatPercent(value)
   }
 }))
 
