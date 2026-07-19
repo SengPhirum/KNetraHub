@@ -65,21 +65,29 @@ async function confirmDelete(password: string) {
         <UButton v-if="canCreate" class="mt-3" icon="i-lucide-plus" size="sm" @click="openCreate">Add Rack</UButton>
       </template>
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <div v-for="r in racks" :key="r.id" class="panel space-y-3 p-5">
-          <div class="flex items-start justify-between">
-            <div>
-              <NuxtLink :to="`/ipmgt/racks/${r.id}`" class="font-medium text-foam hover:text-beacon">{{ r.name }}</NuxtLink>
-              <p class="text-xs text-faint">{{ r.location_name || 'No location' }}<span v-if="r.room"> · {{ r.room }}</span></p>
+        <div v-for="r in racks" :key="r.id" class="panel flex gap-4 p-5">
+          <NuxtLink :to="`/ipmgt/racks/${r.id}`" :title="`Open ${r.name} elevation`" class="transition hover:brightness-125">
+            <IpamRackMiniDiagram :rack="r" />
+          </NuxtLink>
+          <div class="min-w-0 flex-1 space-y-3">
+            <div class="flex items-start justify-between">
+              <div class="min-w-0">
+                <NuxtLink :to="`/ipmgt/racks/${r.id}`" class="font-medium text-foam hover:text-beacon">{{ r.name }}</NuxtLink>
+                <p class="text-xs text-faint">{{ r.location_name || 'No location' }}<span v-if="r.room"> · {{ r.room }}</span></p>
+              </div>
+              <div class="flex items-center gap-1">
+                <UButton v-if="canUpdate" size="xs" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="openEdit(r)" />
+                <UButton v-if="canDelete" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete" @click="deleteTarget = r" />
+              </div>
             </div>
-            <div class="flex items-center gap-1">
-              <UButton v-if="canUpdate" size="xs" variant="ghost" icon="i-lucide-pencil" aria-label="Edit" @click="openEdit(r)" />
-              <UButton v-if="canDelete" size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" aria-label="Delete" @click="deleteTarget = r" />
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+              <div class="h-full rounded-full" :class="usageBarClass(Math.round((r.used_u / r.size_u) * 100))" :style="{ width: `${Math.min(100, Math.round((r.used_u / r.size_u) * 100))}%` }" />
             </div>
+            <p class="text-xs text-faint">{{ r.used_u }}/{{ r.size_u }}U used · {{ r.item_count }} item(s)</p>
+            <NuxtLink :to="`/ipmgt/racks/${r.id}`" class="inline-flex items-center gap-1 text-xs text-beacon hover:underline">
+              <UIcon name="i-lucide-layout-panel-top" class="size-3.5" /> View rack diagram
+            </NuxtLink>
           </div>
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-            <div class="h-full rounded-full" :class="usageBarClass(Math.round((r.used_u / r.size_u) * 100))" :style="{ width: `${Math.min(100, Math.round((r.used_u / r.size_u) * 100))}%` }" />
-          </div>
-          <p class="text-xs text-faint">{{ r.used_u }}/{{ r.size_u }}U used · {{ r.item_count }} item(s)</p>
         </div>
       </div>
     </DataState>

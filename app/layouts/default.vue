@@ -41,7 +41,9 @@ let sysMaintTimer: ReturnType<typeof setInterval> | null = null
 watch(user, (u) => {
   if (u) {
     fetchSysMaint()
-    if (!sysMaintTimer) sysMaintTimer = setInterval(fetchSysMaint, 60_000)
+    // Poll only in the browser: this watcher also fires during SSR (immediate
+    // + user already hydrated), where an interval must never be scheduled.
+    if (import.meta.client && !sysMaintTimer) sysMaintTimer = setInterval(fetchSysMaint, 60_000)
   } else if (sysMaintTimer) {
     clearInterval(sysMaintTimer)
     sysMaintTimer = null

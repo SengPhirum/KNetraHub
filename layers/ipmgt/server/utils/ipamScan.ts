@@ -1,4 +1,5 @@
 import ping from 'ping'
+import { promises as dnsPromises } from 'node:dns'
 import { nanoid } from 'nanoid'
 import { getDb } from '~~/server/utils/db'
 import { canonicalizeIp, enumerateHosts } from '~~/layers/ipmgt/server/utils/ipam'
@@ -37,20 +38,44 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) =>
   return results
 }
 
+/** Reverse-DNS (PTR) lookup with a hard timeout; null when unresolvable. */
+export async function resolveHostname(ip: string, timeoutMs = 2000): Promise<string | null> {
+  try {
+    const names = await Promise.race([
+      dnsPromises.reverse(ip),
+      new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+    ])
+    return names?.[0] || null
+  } catch {
+    return null
+  }
+}
+
+export interface DiscoveredHost {
+  ip: string
+  hostname: string | null
+  rttMs: number | null
+}
+
 export interface ScanReport {
   hostsScanned: number
   hostsUp: number
   newHosts: number
+  /** Present in 'report' mode: alive-but-unknown hosts awaiting user confirmation. */
+  discovered?: DiscoveredHost[]
 }
 
 /**
  * Scan one subnet: refresh last_seen/last_scanned on every existing address
  * (if ping_enabled), and - if scan_enabled - additionally probe not-yet-known
- * addresses in the subnet's usable range (capped, like the visual grid) and
- * record any that respond as new 'used' addresses. Logged to
- * ipmgt_scan_history for the Scans page.
+ * addresses in the subnet's usable range (capped, like the visual grid).
+ * Responding unknown hosts get a reverse-DNS hostname lookup, then either:
+ *  - discoverMode 'auto-add' (scheduled scans): recorded as new 'used' addresses;
+ *  - discoverMode 'report' (manual scans): returned in `report.discovered` for
+ *    the user to review/edit and confirm before anything is saved.
+ * Logged to ipmgt_scan_history for the Scans page either way.
  */
-export async function scanSubnet(subnet: SubnetRow, opts: { concurrency: number; pingTimeoutSeconds: number; trigger: 'manual' | 'scheduled'; actor?: string }): Promise<ScanReport> {
+export async function scanSubnet(subnet: SubnetRow, opts: { concurrency: number; pingTimeoutSeconds: number; trigger: 'manual' | 'scheduled'; actor?: string; discoverMode?: 'auto-add' | 'report' }): Promise<ScanReport> {
   const db = getDb()
   const historyId = nanoid()
   const startedAt = new Date().toISOString()
@@ -59,7 +84,9 @@ export async function scanSubnet(subnet: SubnetRow, opts: { concurrency: number;
     [historyId, subnet.id, opts.trigger, startedAt, opts.actor || null]
   )
 
+  const discoverMode = opts.discoverMode || 'auto-add'
   const report: ScanReport = { hostsScanned: 0, hostsUp: 0, newHosts: 0 }
+  if (discoverMode === 'report') report.discovered = []
   try {
     const { rows: existingRows } = await db.query('SELECT id, ip FROM ipmgt_ips WHERE subnet_id = $1', [subnet.id])
     const existingByIp = new Map<string, string>()
@@ -88,14 +115,20 @@ export async function scanSubnet(subnet: SubnetRow, opts: { concurrency: number;
         if (result.alive) {
           report.hostsUp++
           report.newHosts++
-          const now = new Date().toISOString()
-          await db.query(
-            `INSERT INTO ipmgt_ips (id, subnet_id, ip, status, state, note, last_seen, last_scanned, created_at, created_by)
-             VALUES ($1,$2,$3,'used','used','Auto-discovered by scan',$4,$4,$4,'scanner')`,
-            [nanoid(), subnet.id, cell.ip, now]
-          )
+          const hostname = await resolveHostname(cell.ip)
+          if (discoverMode === 'report') {
+            report.discovered!.push({ ip: cell.ip, hostname, rttMs: result.rttMs })
+          } else {
+            const now = new Date().toISOString()
+            await db.query(
+              `INSERT INTO ipmgt_ips (id, subnet_id, ip, hostname, status, state, note, last_seen, last_scanned, created_at, created_by)
+               VALUES ($1,$2,$3,$4,'used','used','Auto-discovered by scan',$5,$5,$5,'scanner')`,
+              [nanoid(), subnet.id, cell.ip, hostname, now]
+            )
+          }
         }
       })
+      report.discovered?.sort((a, b) => a.ip.localeCompare(b.ip, undefined, { numeric: true }))
     }
 
     await db.query(

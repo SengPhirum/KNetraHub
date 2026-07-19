@@ -12,13 +12,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: `Subnet ${subnet.network} has neither ping nor discovery scanning enabled` })
   }
 
+  // Manual scans report discovered hosts back (with reverse-DNS hostnames)
+  // instead of auto-saving them - the user confirms via add-discovered.
   const cfg = useRuntimeConfig().ipmgt as { scanConcurrency: number; pingTimeoutSeconds: number }
   const report = await scanSubnet(subnet, {
     concurrency: cfg.scanConcurrency || 16,
     pingTimeoutSeconds: cfg.pingTimeoutSeconds || 2,
     trigger: 'manual',
-    actor: user.username
+    actor: user.username,
+    discoverMode: 'report'
   })
-  await ipamAudit(user, 'ipmgt.subnet.scan', id, { network: subnet.network, ...report })
+  const { discovered, ...stats } = report
+  await ipamAudit(user, 'ipmgt.subnet.scan', id, { network: subnet.network, ...stats })
   return report
 })

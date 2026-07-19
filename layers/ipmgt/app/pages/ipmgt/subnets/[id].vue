@@ -60,17 +60,45 @@ async function reserveFirstFree() {
 }
 
 // ── Scanning ─────────────────────────────────────────────────────────────
+// Manual scans open a dialog: the scan reports discovered hosts (with
+// reverse-DNS hostnames) and nothing is saved until the user reviews the
+// list - editable hostname/description, removable rows - and confirms.
 const scanning = ref(false)
+const scanDialog = reactive({
+  open: false,
+  report: null as any,
+  hosts: [] as { ip: string; hostname: string; description: string; rttMs: number | null }[]
+})
+const addingHosts = ref(false)
 const { data: scanHistory, refresh: refreshScans } = useAsyncData(
   'ipamSubnetScans', () => $fetch<any[]>('/api/ipmgt/scans', { query: { subnet_id: id.value, limit: 5 } }), { server: false, default: () => [], watch: [id] })
 async function runScan() {
   scanning.value = true
+  scanDialog.report = null
+  scanDialog.hosts = []
+  scanDialog.open = true
   try {
     const report = await $fetch<any>(`/api/ipmgt/subnets/${id.value}/scan`, { method: 'POST' })
-    toast.add({ title: `Scan complete: ${report.hostsUp}/${report.hostsScanned} up, ${report.newHosts} new`, color: 'primary', icon: 'i-lucide-check' })
+    scanDialog.report = report
+    scanDialog.hosts = (report.discovered || []).map((d: any) => ({ ip: d.ip, hostname: d.hostname || '', description: '', rttMs: d.rttMs }))
     await Promise.all([refreshAll(), refreshScans()])
-  } catch (e: any) { toast.add({ title: 'Scan failed', description: e?.data?.statusMessage, color: 'error' }) }
-  finally { scanning.value = false }
+  } catch (e: any) {
+    scanDialog.open = false
+    toast.add({ title: 'Scan failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { scanning.value = false }
+}
+function removeDiscovered(ip: string) { scanDialog.hosts = scanDialog.hosts.filter((h) => h.ip !== ip) }
+async function addDiscoveredHosts() {
+  if (!scanDialog.hosts.length) return
+  addingHosts.value = true
+  try {
+    const res = await $fetch<any>(`/api/ipmgt/subnets/${id.value}/add-discovered`, { method: 'POST', body: { hosts: scanDialog.hosts } })
+    const skippedNote = res.skipped?.length ? `, ${res.skipped.length} skipped` : ''
+    toast.add({ title: `Added ${res.added} discovered host(s)${skippedNote}`, color: 'primary', icon: 'i-lucide-check' })
+    scanDialog.open = false
+    await refreshAll()
+  } catch (e: any) { toast.add({ title: 'Save failed', description: e?.data?.statusMessage, color: 'error' }) }
+  finally { addingHosts.value = false }
 }
 
 // ── Release address ─────────────────────────────────────────────────────────
@@ -96,6 +124,12 @@ async function deleteSubnet(password: string) {
   await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
   toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
   await navigateTo('/ipmgt/subnets')
+}
+
+/** Short per-cell label for the address map: last octet for v4 ('.191'), last hextet for v6. */
+function cellLabel(ip: string): string {
+  if (ip.includes(':')) { const g = ip.split(':').pop(); return g ? `:${g}` : '::' }
+  return `.${ip.split('.').pop()}`
 }
 
 const facts = computed(() => {
@@ -206,10 +240,10 @@ const facts = computed(() => {
           <p v-if="grid?.truncated" class="mb-2 text-xs text-amber-400">Showing first {{ grid.gridLimit }} of {{ grid.total }} addresses.</p>
           <div class="flex flex-wrap gap-1">
             <button v-for="c in visibleCells" :key="c.ip"
-                    class="group relative size-6 rounded-sm text-[0px] transition hover:ring-2 hover:ring-beacon"
+                    class="group relative flex h-6 min-w-10 items-center justify-center rounded-sm px-1 font-mono text-[10px] leading-none transition hover:ring-2 hover:ring-beacon"
                     :class="statusMeta(c.status).swatch"
                     :title="`${c.ip}${c.record?.hostname ? ' · ' + c.record.hostname : ''} (${statusMeta(c.status).label})`"
-                    @click="onCellClick(c)">{{ c.ip }}</button>
+                    @click="onCellClick(c)">{{ cellLabel(c.ip) }}</button>
           </div>
         </section>
 
@@ -252,6 +286,64 @@ const facts = computed(() => {
 
     <IpamAddressFormModal v-model:open="addrOpen" :address="editingAddr" :subnet-id="id" :preset-ip="presetIp" @saved="refreshAll" />
     <IpamSubnetFormModal v-model:open="subnetFormOpen" :subnet="subnet" @saved="refreshAll" />
+
+    <!-- Scan results: review discovered hosts before saving -->
+    <UModal v-model:open="scanDialog.open" title="Scan subnet" :ui="{ content: 'max-w-2xl' }" :dismissible="!scanning">
+      <template #body>
+        <div class="space-y-4">
+          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+            <dt class="text-faint">Subnet</dt>
+            <dd class="font-mono text-foam">{{ subnet?.network }}<span v-if="subnet?.name" class="ml-1 font-sans text-(--color-muted)">({{ subnet.name }})</span></dd>
+            <dt class="text-faint">Scan type</dt>
+            <dd class="text-(--color-muted)">Discovery scan: ping</dd>
+          </dl>
+
+          <div v-if="scanning" class="flex items-center gap-2 py-6 text-sm text-(--color-muted)">
+            <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" /> Scanning {{ subnet?.network }}…
+          </div>
+
+          <template v-else-if="scanDialog.report">
+            <p class="text-xs text-faint">{{ scanDialog.report.hostsScanned }} scanned · {{ scanDialog.report.hostsUp }} up · {{ scanDialog.report.newHosts }} new</p>
+
+            <div v-if="scanDialog.hosts.length">
+              <p class="mb-2 text-sm font-medium text-foam">Scan results:</p>
+              <table class="w-full text-left text-sm">
+                <thead class="bg-surface-2 text-xs uppercase text-faint">
+                  <tr>
+                    <th class="px-3 py-2 font-medium">IP</th>
+                    <th class="px-3 py-2 font-medium">Description</th>
+                    <th class="px-3 py-2 font-medium">Hostname</th>
+                    <th class="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-surface">
+                  <tr v-for="h in scanDialog.hosts" :key="h.ip">
+                    <td class="px-3 py-2 font-mono text-foam">{{ h.ip }}</td>
+                    <td class="px-3 py-2"><UInput v-model="h.description" size="xs" placeholder="Description" class="w-full" /></td>
+                    <td class="px-3 py-2"><UInput v-model="h.hostname" size="xs" placeholder="Hostname" class="w-full" /></td>
+                    <td class="px-3 py-2 text-right">
+                      <UButton size="xs" variant="ghost" color="error" icon="i-lucide-x" aria-label="Discard host" @click="removeDiscovered(h.ip)" />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="py-2 text-sm text-faint">No new hosts discovered. Existing addresses had their status refreshed.</p>
+          </template>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex w-full items-center justify-between gap-3">
+          <span class="text-xs text-faint">Scan method: ping</span>
+          <div class="flex gap-3">
+            <UButton variant="ghost" :disabled="scanning" @click="scanDialog.open = false">{{ scanDialog.hosts.length ? 'Cancel' : 'Close' }}</UButton>
+            <UButton v-if="canCreate && scanDialog.hosts.length" color="primary" icon="i-lucide-plus" :loading="addingHosts" @click="addDiscoveredHosts">
+              Add {{ scanDialog.hosts.length }} discovered host(s)
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
 
     <UModal :open="!!releaseTarget" @update:open="(v: boolean) => { if (!v) releaseTarget = null }" title="Release address">
       <template #body>

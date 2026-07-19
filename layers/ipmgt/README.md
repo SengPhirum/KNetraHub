@@ -9,17 +9,21 @@ conventions, and security model.
 ## Feature summary
 
 **Address space** — Sections (nested), Subnets (IPv4 + IPv6, nested, overlap-checked per
-VRF), IP Addresses (with full change history), visual per-subnet address grid, subnet
-calculator/splitter with reverse-DNS zone display.
+VRF), IP Addresses (with full change history), visual per-subnet address grid (each cell
+labeled with its last octet, phpIPAM-style), subnet calculator/splitter with reverse-DNS zone
+display.
 
 **Network resources** — VLANs + Layer-2 domains, VRFs, Devices (with encrypted SNMP
-credentials), Locations, Customers, Racks (clickable per-U elevation, front/rear, overlap and
-bounds-validated placement), Circuits + providers (two-endpoint mapping, expiry tracking), NAT
-rule bindings.
+credentials), Locations, Customers, Racks (visual front/rear elevation diagrams with U-number
+rails, mini per-card previews, overlap and bounds-validated placement — see
+[Using racks](#using-racks)), Circuits + providers (two-endpoint mapping, expiry tracking),
+NAT rule bindings.
 
 **Discovery** — scheduled host-status scanning and new-host discovery (ICMP) per subnet, plus
-a manual "Run scan now" action; real SNMP (v1/v2c/v3) system-info test and ARP-table discovery
-per device; full scan-run history.
+a manual "Run scan" action that resolves reverse-DNS hostnames and presents discovered hosts
+in a review dialog (editable hostname/description per host) — nothing is saved until the
+operator confirms "Add discovered hosts"; scheduled scans auto-add. Real SNMP (v1/v2c/v3)
+system-info test and ARP-table discovery per device; full scan-run history.
 
 **Operations** — IP request/approval workflow (concurrency-safe first-free allocation under a
 per-subnet advisory lock); bulk JSON/CSV import and export for every major entity; global
@@ -28,6 +32,36 @@ and is audited); admin-defined custom fields on any major entity type.
 
 **Administration** — module settings, per-user activity/system logs (shared portal
 infrastructure), REST API documented in the portal's OpenAPI spec (`/api/swagger/openapi`).
+
+## Using racks
+
+Racks live under **Network resources → Racks**. Each rack card shows a to-scale miniature of
+the front face; click the card (or "View rack diagram") to open the rack detail page, which
+renders the **[F] front and [R] rear elevations side by side** with U numbers on both rails,
+next to a facts panel listing everything placed in the rack.
+
+**Creating a rack** — "Add Rack" on the list page. Size (U), starting unit, and numbering
+orientation (top-down vs bottom-up) control how the elevation is drawn; location/room/row are
+informational.
+
+**Adding equipment** (operator tier, `ipmgt.create`):
+
+- **Add device** — places a unit linked to a device from the Devices inventory (the link is
+  optional and can be changed later; linked devices show their hostname on the elevation).
+- **Add custom equipment** — anything that isn't an inventory device: patch panel, PDU,
+  shelf, chassis, blank panel, or "other". Same dialog, no device link.
+- Both buttons preselect the first free U on the front face; alternatively **click any empty
+  slot** in either elevation to place equipment at that exact U and side.
+- The dialog fields: name (required), type, linked device, position U, height in U (multi-U
+  items span down the elevation), side (front/rear — the two faces are independent), display
+  color, and notes.
+- Placement is validated server-side: items must fit inside the rack's U range and may not
+  overlap another item on the same face (HTTP 409 with the conflicting item's name/position).
+
+**Editing / removing** — click a placed item in the elevation (or its row in the facts
+panel's Devices list) to reopen the dialog; change any field to move/resize/recolor it, or
+"Remove" to unplace it. Removing an item never deletes the linked device itself. Deleting a
+whole rack requires admin tier plus password re-confirmation and removes its placements.
 
 ## Architecture notes
 
