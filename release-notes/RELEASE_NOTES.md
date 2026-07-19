@@ -11,11 +11,12 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `97e818b`
+- Commit: `98edb38`
 - Previous tag: none
 
 ## Changes
 
+- Add environment badges and release workflow (98edb38)
 - Update (97e818b)
 - feat(ipmgt): scan review dialog with hostnames, labeled address map, visual rack diagrams (91f485c)
 - Update (9687c02)

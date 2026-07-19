@@ -1547,7 +1547,7 @@ watch(activeSection, (val) => {
             <UIcon name="i-lucide-menu" class="size-4" />
           </button>
           <NuxtLink to="/" class="flex items-center gap-2 shrink-0 group">
-            <KNetraHubLogo variant="icon" class="size-7 transition-opacity group-hover:opacity-80 drop-shadow-[0_4px_12px_rgba(36,150,237,0.3)]" />
+            <KNetraHubLogo variant="icon" size="sm" class="size-8 transition-opacity group-hover:opacity-80 drop-shadow-[0_4px_12px_rgba(36,150,237,0.3)]" />
             <span class="font-display text-sm font-bold text-foam hidden sm:inline">KNetraHub</span>
           </NuxtLink>
           <UIcon name="i-lucide-chevron-right" class="size-3.5 text-faint hidden sm:block shrink-0" />
