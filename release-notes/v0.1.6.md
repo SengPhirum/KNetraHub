@@ -11,11 +11,13 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `d160dc8`
+- Commit: `74d6f70`
 - Previous tag: none
 
 ## Changes
 
+- feat(monitoring): hrDevice hardware inventory tab with port links and sparklines (74d6f70)
+- Update (475bbb2)
 - feat(admin): System Maintenance page with banner, maintenance mode, and DB backup/restore (d160dc8)
 - fix(monitoring): coerce pg string numerics before toFixed on device page (87f1fa3)
 - feat(monitoring): LibreNMS-style device page, device types, sensor collection fix (2b73598)
