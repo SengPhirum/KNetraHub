@@ -1,5 +1,5 @@
 import ping from 'ping'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { parseIPv4Cidr, enumerateIPv4Hosts } from '../utils/cidr'
 
 /**

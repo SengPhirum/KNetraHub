@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Create a VLAN. VLAN id must be 1-4094 and unique within its L2 domain (the

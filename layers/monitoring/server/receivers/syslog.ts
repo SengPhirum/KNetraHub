@@ -1,6 +1,6 @@
 import dgram from 'node:dgram'
 import net from 'node:net'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { parseSyslog, type ParsedSyslog } from './syslogParser'
 
 /**
@@ -70,6 +70,7 @@ async function ingest(raw: string, sourceIp: string): Promise<void> {
 }
 
 export function startSyslogReceiver(): void {
+  if (udpServer || tcpServer) return
   const rc = useRuntimeConfig().monitoring as Record<string, any>
   if (!rc.syslogEnabled) return
   const port = Number(rc.syslogPort ?? 1514)

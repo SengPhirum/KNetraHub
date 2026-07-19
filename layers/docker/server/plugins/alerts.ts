@@ -1,5 +1,5 @@
 import { useDocker } from '~~/layers/docker/server/utils/docker'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb, isModuleEnabled } from '~~/server/utils/moduleDb'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
 import { fireAlert } from '~~/server/utils/alertNotify'
@@ -37,6 +37,7 @@ let firstPoll = true
 async function pollAlerts() {
   const cfg = useRuntimeConfig().alerts
   try {
+    if (!(await isModuleEnabled('docker'))) return
     const seenKeys = new Set<string>()
     await Promise.allSettled([
       checkUsageThreshold(seenKeys),

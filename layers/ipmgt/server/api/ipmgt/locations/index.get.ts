@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // List locations with parent name and counts of what's assigned to each.

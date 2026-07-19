@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { getDb } from './db'
+import { getDockerDb } from './moduleDb'
 
 export interface ContainerSample {
   id: string
@@ -30,7 +30,7 @@ export interface AgentReportForMetrics {
   containers: { running: number; sampled: number; list?: ContainerSample[] }
 }
 
-let _metricsMigrated: Promise<void> | null = null
+const migratedPools = new WeakMap<Pool, Promise<void>>()
 
 /** Hypertable DDL + retention policies. Memoized like db.ts's migrate() so
  * it's safe to call from multiple Nitro plugins regardless of load order,
@@ -40,13 +40,15 @@ let _metricsMigrated: Promise<void> | null = null
  * caller racing a still-booting Postgres (Timescale's first-ever boot can
  * take 10-30s) would permanently wedge metrics, even after Postgres recovers. */
 export async function migrateMetrics(db: Pool, retentionDays: number): Promise<void> {
-  if (!_metricsMigrated) {
-    _metricsMigrated = runMetricsMigrations(db, retentionDays).catch((err) => {
-      _metricsMigrated = null
+  let pending = migratedPools.get(db)
+  if (!pending) {
+    pending = runMetricsMigrations(db, retentionDays).catch((err) => {
+      migratedPools.delete(db)
       throw err
     })
+    migratedPools.set(db, pending)
   }
-  return _metricsMigrated
+  return pending
 }
 
 async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<void> {
@@ -198,7 +200,7 @@ async function runMetricsMigrations(db: Pool, retentionDays: number): Promise<vo
  * /api/agent/report or the live in-memory dashboard (agentReports.ts). */
 export async function recordMetrics(report: AgentReportForMetrics): Promise<void> {
   try {
-    const db = getDb()
+    const db = getDockerDb()
     // Defensive: Nitro doesn't await plugins before it starts accepting
     // requests, so the knetrahub-agent's first reports after a fresh deploy
     // can otherwise land here before server/plugins/db.ts's migrateMetrics()
@@ -272,7 +274,7 @@ export async function recordServiceStatusEvent(evt: {
   message?: string
 }): Promise<void> {
   try {
-    const db = getDb()
+    const db = getDockerDb()
     await migrateMetrics(db, useRuntimeConfig().metrics.retentionDays)
     await db.query(
       `INSERT INTO service_status_events (time, service_id, service_name, task_id, node_id, status, message)

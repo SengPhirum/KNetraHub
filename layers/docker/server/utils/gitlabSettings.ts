@@ -1,4 +1,4 @@
-import { getAppSetting, setAppSetting, deleteAppSetting } from '~~/server/utils/store'
+import { getModuleSetting, setModuleSetting, deleteModuleSetting } from '~~/server/utils/moduleSettings'
 import { encryptSecret, decryptSecret } from '~~/server/utils/secretCrypto'
 
 /**
@@ -32,7 +32,7 @@ function envGitlab(): GitlabSettings {
 }
 
 async function readOverride(): Promise<Partial<GitlabSettings> | null> {
-  const raw = await getAppSetting(KEY)
+  const raw = await getModuleSetting('docker', KEY)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Partial<GitlabSettings>
@@ -50,7 +50,7 @@ export async function getGitlabSettings(): Promise<GitlabSettings> {
 }
 
 export async function hasGitlabOverride(): Promise<boolean> {
-  return (await getAppSetting(KEY)) !== null
+  return (await getModuleSetting('docker', KEY)) !== null
 }
 
 /** Persist a partial update; a blank token in the patch keeps the current value. */
@@ -59,10 +59,10 @@ export async function saveGitlabSettings(patch: Partial<GitlabSettings>, actor: 
   const next = { ...current, ...patch }
   if (!patch.token) next.token = current.token
   const stored = { ...next, token: next.token ? encryptSecret(next.token) : '' }
-  await setAppSetting(KEY, JSON.stringify(stored), actor)
+  await setModuleSetting('docker', KEY, JSON.stringify(stored), actor)
   return next
 }
 
 export async function resetGitlabSettings(): Promise<void> {
-  await deleteAppSetting(KEY)
+  await deleteModuleSetting('docker', KEY)
 }

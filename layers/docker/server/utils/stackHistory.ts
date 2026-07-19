@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 import { gitlabEnabled, stackHistory as gitlabStackHistory, stackFileAtCommit, commitStackFile } from '~~/layers/docker/server/utils/gitlab'
 
 /**

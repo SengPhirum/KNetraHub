@@ -48,6 +48,8 @@ async function save(part: 'banner' | 'maintenance') {
 // ── Backup & Restore ──
 const backups = ref<any[]>([])
 const backupLog = ref<any[]>([])
+const backupTargets = ref<Array<{ key: string; label: string; database: string; enabled: boolean }>>([])
+const selectedTarget = ref('portal')
 const backupsLoading = ref(false)
 const creating = ref(false)
 const restoring = ref(false)
@@ -59,7 +61,14 @@ const dragOver = ref(false)
 
 const confirmOpen = ref(false)
 // What the confirm modal will restore: an uploaded file or an existing backup.
-const confirmTarget = ref<{ kind: 'upload'; file: File } | { kind: 'existing'; name: string } | null>(null)
+const confirmTarget = ref<
+  { kind: 'upload'; file: File; target: string }
+  | { kind: 'existing'; name: string; target: string }
+  | null
+>(null)
+
+const visibleBackups = computed(() => backups.value.filter((backup) => backup.target === selectedTarget.value))
+const currentDatabase = computed(() => backupTargets.value.find((target) => target.key === selectedTarget.value))
 
 async function loadBackups() {
   backupsLoading.value = true
@@ -67,6 +76,8 @@ async function loadBackups() {
     const res = await $fetch<any>('/api/system/backups')
     backups.value = res.backups ?? []
     backupLog.value = res.log ?? []
+    backupTargets.value = res.targets ?? []
+    if (!backupTargets.value.some((target) => target.key === selectedTarget.value)) selectedTarget.value = 'portal'
   } catch (e: any) {
     toast.add({ title: 'Failed to load backups', description: e?.data?.statusMessage, color: 'error' })
   } finally { backupsLoading.value = false }
@@ -75,7 +86,7 @@ async function loadBackups() {
 async function createBackup() {
   creating.value = true
   try {
-    const res = await $fetch<any>('/api/system/backups', { method: 'POST' })
+    const res = await $fetch<any>('/api/system/backups', { method: 'POST', body: { target: selectedTarget.value } })
     toast.add({ title: 'Backup created', description: res.created?.name, color: 'primary', icon: 'i-lucide-check' })
     await loadBackups()
   } catch (e: any) {
@@ -115,11 +126,11 @@ function setUpload(file: File | null) {
 
 function askRestoreUpload() {
   if (!uploadFile.value) return
-  confirmTarget.value = { kind: 'upload', file: uploadFile.value }
+  confirmTarget.value = { kind: 'upload', file: uploadFile.value, target: selectedTarget.value }
   confirmOpen.value = true
 }
-function askRestoreExisting(name: string) {
-  confirmTarget.value = { kind: 'existing', name }
+function askRestoreExisting(name: string, target: string) {
+  confirmTarget.value = { kind: 'existing', name, target }
   confirmOpen.value = true
 }
 
@@ -131,11 +142,12 @@ async function confirmRestore() {
     if (target.kind === 'upload') {
       const fd = new FormData()
       fd.append('file', target.file)
+      fd.append('target', target.target)
       await $fetch('/api/system/backups/restore', { method: 'POST', body: fd })
     } else {
-      await $fetch('/api/system/backups/restore', { method: 'POST', body: { name: target.name } })
+      await $fetch('/api/system/backups/restore', { method: 'POST', body: { name: target.name, target: target.target } })
     }
-    toast.add({ title: 'Restore complete', description: 'Database restored — reload the app.', color: 'primary', icon: 'i-lucide-check-check' })
+    toast.add({ title: 'Restore complete', description: `${currentDatabase.value?.label || target.target} database restored.`, color: 'primary', icon: 'i-lucide-check-check' })
     uploadFile.value = null
     confirmOpen.value = false
     await loadBackups()
@@ -219,12 +231,38 @@ function fmtBytes(n?: number | string | null): string {
         disruptive — consider enabling Maintenance Mode first.
       </p>
 
+      <div class="panel p-4">
+        <div class="mb-3 flex items-start gap-3">
+          <UIcon name="i-lucide-database-zap" class="mt-0.5 size-5 shrink-0 text-beacon" />
+          <div>
+            <h2 class="font-semibold text-foam">Select an isolated database</h2>
+            <p class="text-xs text-muted">Every backup and restore operation affects only the selected portal or module database.</p>
+          </div>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <button
+            v-for="target in backupTargets"
+            :key="target.key"
+            type="button"
+            class="rounded-lg border p-3 text-left transition"
+            :class="selectedTarget === target.key ? 'border-beacon bg-beacon/10' : 'border-hull bg-surface-2/40 hover:border-beacon/40'"
+            @click="selectedTarget = target.key; uploadFile = null"
+          >
+            <span class="flex items-center gap-2 text-sm font-semibold text-foam">
+              {{ target.label }}
+              <UBadge v-if="!target.enabled" class="ml-auto" color="neutral" variant="subtle" size="sm" label="Disabled" />
+            </span>
+            <span class="mt-1 block truncate font-mono text-xs text-faint">{{ target.database }}</span>
+          </button>
+        </div>
+      </div>
+
       <div class="panel overflow-hidden">
         <div class="flex items-center gap-3 border-b border-hull bg-surface-2 px-4 py-3">
           <UIcon name="i-lucide-database" class="h-5 w-5 text-muted" />
           <div>
-            <h2 class="font-semibold leading-tight">Database</h2>
-            <p class="text-xs text-muted">PostgreSQL dump via pg_dump / pg_restore — covers all portal and monitoring data</p>
+            <h2 class="font-semibold leading-tight">{{ currentDatabase?.label || 'Database' }}</h2>
+            <p class="text-xs text-muted">PostgreSQL dump via pg_dump / pg_restore · {{ currentDatabase?.database }}</p>
           </div>
         </div>
         <div class="space-y-5 p-4">
@@ -233,9 +271,9 @@ function fmtBytes(n?: number | string | null): string {
           <div>
             <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Available backups</h3>
             <div v-if="backupsLoading" class="py-4 text-center text-sm text-muted">Loading…</div>
-            <div v-else-if="!backups.length" class="py-4 text-center text-sm text-muted">No backups yet.</div>
+            <div v-else-if="!visibleBackups.length" class="py-4 text-center text-sm text-muted">No backups for this database yet.</div>
             <div v-else class="space-y-2">
-              <div v-for="b in backups" :key="b.name"
+              <div v-for="b in visibleBackups" :key="b.name"
                 class="flex flex-wrap items-center gap-3 rounded border border-hull px-3 py-2">
                 <div class="min-w-0">
                   <div class="truncate font-mono text-sm">{{ b.name }}</div>
@@ -245,7 +283,7 @@ function fmtBytes(n?: number | string | null): string {
                   <UButton size="xs" variant="soft" icon="i-lucide-download"
                     :to="`/api/system/backups/${encodeURIComponent(b.name)}`" external target="_blank">Download</UButton>
                   <UButton size="xs" variant="soft" color="warning" icon="i-lucide-history"
-                    :disabled="restoring" @click="askRestoreExisting(b.name)">Restore</UButton>
+                    :disabled="restoring" @click="askRestoreExisting(b.name, b.target)">Restore</UButton>
                   <UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2"
                     :loading="deleting === b.name" @click="deleteBackup(b.name)">Delete</UButton>
                 </div>
@@ -322,10 +360,10 @@ function fmtBytes(n?: number | string | null): string {
     <UModal v-model:open="confirmOpen" title="Restore database">
       <template #body>
         <p class="text-sm text-muted">
-          Restore the database from
+          Restore <strong class="text-foam">{{ currentDatabase?.label || confirmTarget?.target }}</strong> from
           <strong class="font-mono">{{ confirmTarget?.kind === 'upload' ? confirmTarget.file.name : confirmTarget?.name }}</strong>?
-          This <strong>overwrites all current data</strong> (users, settings, monitoring history, IPAM — everything)
-          and cannot be undone. Enable Maintenance Mode first so users aren't writing during the restore.
+          This overwrites <strong>only the selected database</strong> and cannot be undone. Other module databases remain untouched.
+          Enable Maintenance Mode first so users and background jobs are not writing during the restore.
         </p>
       </template>
       <template #footer>

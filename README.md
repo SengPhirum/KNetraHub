@@ -184,10 +184,15 @@ An iframe isolates a remote's CSS/DOM cleanly, but it can't share the portal's l
 
 ### Database Separation
 
-One shared Postgres/TimescaleDB instance, separated by **schema**:
-- Portal tables in `public`.
-- Monitoring owns the `monitoring` schema (repeatable migrations in `layers/monitoring/migrations/`).
-- Future modules follow the identical pattern (one schema per module).
+KNetraHub uses a database-per-system boundary:
+
+- `knetrahub` contains portal identity, preferences, admin settings, audit, and module lifecycle metadata only.
+- Docker, Monitoring, and IP Management each receive a dedicated database when first enabled.
+- Module databases may share one PostgreSQL/TimescaleDB host or use separate hosts, as selected by an admin.
+- Disabling a module stops access and background work but retains its database. Re-enabling reconnects without repeating first-time initialization.
+- Maintenance backup and restore always targets one database, so restoring a module never overwrites portal or other module data.
+
+A clean installation shows no module cards until a portal admin runs **Initialize modules** or opens **Admin -> Modules**.
 
 ### Shared Authentication
 
@@ -203,12 +208,7 @@ cp .env.example .env          # edit as needed
 pnpm run dev                   # http://localhost:3000
 ```
 
-By default, it talks to Docker at `/var/run/docker.sock`, so run it **on a swarm manager node**. On first run, it seeds an admin account:
-- **Username:** `admin`
-- **Password:** `admin`
-
-> [!WARNING]
-> Override the seed with `NUXT_ADMIN_USERNAME` / `NUXT_ADMIN_PASSWORD` and **change it immediately** in production.
+By default, it talks to Docker at `/var/run/docker.sock`, so run it **on a swarm manager node**. On first run, KNetraHub opens a one-time administrator setup screen unless `NUXT_ADMIN_USERNAME` and `NUXT_ADMIN_PASSWORD` are both supplied.
 
 ### Running with a Remote Subsystem (Module Federation)
 
@@ -275,7 +275,7 @@ Everything is configured via environment variables (see [`.env.example`](./.env.
 | `NUXT_JWT_SECRET` | Signs session cookies and encrypts stored credentials. **Set a long random value!** |
 | `NUXT_DOCKER_SOCKET_PATH` | Docker socket path (default `/var/run/docker.sock`). |
 | `NUXT_DOCKER_HOST` / `PORT` | Use remote engine over TCP. |
-| `NUXT_DB_HOST` / `NAME` / `USER` | Postgres + TimescaleDB connection. |
+| `NUXT_DB_HOST` / `NAME` / `USER` | Main portal database connection; module databases are configured under Admin -> Modules. |
 | `NUXT_METRICS_RETENTION_DAYS` | How many days of metrics history to keep (default `30`). |
 
 ### Appearance

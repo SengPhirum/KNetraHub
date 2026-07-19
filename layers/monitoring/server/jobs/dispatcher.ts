@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { enqueue, claim, complete, fail, reapExpiredLeases, type JobRow } from './queue'
 import { runPoll } from '../polling/engine'
 import { runDiscovery } from '../discovery/engine'
@@ -28,6 +28,8 @@ export function nodeId(): string {
 }
 
 export async function startDispatcher(): Promise<void> {
+  if (dispatcher) return
+  stopping = false
   const rc = useRuntimeConfig().monitoring as Record<string, any>
   const db = getDb()
   const id = nodeId()

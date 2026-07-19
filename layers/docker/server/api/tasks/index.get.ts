@@ -1,6 +1,6 @@
 import { requireUser } from '~~/server/utils/auth'
 import { useDocker, assertSwarm } from '~~/layers/docker/server/utils/docker'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event); await assertSwarm()

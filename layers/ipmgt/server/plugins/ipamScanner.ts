@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb, isModuleEnabled } from '~~/server/utils/moduleDb'
 import { scanSubnet } from '~~/layers/ipmgt/server/utils/ipamScan'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import type { SubnetRow } from '~~/layers/ipmgt/server/utils/ipamStore'
@@ -30,6 +30,7 @@ export default defineNitroPlugin(() => {
     if (running) return
     running = true
     try {
+      if (!(await isModuleEnabled('ipmgt'))) return
       const { rows } = await getDb().query('SELECT * FROM ipmgt_subnets WHERE ping_enabled = true OR scan_enabled = true')
       for (const subnet of rows as SubnetRow[]) {
         try {

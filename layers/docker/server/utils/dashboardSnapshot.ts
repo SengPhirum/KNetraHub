@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { assertSwarm, useDocker } from '~~/layers/docker/server/utils/docker'
 import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 
 /**
  * Server-computed dashboard data, pushed to every connected browser tab over

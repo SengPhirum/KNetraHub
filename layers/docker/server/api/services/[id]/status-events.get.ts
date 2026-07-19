@@ -1,5 +1,5 @@
 import { requireUser } from '~~/server/utils/auth'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)

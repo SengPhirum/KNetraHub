@@ -1,4 +1,5 @@
 import { readSession, resolveUserEntitlements } from '~~/server/utils/auth'
+import { isModuleEnabled } from '~~/server/utils/moduleDb'
 import type { AppKey } from '../../shared/utils/entitlements'
 
 /**
@@ -67,6 +68,10 @@ export default defineEventHandler(async (event) => {
     // historically had no guards, so the middleware must reject here.
     if (app === 'docker') return
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+  }
+
+  if (!(await isModuleEnabled(app))) {
+    throw createError({ statusCode: 503, statusMessage: `${APP_LABEL[app]} is disabled` })
   }
 
   const apps = await resolveUserEntitlements(user)

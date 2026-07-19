@@ -1,5 +1,5 @@
-import { getDb, migrate } from '~~/server/utils/db'
-import { migrateMetrics, recordServiceStatusEvent } from '~~/server/utils/metrics'
+import { getDockerDb as getDb, isModuleEnabled } from '~~/server/utils/moduleDb'
+import { recordServiceStatusEvent } from '~~/server/utils/metrics'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import { fireAlert } from '~~/server/utils/alertNotify'
 import { getAlertRule } from '~~/server/utils/alertRules'
@@ -20,29 +20,19 @@ const POLL_INTERVAL_MS = 10_000
 // only forwards to that one client - reusing it here would multiply DB
 // writes per open tab and die when the last tab closes. This plugin runs
 // once for the life of the server process.
-export default defineNitroPlugin(async () => {
+export default defineNitroPlugin(() => {
   if (useRuntimeConfig().public.staticDocs) return
-
-  // Defensive: don't rely on server/plugins/db.ts having run first - both
-  // migrate() and migrateMetrics() are memoized, so calling them again here
-  // is cheap and removes any implicit plugin-ordering dependency.
-  try {
-    await migrate()
-    await migrateMetrics(getDb(), useRuntimeConfig().metrics.retentionDays)
-  } catch (err: any) {
-    console.error('[serviceEvents] could not migrate, will not start listener', err)
-    await logSystem('docker', 'error', 'service-events.start.failed',
-      `Could not migrate the metrics schema - service status history will not be recorded: ${err?.message || err}`)
-    return
-  }
-
   attachServiceEvents()
   pollTaskStates()
 })
 
 // Service create/update/remove ARE manager-visible via the swarm
 // orchestration layer, so a push-based events subscription works for these.
-function attachServiceEvents() {
+async function attachServiceEvents() {
+  if (!(await isModuleEnabled('docker').catch(() => false))) {
+    setTimeout(attachServiceEvents, 8_000)
+    return
+  }
   try {
     const docker = useDocker()
     docker.getEvents({ filters: { type: ['service'] } }, (err: Error | null, stream: any) => {
@@ -54,10 +44,13 @@ function attachServiceEvents() {
       stream.on('data', (chunk: Buffer) => {
         try {
           const evt = JSON.parse(chunk.toString())
-          void recordServiceStatusEvent({
-            serviceId: evt.Actor?.ID,
-            serviceName: evt.Actor?.Attributes?.name,
-            status: evt.Action
+          void isModuleEnabled('docker').then((enabled) => {
+            if (!enabled) return
+            return recordServiceStatusEvent({
+              serviceId: evt.Actor?.ID,
+              serviceName: evt.Actor?.Attributes?.name,
+              status: evt.Action
+            })
           })
         } catch {
           // ignore malformed event
@@ -82,6 +75,11 @@ let firstPoll = true
 
 async function pollTaskStates() {
   try {
+    if (!(await isModuleEnabled('docker'))) {
+      lastTaskState.clear()
+      firstPoll = true
+      return
+    }
     const docker = useDocker()
     const [tasks, services] = await Promise.all([docker.listTasks(), docker.listServices()])
     const serviceNames = new Map((services as any[]).map((s) => [s.ID, s.Spec?.Name]))

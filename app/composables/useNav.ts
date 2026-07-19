@@ -222,6 +222,7 @@ const ADMIN_GROUPS: NavGroup[] = [
   {
     label: 'System',
     items: [
+      { label: 'Modules',     to: '/admin/modules',     icon: 'i-lucide-blocks',  minRole: 'admin' },
       { label: 'Maintenance', to: '/admin/maintenance', icon: 'i-lucide-hard-hat', minRole: 'admin' }
     ]
   },

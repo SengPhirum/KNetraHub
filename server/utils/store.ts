@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { nanoid } from 'nanoid'
 import { createHash, randomBytes } from 'node:crypto'
 import { migrate } from './db'
+import { getDockerDb } from './moduleDb'
 import { encryptSecret, decryptSecret } from './secretCrypto'
 
 export type Role = 'admin' | 'manager' | 'operator' | 'viewer'
@@ -554,7 +555,7 @@ export async function deleteUserSessions(userId: string, exceptId?: string): Pro
 // ─── registries ───────────────────────────────────────────────────────────────
 
 export async function listRegistries(): Promise<Registry[]> {
-  const { rows } = await getDb().query('SELECT * FROM registries ORDER BY name')
+  const { rows } = await getDockerDb().query('SELECT * FROM registries ORDER BY name')
   return rows.map((r: any) => ({
     id: r.id,
     name: r.name,
@@ -565,7 +566,7 @@ export async function listRegistries(): Promise<Registry[]> {
 }
 
 export async function addRegistry(input: Omit<Registry, 'id'>): Promise<Registry> {
-  const db = getDb()
+  const db = getDockerDb()
   const id = nanoid()
   await db.query(
     'INSERT INTO registries (id, name, url, username, auth) VALUES ($1, $2, $3, $4, $5)',
@@ -575,7 +576,7 @@ export async function addRegistry(input: Omit<Registry, 'id'>): Promise<Registry
 }
 
 export async function getRegistry(id: string): Promise<Registry | null> {
-  const { rows } = await getDb().query('SELECT * FROM registries WHERE id = $1', [id])
+  const { rows } = await getDockerDb().query('SELECT * FROM registries WHERE id = $1', [id])
   const r = rows[0]
   if (!r) return null
   return {
@@ -589,7 +590,7 @@ export async function getRegistry(id: string): Promise<Registry | null> {
 
 /** Update a registry's details. `auth` is left untouched when omitted (edit without re-entering credentials). */
 export async function updateRegistry(id: string, input: { name: string; url: string; username: string; auth?: string }): Promise<Registry | null> {
-  const db = getDb()
+  const db = getDockerDb()
   if (input.auth) {
     await db.query(
       'UPDATE registries SET name = $2, url = $3, username = $4, auth = $5 WHERE id = $1',
@@ -605,7 +606,7 @@ export async function updateRegistry(id: string, input: { name: string; url: str
 }
 
 export async function deleteRegistry(id: string): Promise<void> {
-  await getDb().query('DELETE FROM registries WHERE id = $1', [id])
+  await getDockerDb().query('DELETE FROM registries WHERE id = $1', [id])
 }
 
 // ─── app settings ─────────────────────────────────────────────────────────────

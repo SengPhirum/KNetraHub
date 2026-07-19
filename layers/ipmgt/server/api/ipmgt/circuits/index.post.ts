@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 const CIRCUIT_TYPES = ['physical', 'logical', 'virtual']

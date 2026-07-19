@@ -1,5 +1,5 @@
 import { requireUser } from '~~/server/utils/auth'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { AUTOREDEPLOY_LABEL } from '~~/layers/docker/server/utils/registryClient'

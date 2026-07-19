@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Recent scan run history, optionally filtered to one subnet.

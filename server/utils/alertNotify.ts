@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from './db'
+import { getDockerDb } from './moduleDb'
 import { getAlertRule, renderTemplate, type AlertRuleType } from './alertRules'
 import { listAlertChannelsWithConfig, type AlertChannelWithConfig } from './alertChannels'
 import { logSystem } from './moduleLogs'
@@ -60,7 +60,7 @@ export async function fireAlert(input: FireAlertInput): Promise<void> {
 
     const message = renderTemplate(rule.template, { ...input.vars, target: input.target ?? input.vars.target ?? '' })
 
-    await getDb().query(
+    await getDockerDb().query(
       'INSERT INTO alert_events (id, rule_type, target, severity, message, fired_at) VALUES ($1, $2, $3, $4, $5, $6)',
       [nanoid(), input.ruleType, input.target ?? null, input.severity, message, new Date().toISOString()]
     ).catch((err: any) => logSystem('portal', 'error', 'alert.record.failed',

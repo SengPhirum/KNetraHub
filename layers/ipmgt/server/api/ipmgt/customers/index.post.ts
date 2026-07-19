@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, normalizeCustomerStatus } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 export default defineEventHandler(async (event) => {

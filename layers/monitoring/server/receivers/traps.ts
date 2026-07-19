@@ -1,5 +1,5 @@
 import snmp from 'net-snmp'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { convertVarbind } from '../snmp/values'
 import { findTrapHandler, defineTrapHandler } from '../core/registry'
 import { recordEvent } from '../core/events'
@@ -75,6 +75,7 @@ function extractIfIndex(varbinds: { oid: string; value: unknown }[]): number | n
 // ── Receiver lifecycle ──────────────────────────────────────────────────────
 
 export function startTrapReceiver(): void {
+  if (receiver) return
   const rc = useRuntimeConfig().monitoring as Record<string, any>
   if (!rc.trapEnabled) return
   const port = Number(rc.trapPort ?? 1162)

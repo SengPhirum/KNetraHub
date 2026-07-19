@@ -4,7 +4,7 @@ import { stackServices, STACK_LABEL } from '~~/layers/docker/server/utils/stack'
 import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { gitlabEnabled, getStackFile } from '~~/layers/docker/server/utils/gitlab'
 import { combinedStackHistory, getLatestStackVersion, getStackVersionContent } from '~~/layers/docker/server/utils/stackHistory'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 
 export default defineEventHandler(async (event) => {
   await requireUser(event)

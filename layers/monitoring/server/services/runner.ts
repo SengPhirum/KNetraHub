@@ -2,7 +2,7 @@ import ping from 'ping'
 import net from 'node:net'
 import tls from 'node:tls'
 import dns from 'node:dns/promises'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { recordEvent } from '../core/events'
 import type { ServiceType } from '../../shared/constants'
 

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { resolveUserEntitlements } from '~~/server/utils/auth'
 import { tierAtLeast } from '~~/shared/utils/entitlements'

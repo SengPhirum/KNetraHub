@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import type { PoolClient } from 'pg'
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { audit } from '~~/server/utils/store'
 import { requireApp } from '~~/server/utils/auth'
 import type { SessionUser } from '~~/server/utils/auth'

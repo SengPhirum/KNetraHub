@@ -34,11 +34,10 @@ export function getDb(): Pool {
  * starts - there's no reliable depends_on health-gating in a swarm stack
  * deploy, and Timescale's own first-boot init can itself take 10-30s.
  *
- * Memoized like migrate() below: several Nitro plugins (db.ts,
- * seedSubsystems.ts) each call this independently at boot, and without
- * memoization every one of them ran its own concurrent 30-attempt retry
- * loop - same outcome, but duplicated connection attempts and interleaved
- * "not ready yet (attempt N/30)" log lines. On failure the memo is cleared
+ * Memoized like migrate() below because multiple Nitro plugins may call this
+ * independently at boot. Without memoization each would run a concurrent
+ * retry loop, duplicating connection attempts and interleaving readiness log
+ * lines. On failure the memo is cleared
  * (not cached as a rejection) so a later, separate wait can still succeed
  * once Postgres actually comes up. */
 export async function waitForDb(maxAttempts = 30, delayMs = 2000): Promise<void> {
@@ -81,14 +80,32 @@ export async function migrate(): Promise<void> {
   return _migrated
 }
 
-async function runMigrations(): Promise<void> {
-  const db = getDb()
+export type BaseSchemaScope = 'portal' | 'docker' | 'ipmgt'
+
+function schemaScope(statement: string): BaseSchemaScope {
+  const sql = statement.toLowerCase()
+  if (/\bipmgt_[a-z0-9_]+\b/.test(sql)) return 'ipmgt'
+  if (/\b(docker_settings|registries|stack_history|alert_channels|alert_events)\b/.test(sql)) return 'docker'
+  return 'portal'
+}
+
+/**
+ * Initialize only the tables owned by one database boundary. The DDL remains
+ * in one audited definition, but every statement is routed to exactly one
+ * target: portal, Docker, or IP Management. Monitoring retains its ordered
+ * migration set under layers/monitoring/server/db.
+ */
+export async function migrateModuleBase(scope: Exclude<BaseSchemaScope, 'portal'>, db: Pool): Promise<void> {
+  await runMigrations(scope, db)
+}
+
+async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb()): Promise<void> {
 
   // App-data tables keep TEXT ISO8601 timestamps (identical to the old
   // SQLite schema) since they're only ever stored/displayed/sorted as
   // strings, never range-queried - only the metrics hypertables (see
   // metrics.ts) need real TIMESTAMPTZ columns for Timescale partitioning.
-  await db.query(`
+  const schemaSql = `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -131,6 +148,13 @@ async function runMigrations(): Promise<void> {
       url TEXT NOT NULL,
       username TEXT NOT NULL,
       auth TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS docker_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
     );
 
     CREATE TABLE IF NOT EXISTS audit (
@@ -218,6 +242,28 @@ async function runMigrations(): Promise<void> {
       updated_at TEXT NOT NULL
     );
 
+    -- Runtime lifecycle and encrypted connection configuration for built-in
+    -- subsystem databases. Absence of a row means never initialized/disabled.
+    CREATE TABLE IF NOT EXISTS module_databases (
+      module_key TEXT PRIMARY KEY,
+      enabled BOOLEAN NOT NULL DEFAULT false,
+      status TEXT NOT NULL DEFAULT 'disabled',
+      host_mode TEXT NOT NULL DEFAULT 'portal-host',
+      db_host TEXT,
+      db_port INTEGER,
+      db_name TEXT NOT NULL,
+      db_user TEXT,
+      db_password_enc TEXT,
+      db_ssl BOOLEAN NOT NULL DEFAULT false,
+      admin_database TEXT,
+      pool_max INTEGER NOT NULL DEFAULT 20,
+      initialized_at TEXT,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT,
+      last_error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_module_databases_enabled ON module_databases(enabled, status);
+
     -- Stack deploy history: every deploy/update/rollback records the compose
     -- content here (the local, always-on equivalent of the GitLab commit
     -- trail). gitlab_sha links a version to its GitLab commit once synced -
@@ -257,6 +303,13 @@ async function runMigrations(): Promise<void> {
       vlan INTEGER,
       gateway TEXT,
       usage INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS ipmgt_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
     );
 
     CREATE TABLE IF NOT EXISTS ipmgt_ips (
@@ -747,5 +800,18 @@ async function runMigrations(): Promise<void> {
     -- (see App & Access) - this column only matters for user.source = 'local',
     -- since local accounts otherwise have zero app access (see resolveEntitlements).
     ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access TEXT;
-  `)
+  `
+
+  // Remove line comments before splitting: several explanatory comments
+  // contain semicolons, which are not SQL statement terminators. Keeping them
+  // in the naive split would turn the text after that semicolon into invalid
+  // SQL during a clean installation.
+  const statements = schemaSql
+    .replace(/--.*$/gm, '')
+    .split(';')
+    .map((statement) => statement.trim())
+    .filter(Boolean)
+    .filter((statement) => schemaScope(statement) === scope)
+
+  for (const statement of statements) await db.query(statement)
 }

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Bulk export for one entity_type as JSON rows (CSV conversion happens

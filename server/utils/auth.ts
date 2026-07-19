@@ -8,11 +8,13 @@ import {
   tierAtLeast,
   tierGrantsPermission,
   appForPermission,
+  APP_KEYS,
   type AppKey,
   type AppTier,
   type AppEntitlements
 } from '../../shared/utils/entitlements'
 import { getAppRoleMap } from './appRoles'
+import { enabledModuleKeys } from './moduleDb'
 import { logSystem } from './moduleLogs'
 import { getLocalAuthSettings } from './authSettings'
 
@@ -74,8 +76,10 @@ export async function issueSubsystemToken(user: SessionUser): Promise<string> {
 
 /** Resolve the caller's per-app entitlements from their realm roles + the DB role map. */
 export async function resolveUserEntitlements(user: SessionUser): Promise<AppEntitlements> {
-  const roleMap = await getAppRoleMap()
-  return resolveEntitlements(user, user.realmRoles || [], roleMap)
+  const [roleMap, enabled] = await Promise.all([getAppRoleMap(), enabledModuleKeys()])
+  const resolved = resolveEntitlements(user, user.realmRoles || [], roleMap)
+  for (const app of APP_KEYS) if (!enabled.has(app)) resolved[app] = null
+  return resolved
 }
 
 export async function setSession(event: H3Event, user: SessionUser) {

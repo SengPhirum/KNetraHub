@@ -1,5 +1,6 @@
 import { requireUser, resolveUserEntitlements } from '~~/server/utils/auth'
 import { getDb } from '~~/server/utils/db'
+import { getDockerDb } from '~~/server/utils/moduleDb'
 import { getUserPreferences } from '~~/server/utils/store'
 
 const RULE_TYPES: Record<string, string[]> = {
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
       .flatMap(([, types]) => types)
 
     if (enabledRuleTypes.length) {
-      const { rows } = await getDb().query(
+      const { rows } = await getDockerDb().query(
         `SELECT id, rule_type, target, severity, message, fired_at
          FROM alert_events
          WHERE fired_at >= $1 AND rule_type = ANY($2::text[])

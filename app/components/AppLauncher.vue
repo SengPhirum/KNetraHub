@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import type { AppKey } from '../../shared/utils/entitlements'
 
-// The KNetraHub app launcher card grid. Lists *every* registered app so the
-// portal home is a full directory of what's available. Apps the signed-in user
-// can reach (resolved from their Keycloak realm roles + the Settings app-role
-// map, or the local-admin superuser) are clickable; apps they can't reach are
-// listed but disabled (greyed, non-interactive). Access is always enforced
-// again server-side. Rendered on the full-page portal home (/) and on the
-// sidebar "Admin" view (/admin).
-const { user, hasApp } = useAuth()
+// The portal directory only shows subsystems explicitly enabled by an admin.
+// A clean installation therefore opens on a welcome state instead of exposing
+// module cards backed by databases that have not been provisioned yet.
+const { user, hasApp, can } = useAuth()
+const { modules, enabledModules, fetchModules } = useModules()
+const setupOpen = ref(false)
+
+await fetchModules().catch(() => [])
 
 const apps = computed(() =>
-  getModuleRegistry()
-    .filter((m) => m.enabled)
+  enabledModules.value
     .map((m) => ({ ...m, accessible: hasApp(m.key as AppKey) }))
 )
 
@@ -55,9 +54,36 @@ function launchApp(event: MouseEvent, app: { routePath: string; icon: string; ac
       title="Apps"
       :subtitle="user ? `Welcome back, ${user.displayName}` : 'Available systems'"
       icon="i-lucide-layout-grid"
-    />
+    >
+      <template v-if="can('admin') && apps.length" #actions>
+        <UButton variant="soft" icon="i-lucide-settings-2" to="/admin/modules">Manage modules</UButton>
+      </template>
+    </PageHeader>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div v-if="!apps.length" class="panel relative overflow-hidden px-6 py-14 text-center sm:px-12">
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--color-beacon)_14%,transparent),transparent_55%)]" />
+      <div class="relative mx-auto max-w-xl">
+        <span class="mx-auto flex size-16 items-center justify-center rounded-2xl bg-beacon/10 ring-1 ring-beacon/25">
+          <UIcon name="i-lucide-blocks" class="size-8 text-beacon" />
+        </span>
+        <h2 class="mt-5 font-display text-2xl font-semibold text-foam">Welcome to KNetraHub</h2>
+        <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted">
+          This portal is ready, with no subsystems enabled yet. Choose only the built-in systems your organization needs; each one will receive its own isolated database.
+        </p>
+        <UButton
+          v-if="can('admin')"
+          class="mt-6"
+          size="lg"
+          icon="i-lucide-wand-sparkles"
+          @click="setupOpen = true"
+        >
+          Initialize modules
+        </UButton>
+        <p v-else class="mt-5 text-xs text-faint">Ask a portal administrator to initialize the required modules.</p>
+      </div>
+    </div>
+
+    <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <NuxtLink
         v-for="app in apps"
         :key="app.key"
@@ -102,6 +128,8 @@ function launchApp(event: MouseEvent, app: { routePath: string; icon: string; ac
         <p class="text-sm text-(--color-muted)">{{ app.description }}</p>
       </NuxtLink>
     </div>
+
+    <ModuleSetupWizard v-model:open="setupOpen" :modules="modules" />
 
     <Teleport to="body">
       <div v-if="launching" class="app-launch-overlay">

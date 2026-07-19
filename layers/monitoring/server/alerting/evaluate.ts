@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { evaluateConditions } from './conditions'
 import { activeMaintenance } from '../core/moduleSettings'
 import { recordEvent } from '../core/events'

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // List IP requests, optionally filtered by status/subnet_id, or narrowed to

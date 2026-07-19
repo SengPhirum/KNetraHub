@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // List VLANs with their L2 domain name and count of attached subnets.

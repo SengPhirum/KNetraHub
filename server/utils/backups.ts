@@ -3,6 +3,14 @@ import { mkdir, readdir, stat, unlink } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { nanoid } from 'nanoid'
 import { getDb } from './db'
+import {
+  getModuleDatabaseConnection,
+  getModuleDatabaseRecord,
+  getPortalDatabaseConnection,
+  type DatabaseConnection
+} from './moduleDb'
+import { BUILTIN_MODULES } from '../../shared/moduleCatalog'
+import type { AppKey } from '../../shared/utils/entitlements'
 
 /**
  * Database backup & restore (Admin > System > Maintenance > Backup & Restore).
@@ -18,8 +26,18 @@ import { getDb } from './db'
 
 export interface BackupFile {
   name: string
+  target: BackupTarget
   size_bytes: number
   created_at: string
+}
+
+export type BackupTarget = 'portal' | AppKey
+
+export interface BackupTargetInfo {
+  key: BackupTarget
+  label: string
+  database: string
+  enabled: boolean
 }
 
 export interface BackupLogEntry {
@@ -42,6 +60,16 @@ export function isSafeBackupName(name: string): boolean {
   return NAME_RE.test(name) && !name.includes('..')
 }
 
+export function backupTargetFromName(name: string): BackupTarget {
+  const prefix = name.split('__', 1)[0]
+  if (prefix === 'docker' || prefix === 'monitoring' || prefix === 'ipmgt' || prefix === 'portal') return prefix
+  return 'portal' // legacy backups created before database separation
+}
+
+export function isBackupTarget(value: unknown): value is BackupTarget {
+  return value === 'portal' || value === 'docker' || value === 'monitoring' || value === 'ipmgt'
+}
+
 export function backupDir(): string {
   const cfg = useRuntimeConfig().backups as { dir?: string }
   return resolve(cfg?.dir || join(process.cwd(), 'data', 'backups'))
@@ -62,7 +90,7 @@ export async function listBackups(): Promise<BackupFile[]> {
     try {
       const s = await stat(join(dir, name))
       if (!s.isFile()) continue
-      out.push({ name, size_bytes: s.size, created_at: s.mtime.toISOString() })
+      out.push({ name, target: backupTargetFromName(name), size_bytes: s.size, created_at: s.mtime.toISOString() })
     } catch { /* raced deletion */ }
   }
   return out.sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -75,11 +103,27 @@ export async function deleteBackup(name: string): Promise<void> {
 
 // ─── pg_dump / pg_restore ────────────────────────────────────────────────────
 
-function dbEnv(): { args: string[]; env: NodeJS.ProcessEnv } {
-  const cfg = useRuntimeConfig().db as Record<string, any>
+async function targetConnection(target: BackupTarget): Promise<DatabaseConnection> {
+  return target === 'portal' ? getPortalDatabaseConnection() : getModuleDatabaseConnection(target)
+}
+
+export async function listBackupTargets(): Promise<BackupTargetInfo[]> {
+  const portal = getPortalDatabaseConnection()
+  const targets: BackupTargetInfo[] = [{ key: 'portal', label: 'KNetraHub Portal', database: portal.database, enabled: true }]
+  for (const module of BUILTIN_MODULES) {
+    const record = await getModuleDatabaseRecord(module.key as AppKey)
+    if (!record?.initialized_at) continue
+    targets.push({ key: module.key as AppKey, label: module.name, database: record.db_name, enabled: record.enabled && record.status === 'ready' })
+  }
+  return targets
+}
+
+async function dbEnv(target: BackupTarget): Promise<{ args: string[]; env: NodeJS.ProcessEnv; connection: DatabaseConnection }> {
+  const cfg = await targetConnection(target)
   return {
-    args: ['-h', String(cfg.host), '-p', String(cfg.port), '-U', String(cfg.user), '-d', String(cfg.database)],
-    env: { ...process.env, PGPASSWORD: String(cfg.password) }
+    args: ['-h', cfg.host, '-p', String(cfg.port), '-U', cfg.user, '-d', cfg.database],
+    env: { ...process.env, PGPASSWORD: cfg.password, ...(cfg.ssl ? { PGSSLMODE: 'require' } : {}) },
+    connection: cfg
   }
 }
 
@@ -102,16 +146,15 @@ function runPg(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<voi
 }
 
 /** Create a custom-format dump of the whole database (all schemas, including monitoring). */
-export async function createDatabaseBackup(): Promise<BackupFile> {
+export async function createDatabaseBackup(target: BackupTarget): Promise<BackupFile> {
   const dir = await ensureBackupDir()
-  const cfg = useRuntimeConfig().db as Record<string, any>
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15).replace(/^(\d{8})(\d{6}).*/, '$1_$2')
-  const name = `${String(cfg.database)}_${stamp}.dump`
+  const { args, env, connection } = await dbEnv(target)
+  const name = `${target}__${connection.database}_${stamp}.dump`
   const file = join(dir, name)
-  const { args, env } = dbEnv()
   await runPg('pg_dump', [...args, '-Fc', '--no-owner', '-f', file], env)
   const s = await stat(file)
-  return { name, size_bytes: s.size, created_at: s.mtime.toISOString() }
+  return { name, target, size_bytes: s.size, created_at: s.mtime.toISOString() }
 }
 
 /**
@@ -121,8 +164,8 @@ export async function createDatabaseBackup(): Promise<BackupFile> {
  * only when exit code is 0 — we treat a non-zero exit as failure and surface
  * stderr. Enabling Maintenance Mode first is strongly recommended.
  */
-export async function restoreDatabaseBackup(file: string): Promise<void> {
-  const { args, env } = dbEnv()
+export async function restoreDatabaseBackup(target: BackupTarget, file: string): Promise<void> {
+  const { args, env } = await dbEnv(target)
   await runPg('pg_restore', [...args, '--clean', '--if-exists', '--no-owner', '--no-privileges', file], env)
 }
 

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from './db'
+import { getDockerDb as getDb } from './moduleDb'
 import { encryptSecret, decryptSecret } from './secretCrypto'
 
 export type AlertChannelType = 'telegram' | 'teams' | 'webhook'

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, loadSubnet, recordIpHistory, withSubnetLock } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { firstFreeIp, canonicalizeIp, cidrInfo, ipToBigInt, isValidIp } from '~~/layers/ipmgt/server/utils/ipam'
 

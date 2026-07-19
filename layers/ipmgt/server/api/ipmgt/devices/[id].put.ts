@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, normalizeDeviceStatus } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { encryptSecret } from '~~/server/utils/secretCrypto'
 

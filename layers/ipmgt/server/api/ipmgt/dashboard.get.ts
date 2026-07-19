@@ -1,6 +1,6 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
-import { getAppSetting } from '~~/server/utils/store'
+import { getModuleSetting } from '~~/server/utils/moduleSettings'
 import { usableCapacity } from '~~/layers/ipmgt/server/utils/ipam'
 
 // Dashboard summary: entity counts, IPv4/IPv6 capacity/usage, status breakdown,
@@ -87,7 +87,7 @@ export default defineEventHandler(async (event) => {
 
 async function highUsageThreshold(): Promise<number> {
   try {
-    const raw = await getAppSetting('ipmgt_settings')
+    const raw = await getModuleSetting('ipmgt', 'ipmgt_settings')
     if (raw) {
       const parsed = JSON.parse(raw)
       const t = Number(parsed?.usageWarningThreshold)

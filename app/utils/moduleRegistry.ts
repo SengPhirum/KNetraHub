@@ -1,4 +1,5 @@
 import type { ModuleDefinition } from '../../shared/types/module'
+import { BUILTIN_MODULES } from '~~/shared/moduleCatalog'
 
 /**
  * KNetraHub module registry - the apps shown on the home launcher. Every app
@@ -10,40 +11,5 @@ import type { ModuleDefinition } from '../../shared/types/module'
  * wiring (permission + nav group), not bespoke nav code.
  */
 export function getModuleRegistry(): ModuleDefinition[] {
-  const modules: ModuleDefinition[] = [
-    {
-      key: 'docker',
-      name: 'Docker',
-      description: 'Docker Swarm management - nodes, services, stacks, tasks, and data resources.',
-      routePath: '/docker',
-      icon: 'i-lucide-container',
-      permission: 'docker.view',
-      type: 'local',
-      enabled: true,
-      order: 10
-    },
-    {
-      key: 'monitoring',
-      name: 'Monitoring',
-      description: 'Full-stack network monitoring - SNMP discovery and polling of routers, switches, firewalls, servers and more, with health sensors, alerting, traps, syslog, and topology.',
-      routePath: '/monitoring',
-      icon: 'i-lucide-activity',
-      permission: 'monitoring.view',
-      type: 'local',
-      enabled: true,
-      order: 20
-    },
-    {
-      key: 'ipmgt',
-      name: 'IP Management',
-      description: 'IP address management - subnets, address inventory, assignment, and utilization.',
-      routePath: '/ipmgt',
-      icon: 'i-lucide-id-card',
-      permission: 'ipmgt.view',
-      type: 'local',
-      enabled: true,
-      order: 40
-    }
-  ]
-  return modules.sort((a, b) => a.order - b.order)
+  return [...BUILTIN_MODULES].sort((a, b) => a.order - b.order)
 }

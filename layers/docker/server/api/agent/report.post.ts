@@ -3,6 +3,7 @@ import { recordMetrics } from '~~/server/utils/metrics'
 import { scheduleNodeUsagePush, scheduleMetricsPush } from '~~/layers/docker/server/utils/dashboardSnapshot'
 import { scheduleListPush } from '~~/layers/docker/server/utils/resourcePush'
 import { computeServicesUsage } from '~~/layers/docker/server/api/services/usage.get'
+import { isModuleEnabled } from '~~/server/utils/moduleDb'
 
 /**
  * Ingest endpoint for the knetrahub-agent task running on every swarm node
@@ -14,6 +15,13 @@ export default defineEventHandler(async (event) => {
   const token = useRuntimeConfig().agent.token
   if (token && getRequestHeader(event, 'x-agent-token') !== token) {
     throw createError({ statusCode: 401, statusMessage: 'Invalid agent token' })
+  }
+
+  // Agents may remain deployed while the Docker subsystem is disabled. Accept
+  // the heartbeat without retaining or broadcasting module data in that state.
+  if (!(await isModuleEnabled('docker'))) {
+    setResponseStatus(event, 202)
+    return { ok: false, disabled: true }
   }
 
   const body = await readBody<Record<string, any>>(event)

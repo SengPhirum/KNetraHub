@@ -1,7 +1,7 @@
 import ping from 'ping'
 import { promises as dnsPromises } from 'node:dns'
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { canonicalizeIp, enumerateHosts } from '~~/layers/ipmgt/server/utils/ipam'
 import type { SubnetRow } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { logSystem } from '~~/server/utils/moduleLogs'

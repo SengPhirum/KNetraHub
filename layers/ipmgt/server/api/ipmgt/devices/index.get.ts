@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, stripDeviceSnmpSecrets } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // List devices (optionally filtered) with joined location/customer names.

@@ -1,9 +1,9 @@
 import { requireRole } from '~~/server/utils/auth'
-import { listBackups, listBackupLog } from '~~/server/utils/backups'
+import { listBackups, listBackupLog, listBackupTargets } from '~~/server/utils/backups'
 
 /** GET /api/system/backups — available database backups + activity log (admin). */
 export default defineEventHandler(async (event) => {
   await requireRole(event, 'admin')
-  const [backups, log] = await Promise.all([listBackups(), listBackupLog()])
-  return { backups, log }
+  const [backups, log, targets] = await Promise.all([listBackups(), listBackupLog(), listBackupTargets()])
+  return { backups, log, targets }
 })

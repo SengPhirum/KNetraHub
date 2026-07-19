@@ -1,4 +1,5 @@
-import { getDb, waitForDb } from '~~/server/utils/db'
+import type { Pool } from 'pg'
+import { getMonitoringDb } from '~~/server/utils/moduleDb'
 import { MIGRATIONS } from './migrations'
 
 /**
@@ -13,22 +14,25 @@ import { MIGRATIONS } from './migrations'
  * Memoized like the portal's migrate(): several plugins/handlers may call
  * this concurrently at boot.
  */
-let _migrated: Promise<void> | null = null
+const migratedPools = new WeakMap<Pool, Promise<void>>()
 
-export function migrateMonitoring(): Promise<void> {
-  if (!_migrated) {
-    _migrated = run().catch((err) => {
-      _migrated = null
+export function migrateMonitoring(db: Pool = getMonitoringDb()): Promise<void> {
+  let pending = migratedPools.get(db)
+  if (!pending) {
+    pending = run(db).catch((err) => {
+      migratedPools.delete(db)
       throw err
     })
+    migratedPools.set(db, pending)
   }
-  return _migrated
+  return pending
 }
 
-async function run(): Promise<void> {
-  await waitForDb()
-  const db = getDb()
-
+async function run(db: Pool): Promise<void> {
+  // Monitoring's time-series tables require TimescaleDB in this dedicated
+  // database. Provisioning fails clearly when a custom host lacks the
+  // extension instead of leaving a half-enabled subsystem.
+  await db.query('CREATE EXTENSION IF NOT EXISTS timescaledb')
   await db.query('CREATE SCHEMA IF NOT EXISTS monitoring')
   await db.query(`
     CREATE TABLE IF NOT EXISTS monitoring.schema_migrations (

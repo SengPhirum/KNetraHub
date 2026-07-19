@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, assertNoSubnetOverlap } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { cidrInfo, isValidCidr } from '~~/layers/ipmgt/server/utils/ipam'
 

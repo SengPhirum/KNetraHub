@@ -1,5 +1,5 @@
 import { requireUser } from '~~/server/utils/auth'
-import { getDb } from '~~/server/utils/db'
+import { getDockerDb as getDb } from '~~/server/utils/moduleDb'
 
 const RANGES: Record<string, { lookback: string; bucket: string }> = {
   '1h': { lookback: '1 hour', bucket: '15 seconds' },

@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { migrateMonitoring } from '../db/migrate'
 import { API_DEFAULT_PER_PAGE, API_MAX_PER_PAGE } from '../../shared/constants'
 

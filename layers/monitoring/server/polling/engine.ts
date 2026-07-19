@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { SnmpClient } from '../snmp/engine'
 import { resolveSnmpConfig } from '../core/credentials'
 import { getPollerModules, getOs, type DeviceRow, type ModuleContext } from '../core/registry'

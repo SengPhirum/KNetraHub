@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { purgeStaleEntities } from '../core/reconcile'
 import { trimFinishedJobs } from './queue'
 

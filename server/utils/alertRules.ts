@@ -1,13 +1,9 @@
-import { getAppSetting, setAppSetting } from './store'
+import { getModuleSetting, setModuleSetting } from './moduleSettings'
 
 /**
- * Alert rule configuration - what fires, with what thresholds, and the
- * message template used. Defaults live in code (DEFAULT_RULES); admins can
- * override per-type from the UI. Unlike authSettings.ts (one app_settings
- * row per provider), all rule types share ONE row ('alerts.rules') since
- * there's a small, fixed set of them - reset of a single type is therefore
- * a read-modify-write (delete just that type's key) rather than a
- * deleteAppSetting call, since that would wipe the other rules' overrides.
+ * Docker alert rule configuration. Defaults live in code and overrides stay
+ * in the Docker database so portal-only backups never contain subsystem data.
+ * All rule types share one settings row because the set is small and fixed.
  */
 
 export type AlertRuleType =
@@ -147,7 +143,7 @@ export function renderTemplate(template: string, vars: Record<string, string>): 
 type RuleOverride = Partial<Pick<AlertRuleDef, 'enabled' | 'config' | 'template'>>
 
 async function readRuleOverrides(): Promise<Partial<Record<AlertRuleType, RuleOverride>>> {
-  const raw = await getAppSetting(RULES_KEY)
+  const raw = await getModuleSetting('docker', RULES_KEY)
   if (!raw) return {}
   try {
     return JSON.parse(raw)
@@ -181,7 +177,7 @@ export async function saveAlertRule(type: AlertRuleType, patch: RuleOverride, ac
     template: patch.template ?? current.template
   }
   overrides[type] = nextOverride
-  await setAppSetting(RULES_KEY, JSON.stringify(overrides), actor)
+  await setModuleSetting('docker', RULES_KEY, JSON.stringify(overrides), actor)
   return { ...DEFAULT_RULES[type], ...nextOverride }
 }
 
@@ -189,6 +185,6 @@ export async function saveAlertRule(type: AlertRuleType, patch: RuleOverride, ac
 export async function resetAlertRule(type: AlertRuleType, actor: string): Promise<AlertRuleDef> {
   const overrides = await readRuleOverrides()
   delete overrides[type]
-  await setAppSetting(RULES_KEY, JSON.stringify(overrides), actor)
+  await setModuleSetting('docker', RULES_KEY, JSON.stringify(overrides), actor)
   return DEFAULT_RULES[type]
 }

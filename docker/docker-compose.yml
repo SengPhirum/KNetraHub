@@ -27,8 +27,9 @@ services:
       # NUXT_AGENT_TOKEN_FILE, and the agent service accepts the equivalent
       # KNETRAHUB_AGENT_TOKEN_FILE - see that service's comment below).
       NUXT_AGENT_TOKEN: "change-me-to-a-long-random-string"
-      # Postgres + TimescaleDB - app data and metrics history, one instance.
-      # Keep credentials in sync with the timescaledb service below.
+      # Main KNetraHub portal database. Module databases are created from the
+      # Admin -> Modules wizard, either on this host or on separate hosts.
+      # Keep portal credentials in sync with the timescaledb service below.
       #
       # Every NUXT_DB_* var here also accepts a "_FILE" sibling pointing at a
       # file whose contents become the value (docker/docker-entrypoint.sh
@@ -48,6 +49,7 @@ services:
       NUXT_DB_NAME: "knetrahub"
       NUXT_DB_USER: "knetrahub"
       NUXT_DB_PASSWORD: "change-me-to-a-long-random-string"
+      NUXT_DB_POOL_MAX: "20"
       NUXT_METRICS_RETENTION_DAYS: "30"
       # Local users are always enabled. Optional UI/session/password defaults:
       NUXT_LOCAL_AUTH_HIDE_LOGIN: "false"
@@ -188,11 +190,12 @@ services:
     # defaults (~128MB shared_buffers) and leaves memory sizing entirely to
     # the OS page cache, which is harder to reason about under load and risks
     # a cgroup OOM kill on a burst instead of Postgres evicting buffers
-    # gracefully. max_connections=60 gives headroom above the app's pool
-    # (NUXT_DB_POOL_MAX, default 40 - see nuxt.config.ts) for admin/psql/
-    # backup connections; work_mem is sized so max_connections concurrent
+    # gracefully. max_connections=120 covers the portal plus the default
+    # Docker, Monitoring, and IPAM module pool ceilings on this shared host,
+    # with headroom for admin/psql/backup connections; work_mem is sized so
+    # max_connections concurrent
     # sorts/hashes can't exceed shared_buffers even in the worst case
-    # (60 * 16MB = 960MB). Re-tune if NUXT_DB_POOL_MAX or the memory limit
+    # (120 * 8MB = 960MB). Re-tune if module pools or the memory limit
     # changes. Applying this requires redeploying this service (a brief
     # restart) - it will not take effect on a running container.
     command:
@@ -202,11 +205,11 @@ services:
       - "-c"
       - "effective_cache_size=3GB"
       - "-c"
-      - "work_mem=16MB"
+      - "work_mem=8MB"
       - "-c"
       - "maintenance_work_mem=256MB"
       - "-c"
-      - "max_connections=60"
+      - "max_connections=120"
     volumes:
       - timescale-data:/var/lib/postgresql/data
     deploy:

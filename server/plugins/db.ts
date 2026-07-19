@@ -1,5 +1,4 @@
-import { getDb, migrate, waitForDb } from '../utils/db'
-import { migrateMetrics } from '../utils/metrics'
+import { migrate, waitForDb } from '../utils/db'
 import { logSystem } from '../utils/moduleLogs'
 
 export default defineNitroPlugin(async () => {
@@ -12,8 +11,7 @@ export default defineNitroPlugin(async () => {
   try {
     await waitForDb()
     await migrate()
-    await migrateMetrics(getDb(), useRuntimeConfig().metrics.retentionDays)
-    await logSystem('portal', 'info', 'db.migrated', 'Database connected and migrations complete')
+    await logSystem('portal', 'info', 'db.migrated', 'Portal database connected and migrations complete')
   } catch (err) {
     console.error('[db] could not connect/migrate - exiting so the orchestrator restarts this container', err)
     process.exit(1)

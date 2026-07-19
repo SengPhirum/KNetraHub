@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, recordIpHistory, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Release/delete an address (frees it — free addresses are not stored).

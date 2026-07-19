@@ -149,8 +149,9 @@ export default defineNuxtConfig({
       stacksPath: process.env.NUXT_GITLAB_STACKS_PATH || 'stacks'
     },
 
-    // Postgres + TimescaleDB - one instance: plain tables for app data
-    // (users/settings/audit/...), Timescale hypertables for metrics history.
+    // Main KNetraHub portal database only. Built-in module database hosts,
+    // names, credentials, and pool limits are configured at runtime through
+    // Admin -> Modules and stored as encrypted lifecycle metadata here.
     db: {
       host: process.env.NUXT_DB_HOST || 'localhost',
       port: Number(process.env.NUXT_DB_PORT || 5432),
@@ -158,11 +159,7 @@ export default defineNuxtConfig({
       user: process.env.NUXT_DB_USER || 'knetrahub',
       password: process.env.NUXT_DB_PASSWORD || 'knetrahub',
       ssl: process.env.NUXT_DB_SSL === 'true',
-      // The monitoring worker pool alone can run up to workerConcurrency (16)
-      // concurrent DB-touching jobs, and the IPAM scanner adds more on top -
-      // a pool of 10 queued connections under load. 40 gives the workers
-      // headroom plus room for regular API traffic.
-      poolMax: Number(process.env.NUXT_DB_POOL_MAX || 40)
+      poolMax: Number(process.env.NUXT_DB_POOL_MAX || 20)
     },
 
     // How long node/container metrics history is retained (Timescale retention policy)

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 
 /**
  * Minimal RFC4180 CSV parser (quoted fields, "" escapes, CRLF/LF). A local

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, CUSTOM_FIELD_TYPES } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // Update a custom field definition. entity_type and field_key are immutable

@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, CUSTOM_FIELD_ENTITY_TYPES } from '~~/layers/ipmgt/server/utils/ipamStore'
 
 // List custom field definitions, optionally filtered by entity_type. Readable

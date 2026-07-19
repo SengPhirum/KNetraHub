@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getMonitoringDb as getDb } from '~~/server/utils/moduleDb'
 import { DEFAULT_TITLE_TEMPLATE, DEFAULT_BODY_TEMPLATE } from './templates'
 
 /**

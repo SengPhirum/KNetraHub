@@ -4,6 +4,7 @@ import { AUTOREDEPLOY_LABEL, parseImageRef, fetchRemoteDigest, extractPinnedDige
 import { audit } from '~~/server/utils/store'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import { fireAlert } from '~~/server/utils/alertNotify'
+import { isModuleEnabled } from '~~/server/utils/moduleDb'
 
 // Swarmpit-style "autoredeploy": services opted in via the knetrahub.autoredeploy
 // label get their pinned image digest compared against the registry's
@@ -21,6 +22,7 @@ export default defineNitroPlugin(() => {
 async function pollAutoredeploy() {
   const cfg = useRuntimeConfig().autoredeploy
   try {
+    if (!(await isModuleEnabled('docker'))) return
     const docker = useDocker()
     const services = await docker.listServices({
       filters: JSON.stringify({ label: [`${AUTOREDEPLOY_LABEL}=true`] })

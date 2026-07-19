@@ -1,5 +1,5 @@
 import { requireIpam } from '~~/layers/ipmgt/server/utils/ipamStore'
-import { getAppSetting } from '~~/server/utils/store'
+import { getModuleSetting } from '~~/server/utils/moduleSettings'
 
 export const IPMGT_SETTINGS_KEY = 'ipmgt_settings'
 export const IPMGT_SETTINGS_DEFAULTS = {
@@ -18,7 +18,7 @@ export const IPMGT_SETTINGS_DEFAULTS = {
 // them (the UI needs the threshold etc.); only admins can change them (PUT).
 export default defineEventHandler(async (event) => {
   await requireIpam(event, 'viewer')
-  const raw = await getAppSetting(IPMGT_SETTINGS_KEY)
+  const raw = await getModuleSetting('ipmgt', IPMGT_SETTINGS_KEY)
   let stored: Record<string, unknown> = {}
   if (raw) { try { stored = JSON.parse(raw) } catch { stored = {} } }
   return { ...IPMGT_SETTINGS_DEFAULTS, ...stored }

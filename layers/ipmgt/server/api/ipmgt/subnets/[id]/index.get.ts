@@ -1,4 +1,4 @@
-import { getDb } from '~~/server/utils/db'
+import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, loadSubnet, subnetUsage } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { cidrInfo } from '~~/layers/ipmgt/server/utils/ipam'
 

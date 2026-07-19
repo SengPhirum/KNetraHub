@@ -52,7 +52,8 @@ export function useAuth() {
   const hasApp = (app: AppKey, min: AppTier = 'viewer') => tierAtLeast(appTier(app), min)
 
   /** Apps the user can see, in registry order - used by the launcher and nav. */
-  const accessibleApps = computed(() => getModuleRegistry().filter((m) => m.enabled && hasApp(m.key as AppKey)))
+  const { isEnabled } = useModules()
+  const accessibleApps = computed(() => getModuleRegistry().filter((m) => isEnabled(m.key) && hasApp(m.key as AppKey)))
 
   /**
    * Fine-grained permission check, for menu visibility/UX only (every API
