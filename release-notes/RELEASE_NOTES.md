@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-18 UTC
+Date: 2026-07-19 UTC
 
 ## Docker Images
 
@@ -11,11 +11,14 @@ Date: 2026-07-18 UTC
 
 ## Source
 
-- Commit: `251bc58`
+- Commit: `d160dc8`
 - Previous tag: none
 
 ## Changes
 
+- feat(admin): System Maintenance page with banner, maintenance mode, and DB backup/restore (d160dc8)
+- fix(monitoring): coerce pg string numerics before toFixed on device page (87f1fa3)
+- feat(monitoring): LibreNMS-style device page, device types, sensor collection fix (2b73598)
 - Enhance Monitoring and update service.sh (251bc58)
 - Fix (6ebbf14)
 - feat(monitoring): implement CIDR discovery scans and candidate management (0cba75d)
