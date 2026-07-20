@@ -1,6 +1,6 @@
 # KNetraHub v0.1.6
 
-Date: 2026-07-19 UTC
+Date: 2026-07-20 UTC
 
 ## Docker Images
 
@@ -11,11 +11,14 @@ Date: 2026-07-19 UTC
 
 ## Source
 
-- Commit: `face798`
+- Commit: `f633b64`
 - Previous tag: none
 
 ## Changes
 
+- Update (f633b64)
+- Update release note (9885b9d)
+- Add email configuration and templates to admin settings (c6475d2)
 - Fix dashboard docker show incorrect graph tooltip text (face798)
 - Enhance Docker monitoring and notifications (081b273)
 - Update release (fcfbdf1)
