@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // Step-up confirmation for critical, hard-to-reverse actions: the user must
-// re-enter their password before the action runs. The paired server-side
-// check is requirePasswordConfirm (server/utils/confirmAction.ts) - the
-// caller's `action` must send the password in the `x-confirm-password`
-// header, e.g.:
+// re-enter their portal *security password* (a second secret, distinct from
+// the login password - so this works for SSO accounts too) before the action
+// runs. The paired server-side check is requirePasswordConfirm
+// (server/utils/confirmAction.ts) - the caller's `action` must send the
+// entered value in the `x-confirm-password` header, e.g.:
 //   $fetch(url, { method: 'DELETE', headers: { 'x-confirm-password': password } })
 // The modal stays open and shows the error when confirmation fails, so a
 // mistyped password doesn't dump the user back to square one.
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<{
 })
 
 const open = defineModel<boolean>('open', { default: false })
+const { promptOpen: securityPromptOpen, configured: securityConfigured } = useSecurityPassword()
 const password = ref('')
 const errorMsg = ref('')
 // Delete-conflict 409s name the exact services/containers still using the
@@ -47,6 +49,14 @@ async function submit() {
     open.value = false
   } catch (e: any) {
     const message = e?.data?.statusMessage || e?.message || 'Confirmation failed'
+    // The user never finished setting up their security password (428): close
+    // this dialog and surface the mandatory set-up prompt instead of a dead end.
+    if (e?.data?.data?.securityPasswordRequired) {
+      securityConfigured.value = false
+      open.value = false
+      securityPromptOpen.value = true
+      return
+    }
     const items = e?.data?.data?.usedBy
     if (Array.isArray(items) && items.length) {
       usedBy.value = items
@@ -61,19 +71,19 @@ async function submit() {
 </script>
 
 <template>
-  <UModal v-model:open="open" :title="title" description="Confirm with your password to proceed." :dismissible="false">
+  <UModal v-model:open="open" :title="title" description="Confirm with your security password to proceed." :dismissible="false">
     <template #body>
       <div class="space-y-4">
         <div v-if="message" class="notice-danger panel-flush flex items-start gap-2 p-3 text-xs">
           <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" />
           <span>{{ message }}</span>
         </div>
-        <UFormField label="Your password" required :error="errorMsg || undefined">
+        <UFormField label="Your security password" required :error="errorMsg || undefined">
           <UInput
             v-model="password"
             type="password"
             class="w-full"
-            autocomplete="current-password"
+            autocomplete="off"
             autofocus
             :disabled="working"
             @keydown.enter="submit"

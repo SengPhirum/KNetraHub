@@ -19,11 +19,20 @@ const { name: currentAppName, inApp } = useCurrentSection()
 // close the mobile drawer on navigation
 watch(() => route.fullPath, () => { mobileOpen.value = false })
 
+// Portal security password: prompt the user to set one up right after login if
+// they never have (required to confirm critical deletes across every app).
+const { promptOpen: securityPromptOpen, fetchStatus: fetchSecurityStatus } = useSecurityPassword()
+
 // Load user preferences once after auth is hydrated
 watch(user, async (u) => {
   if (u) {
     await fetchPreferences().catch(() => null)
     await userNotifications.start()
+    // Client-only: the status endpoint is per-session and must not run during SSR.
+    if (import.meta.client) {
+      const configured = await fetchSecurityStatus()
+      if (configured === false) securityPromptOpen.value = true
+    }
   } else {
     userNotifications.stop()
   }
@@ -312,6 +321,11 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
       <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <slot />
       </main>
+
+      <!-- Mandatory one-time security-password setup: shown non-dismissibly to
+           any signed-in user who has never configured one (required to confirm
+           critical deletes across every app). -->
+      <SecurityPasswordModal v-if="user" v-model:open="securityPromptOpen" :dismissible="false" />
 
       <!-- Full-width portal footer (home only): Documentation left, credit right -->
       <footer

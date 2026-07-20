@@ -818,6 +818,16 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
     -- (see App & Access) - this column only matters for user.source = 'local',
     -- since local accounts otherwise have zero app access (see resolveEntitlements).
     ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access TEXT;
+
+    -- Portal-wide "security password": a second secret, distinct from the login
+    -- password, that every user (local, LDAP AND SSO) must key in to confirm the
+    -- deletion of a critical record in any sub-app. It exists precisely so SSO
+    -- sessions - which have no password KNetraHub can verify - can still be
+    -- step-up challenged before a destructive action (see
+    -- server/utils/confirmAction.ts). bcrypt hash; NULL means "not yet
+    -- configured", which forces the set-up prompt on next login and can be
+    -- restored by a portal admin's reset (clears this back to NULL).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS security_password_hash TEXT;
   `
 
   // Remove line comments before splitting: several explanatory comments

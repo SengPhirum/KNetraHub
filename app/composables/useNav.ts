@@ -48,6 +48,7 @@ const DOCK_GROUPS: NavGroup[] = [
   {
     label: 'Administration',
     items: [
+      { label: 'Users',      to: '/docker/users',      icon: 'i-lucide-users',       permission: 'docker.audit' },
       { label: 'Settings',   to: '/docker/settings',   icon: 'i-lucide-settings',    permission: 'docker.manage' },
       { label: 'Logs',       to: '/docker/logs',       icon: 'i-lucide-scroll-text', permission: 'docker.manage' }
     ]
@@ -131,6 +132,12 @@ const MONITORING_GROUPS: NavGroup[] = [
       { label: 'Settings',        to: '/monitoring/settings',        icon: 'i-lucide-settings',      permission: 'monitoring.manage' },
       { label: 'Logs',            to: '/monitoring/logs',            icon: 'i-lucide-file-terminal', permission: 'monitoring.scan' }
     ]
+  },
+  {
+    label: 'Administration',
+    items: [
+      { label: 'Users', to: '/monitoring/users', icon: 'i-lucide-users', permission: 'monitoring.alert' }
+    ]
   }
 ]
 
@@ -189,6 +196,7 @@ const IPMGT_GROUPS: NavGroup[] = [
   {
     label: 'Administration',
     items: [
+      { label: 'Users',         to: '/ipmgt/users',       icon: 'i-lucide-users',       permission: 'ipmgt.approve' },
       { label: 'Custom Fields', to: '/ipmgt/customfields', icon: 'i-lucide-list-plus',   permission: 'ipmgt.settings' },
       { label: 'Settings',   to: '/ipmgt/settings',   icon: 'i-lucide-settings',    permission: 'ipmgt.settings' },
       { label: 'Logs',       to: '/ipmgt/logs',       icon: 'i-lucide-scroll-text', permission: 'ipmgt.create' }
@@ -255,9 +263,9 @@ const PREFERENCES_GROUPS: NavGroup[] = [
   {
     label: 'Account',
     items: [
-      { label: 'Profile',         to: '/preferences/profile',       icon: 'i-lucide-user-round' },
-      { label: 'Password change', to: '/preferences/password',      icon: 'i-lucide-key-round', localOnly: true },
-      { label: 'Notifications',   to: '/preferences/notifications', icon: 'i-lucide-bell' }
+      { label: 'Profile',            to: '/preferences/profile',       icon: 'i-lucide-user-round' },
+      { label: 'Password & security', to: '/preferences/password',     icon: 'i-lucide-key-round' },
+      { label: 'Notifications',      to: '/preferences/notifications', icon: 'i-lucide-bell' }
     ]
   },
   {

@@ -20,10 +20,48 @@ const ENTITY_ITEMS = [
 const entityType = ref('subnet')
 const exporting = ref(false)
 
+// Optional sub-entity scope: restrict an export to the rows belonging to one
+// parent record (e.g. only one section's subnets, or one subnet's addresses).
+// Each scopeable entity maps to the parent it's filtered by and the endpoint
+// that lists those parents. Entities absent here export everything, unscoped.
+const SCOPE_CONFIG: Record<string, { label: string; endpoint: string; format: (r: any) => string }> = {
+  subnet:  { label: 'Section',   endpoint: '/api/ipmgt/sections',  format: (r) => r.name },
+  address: { label: 'Subnet',    endpoint: '/api/ipmgt/subnets',   format: (r) => (r.name ? `${r.network} — ${r.name}` : r.network) },
+  vlan:    { label: 'L2 domain', endpoint: '/api/ipmgt/l2domains', format: (r) => r.name },
+  vrf:     { label: 'Location',  endpoint: '/api/ipmgt/locations', format: (r) => r.name },
+  device:  { label: 'Location',  endpoint: '/api/ipmgt/locations', format: (r) => r.name }
+}
+const scopeConfig = computed(() => SCOPE_CONFIG[entityType.value] || null)
+const scopeId = ref('')
+const scopeItems = ref<{ value: string; label: string }[]>([])
+const loadingScope = ref(false)
+
+async function loadScopeOptions() {
+  scopeId.value = ''
+  const cfg = scopeConfig.value
+  if (!cfg || !canExport.value) { scopeItems.value = []; return }
+  loadingScope.value = true
+  try {
+    const rows = await $fetch<any[]>(cfg.endpoint)
+    scopeItems.value = [
+      { value: '', label: `All ${cfg.label.toLowerCase()}s` },
+      ...rows.map((r) => ({ value: r.id as string, label: cfg.format(r) }))
+    ]
+  } catch {
+    scopeItems.value = [{ value: '', label: `All ${cfg.label.toLowerCase()}s` }]
+  } finally {
+    loadingScope.value = false
+  }
+}
+watch(entityType, loadScopeOptions)
+onMounted(loadScopeOptions)
+
 async function doExport(format: 'json' | 'csv') {
   exporting.value = true
   try {
-    const rows = await $fetch<any[]>('/api/ipmgt/export', { query: { entity_type: entityType.value } })
+    const query: Record<string, string> = { entity_type: entityType.value }
+    if (scopeConfig.value && scopeId.value) query.scope_id = scopeId.value
+    const rows = await $fetch<any[]>('/api/ipmgt/export', { query })
     const base = `ipmgt-${entityType.value}`
     if (format === 'json') {
       downloadJson(exportFilename(base, 'json'), rows)
@@ -85,7 +123,24 @@ async function doImport() {
 
       <section v-if="canExport" class="panel space-y-3 p-5">
         <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Export</h2>
-        <p class="text-sm text-(--color-muted)">Download every {{ entityType }} row. Device exports never include SNMP credentials.</p>
+        <p class="text-sm text-(--color-muted)">
+          Download {{ scopeConfig && scopeId ? 'the selected' : 'every' }} {{ entityType }} row. Device exports never include SNMP credentials.
+        </p>
+        <UFormField
+          v-if="scopeConfig"
+          :label="`Limit to ${scopeConfig.label.toLowerCase()}`"
+          class="max-w-xs"
+          :description="`Optional — export only the ${entityType}s under one ${scopeConfig.label.toLowerCase()}.`"
+        >
+          <USelect
+            v-model="scopeId"
+            :items="scopeItems"
+            value-key="value"
+            label-key="label"
+            :loading="loadingScope"
+            class="w-full"
+          />
+        </UFormField>
         <div class="flex gap-2">
           <UButton icon="i-lucide-file-json" variant="soft" :loading="exporting" @click="doExport('json')">Export JSON</UButton>
           <UButton icon="i-lucide-file-spreadsheet" variant="soft" :loading="exporting" @click="doExport('csv')">Export CSV</UButton>

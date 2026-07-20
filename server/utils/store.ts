@@ -29,6 +29,11 @@ export interface User {
    *  SSO/LDAP users are unaffected - their tier comes from the realm-role map
    *  instead. See shared/utils/entitlements.ts. */
   appAccess?: Record<string, string>
+  /** Whether this user has configured their portal security password (the
+   *  second secret required to confirm critical deletes - see
+   *  server/utils/confirmAction.ts). Derived boolean only; the hash itself is
+   *  never mapped onto a User and never leaves the DB. */
+  securityPasswordSet?: boolean
 }
 
 export interface NotificationPreferences {
@@ -105,7 +110,8 @@ function rowToUser(row: any): User {
     createdAt: row.created_at,
     lastLogin: row.last_login ?? undefined,
     realmRoles: row.realm_roles ? safeParseRealmRoles(row.realm_roles) : undefined,
-    appAccess: row.app_access ? safeParseAppAccess(row.app_access) : undefined
+    appAccess: row.app_access ? safeParseAppAccess(row.app_access) : undefined,
+    securityPasswordSet: row.security_password_hash != null && row.security_password_hash !== ''
   }
 }
 
@@ -337,6 +343,45 @@ export async function resetUserRole(id: string): Promise<User> {
 
 export async function deleteUser(id: string): Promise<void> {
   await getDb().query('DELETE FROM users WHERE id = $1', [id])
+}
+
+// ─── security password ──────────────────────────────────────────────────────
+// A portal-wide second secret (separate from the login password) that every
+// user - including SSO accounts with no verifiable login password - must key
+// in to confirm the deletion of a critical record in any sub-app. Stored as a
+// bcrypt hash on the user row; NULL = not yet configured. See
+// server/utils/confirmAction.ts (verification) and the set-up prompt.
+
+/** Whether the user has configured a security password. */
+export async function hasSecurityPassword(userId: string): Promise<boolean> {
+  const { rows } = await getDb().query('SELECT security_password_hash FROM users WHERE id = $1', [userId])
+  const hash = rows[0]?.security_password_hash
+  return hash != null && hash !== ''
+}
+
+/** Set (or replace) the user's security password. */
+export async function setSecurityPassword(userId: string, password: string): Promise<void> {
+  const result = await getDb().query(
+    'UPDATE users SET security_password_hash = $2 WHERE id = $1',
+    [userId, bcrypt.hashSync(password, 10)]
+  )
+  if (result.rowCount === 0) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+}
+
+/** Verify a candidate security password against the stored hash. Returns false
+ *  when the user has no security password configured. */
+export async function verifySecurityPassword(userId: string, password: string): Promise<boolean> {
+  const { rows } = await getDb().query('SELECT security_password_hash FROM users WHERE id = $1', [userId])
+  const hash = rows[0]?.security_password_hash
+  if (!hash) return false
+  return bcrypt.compareSync(password, hash)
+}
+
+/** Clear the user's security password (portal-admin reset), forcing them to set
+ *  a new one on their next login. */
+export async function clearSecurityPassword(userId: string): Promise<void> {
+  const result = await getDb().query('UPDATE users SET security_password_hash = NULL WHERE id = $1', [userId])
+  if (result.rowCount === 0) throw createError({ statusCode: 404, statusMessage: 'User not found' })
 }
 
 export async function touchLogin(username: string): Promise<void> {

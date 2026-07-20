@@ -133,6 +133,22 @@ async function saveEdit() {
   } catch (e: any) { toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
 
+const resettingSecurity = ref(false)
+async function resetSecurityPassword() {
+  if (!editTarget.value) return
+  resettingSecurity.value = true
+  try {
+    const updated = await $fetch<any>(`/api/users/${editTarget.value.id}/reset-security-password`, { method: 'POST' })
+    data.value = (data.value ?? []).map((u) => u.id === updated.id ? { ...u, securityPasswordSet: false } : u)
+    editTarget.value = { ...editTarget.value, securityPasswordSet: false }
+    toast.add({ title: `Security password reset for ${editTarget.value.username}`, description: 'They will be asked to set a new one on next login.', color: 'primary', icon: 'i-lucide-shield-x' })
+  } catch (e: any) {
+    toast.add({ title: 'Reset failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally {
+    resettingSecurity.value = false
+  }
+}
+
 const resettingRole = ref(false)
 async function resetRole() {
   if (!editTarget.value) return
@@ -297,6 +313,33 @@ async function confirmDelete() {
               @click="resetRole"
             />
           </div>
+          <div class="panel-flush flex items-center justify-between gap-3 p-3 text-xs">
+            <div class="min-w-0">
+              <p class="font-medium text-foam flex items-center gap-1.5">
+                <UIcon name="i-lucide-shield" class="size-3.5 shrink-0" />
+                Security password
+                <span
+                  class="rounded px-1.5 py-0.5"
+                  :class="editTarget?.securityPasswordSet ? 'bg-running/10 text-running' : 'bg-surface-2 text-faint'"
+                >{{ editTarget?.securityPasswordSet ? 'Configured' : 'Not set' }}</span>
+              </p>
+              <p class="mt-1 text-faint">
+                The secret this user confirms critical deletes with. Reset it if they've forgotten it —
+                they'll be prompted to set a new one on their next login.
+              </p>
+            </div>
+            <UButton
+              v-if="editTarget?.securityPasswordSet"
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-shield-x"
+              label="Reset"
+              :loading="resettingSecurity"
+              @click="resetSecurityPassword"
+            />
+          </div>
+
           <UFormField v-if="editTarget?.source === 'local'" label="New password" :description="`Leave blank to keep current. ${passwordRuleSummary}`">
             <UInput v-model="editForm.password" type="password" class="w-full" />
           </UFormField>
