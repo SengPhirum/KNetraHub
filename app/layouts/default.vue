@@ -219,16 +219,6 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
 
     <!-- Main column -->
     <div class="relative z-10 flex min-h-dvh flex-col" :class="{ 'lg:pl-64': !isHome }">
-      <!-- System notification banner (Admin > System > Maintenance > General):
-           a dismissible heads-up for every signed-in user, never blocks access. -->
-      <div v-if="showBanner" class="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 sm:px-6">
-        <UIcon name="i-lucide-megaphone" class="mt-0.5 size-4 shrink-0" />
-        <p class="min-w-0 flex-1 whitespace-pre-line">{{ sysMaint?.banner.message }}</p>
-        <button class="shrink-0 rounded p-0.5 transition-colors hover:bg-amber-500/15" aria-label="Dismiss notification" @click="dismissBanner">
-          <UIcon name="i-lucide-x" class="size-4" />
-        </button>
-      </div>
-
       <!-- top bar -->
       <header class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-hull-soft bg-ink/85 px-4 backdrop-blur-md sm:px-6">
         <UButton
@@ -306,6 +296,17 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
           <div class="skeleton h-8 w-28 rounded-lg" />
         </template>
       </header>
+
+      <!-- System notification banner (Admin > System > Maintenance > General):
+           a dismissible heads-up for every signed-in user, shown directly below
+           the navbar, never blocks access. -->
+      <div v-if="showBanner" class="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 sm:px-6">
+        <UIcon name="i-lucide-megaphone" class="mt-0.5 size-4 shrink-0" />
+        <p class="min-w-0 flex-1 whitespace-pre-line">{{ sysMaint?.banner.message }}</p>
+        <button class="shrink-0 rounded p-0.5 transition-colors hover:bg-amber-500/15" aria-label="Dismiss notification" @click="dismissBanner">
+          <UIcon name="i-lucide-x" class="size-4" />
+        </button>
+      </div>
 
       <!-- page -->
       <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">

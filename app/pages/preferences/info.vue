@@ -4,17 +4,26 @@ import type { AppKey, AppTier } from '../../../shared/utils/entitlements'
 // Preferences > General > Info. Default landing for the preferences area:
 // a read-only summary of who the signed-in user is and what they can reach.
 const { user, accessibleApps } = useAuth()
+const { enabledModules, fetchModules } = useModules()
+
+// The per-app list mirrors the launcher: only subsystems an admin has actually
+// enabled are shown, annotated with this user's granted tier. Enablement is
+// runtime state (ModuleRuntimeState), not part of the compile-time registry, so
+// it must be loaded first — otherwise nothing is enabled and the list is empty.
+await fetchModules().catch(() => [])
 
 const TIER_COLOR: Record<AppTier, 'neutral' | 'info' | 'primary'> = {
   viewer: 'neutral',
   operator: 'info',
+  manager: 'info',
   admin: 'primary'
 }
 
 const appAccess = computed(() =>
-  getModuleRegistry()
-    .filter((m) => m.enabled)
-    .map((m) => ({ ...m, tier: (user.value?.apps?.[m.key as AppKey] ?? null) as AppTier | null }))
+  enabledModules.value.map((m) => ({
+    ...m,
+    tier: (user.value?.apps?.[m.key as AppKey] ?? null) as AppTier | null
+  }))
 )
 </script>
 

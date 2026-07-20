@@ -81,6 +81,17 @@ definePollerModule({
         })
       }
       device.status = 'up'
+    } else if (device.snmp_disabled && wasStatus === 'degraded') {
+      // ICMP-only devices have no SNMP dimension, so a reachable one is simply
+      // "up" — "degraded" is meaningless here. The system module (the only
+      // thing that clears 'degraded' → 'up') is skipped for ICMP-only devices,
+      // so a 'degraded' left over from before SNMP was disabled would otherwise
+      // stick forever. Reachable + ICMP-only ⇒ clear it now.
+      await db.query(
+        `UPDATE monitoring.devices SET status = 'up', status_reason = NULL, updated_at = now() WHERE id = $1`,
+        [device.id]
+      )
+      device.status = 'up'
     }
     return { status: 'success' }
   }
