@@ -11,11 +11,16 @@ Date: 2026-07-20 UTC
 
 ## Source
 
-- Commit: `f633b64`
+- Commit: `160e8b3`
 - Previous tag: none
 
 ## Changes
 
+- Fix users list autofill and move reset-secret button into rows (160e8b3)
+- Add secret-password setup prompt, self-service tab, and emailed reset links (56d260f)
+- Tier delete confirmations (low=yes/no, medium=type name, high=password) (2537772)
+- Add per-app Users admin, IPAM export scoping, and portal security password for deletes (986595d)
+- Update (04ddf46)
 - Update (f633b64)
 - Update release note (9885b9d)
 - Add email configuration and templates to admin settings (c6475d2)
