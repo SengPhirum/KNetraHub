@@ -1,5 +1,6 @@
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
@@ -7,6 +8,7 @@ export default defineEventHandler(async (event) => {
   const db = getDb()
   const cur = await db.query('SELECT * FROM ipmgt_nat_rules WHERE id = $1', [id])
   if (!cur.rows.length) throw createError({ statusCode: 404, statusMessage: 'NAT rule not found' })
+  await requireDeleteConfirm(event, 'ipmgt.nat', { name: cur.rows[0].translated_address })
   await db.query('DELETE FROM ipmgt_nat_rules WHERE id = $1', [id])
   await ipamAudit(user, 'ipmgt.nat.delete', id, { translated_address: cur.rows[0].translated_address })
   return { deleted: 1 }

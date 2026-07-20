@@ -1,16 +1,16 @@
 import { requireRole } from '~~/server/utils/auth'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { audit } from '~~/server/utils/store'
 import { logSystem } from '~~/server/utils/moduleLogs'
 
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'admin')
-  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const force = getQuery(event).force === 'true'
   const docker = useDocker()
   const hostname = (await docker.getNode(id).inspect().catch(() => null))?.Description?.Hostname || id
+  await requireDeleteConfirm(event, 'docker.node', { name: hostname })
 
   try {
     await docker.getNode(id).remove({ force })

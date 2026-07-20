@@ -59,10 +59,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const r = deleteTarget.value
   if (!r) return
-  await $fetch(`/api/ipmgt/nat/${r.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/nat/${r.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'NAT rule deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -174,7 +174,9 @@ function sourceLabel(r: any) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.nat"
+      :item-name="deleteTarget?.translated_address"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete NAT rule"

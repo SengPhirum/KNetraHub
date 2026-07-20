@@ -166,19 +166,13 @@ async function resetRole() {
 }
 
 const deleteTarget = ref<any>(null)
-async function confirmDelete() {
-  if (!deleteTarget.value) return
-  const saved = [...(data.value ?? [])]
-  data.value = saved.filter((u) => u.id !== deleteTarget.value.id)
-  try {
-    await $fetch(`/api/users/${deleteTarget.value.id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${deleteTarget.value.username}`, color: 'primary' })
-    deleteTarget.value = null
-  } catch (e: any) {
-    data.value = saved
-    deleteTarget.value = null
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+async function confirmDelete(headers: Record<string, string>) {
+  const target = deleteTarget.value
+  if (!target) return
+  await $fetch(`/api/users/${target.id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${target.username}`, color: 'primary' })
+  data.value = (data.value ?? []).filter((u) => u.id !== target.id)
+  deleteTarget.value = null
 }
 </script>
 
@@ -369,20 +363,14 @@ async function confirmDelete() {
     </UModal>
 
     <!-- Delete confirm modal -->
-    <UModal :open="!!deleteTarget" @update:open="deleteTarget = null" title="Delete user?">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">
-          Are you sure you want to delete
-          <span class="font-mono text-foam">{{ deleteTarget?.username }}</span>?
-          This action cannot be undone.
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2 w-full">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="deleteTarget = null" />
-          <UButton color="error" label="Delete" icon="i-lucide-trash-2" @click="confirmDelete" />
-        </div>
-      </template>
-    </UModal>
+    <ConfirmDeleteModal
+      type="user"
+      :item-name="deleteTarget?.username"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete user?"
+      :message="deleteTarget ? `User ${deleteTarget.username} will be permanently deleted. This action cannot be undone.` : ''"
+      :action="confirmDelete"
+    />
   </div>
 </template>

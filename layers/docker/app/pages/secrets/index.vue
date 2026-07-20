@@ -30,13 +30,14 @@ async function create() {
     setTimeout(refresh, 500)
   } catch (e: any) { toast.add({ title: 'Create failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
-async function remove(s: any) {
-  if (!confirm(`Delete secret "${s.name}"? Services using it must be updated first.`)) return
-  try {
-    await $fetch(`/api/secrets/${s.id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${s.name}`, color: 'primary' })
-    refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } }) }
+const deleteTarget = ref<any>(null)
+async function confirmRemove(headers: Record<string, string>) {
+  const s = deleteTarget.value
+  if (!s) return
+  await $fetch(`/api/secrets/${s.id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${s.name}`, color: 'primary' })
+  deleteTarget.value = null
+  refresh()
 }
 
 function openSecret(s: any) {
@@ -90,7 +91,7 @@ function openSecret(s: any) {
           </div>
           <div class="sm:col-span-5 text-xs text-faint">Created {{ relative(s.created) }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
-            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(s)" />
+            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="deleteTarget = s" />
           </div>
         </div>
       </div>
@@ -110,5 +111,15 @@ function openSecret(s: any) {
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="docker.secret"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete secret"
+      :message="deleteTarget ? `Secret ${deleteTarget.name} will be permanently removed. Services using it must be updated first.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

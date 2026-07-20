@@ -1,4 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { secretUsers, formatResourceUsers } from '~~/layers/docker/server/utils/resourceUsage'
 import { audit } from '~~/server/utils/store'
@@ -9,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const docker = useDocker()
   const name = (await docker.getSecret(id).inspect().catch(() => null))?.Spec?.Name || id
+  await requireDeleteConfirm(event, 'docker.secret', { name })
 
   // Refuse to delete a secret a service still references, and name the exact
   // services - Docker's own "in use" error doesn't say which.

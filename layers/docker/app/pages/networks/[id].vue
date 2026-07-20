@@ -23,15 +23,12 @@ function listLabel(items: string[] = []) {
   return items.length ? items.join(', ') : '-'
 }
 
-async function remove() {
-  if (!data.value || !confirm(`Delete network "${data.value.name}"?`)) return
-  try {
-    await $fetch(`/api/networks/${id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
-    navigateTo('/networks')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
-  }
+const deleteOpen = ref(false)
+async function confirmRemove(headers: Record<string, string>) {
+  if (!data.value) return
+  await $fetch(`/api/networks/${id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
+  navigateTo('/networks')
 }
 </script>
 
@@ -45,7 +42,7 @@ async function remove() {
         </div>
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/networks" label="Back" />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
-        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="remove" />
+        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="deleteOpen = true" />
       </template>
     </PageHeader>
 
@@ -97,5 +94,14 @@ async function remove() {
         <ResourceServicesTable :services="data?.services" empty-label="No services use this network." />
       </div>
     </DataState>
+
+    <ConfirmDeleteModal
+      type="docker.network"
+      :item-name="data?.name"
+      v-model:open="deleteOpen"
+      title="Delete network"
+      :message="data ? `Network ${data.name} will be permanently removed.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

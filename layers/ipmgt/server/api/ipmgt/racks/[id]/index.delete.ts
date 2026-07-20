@@ -1,16 +1,16 @@
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit } from '~~/layers/ipmgt/server/utils/ipamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 
-// Delete a rack. Placed items cascade (FK ON DELETE CASCADE) - step-up
-// confirmed since that silently discards the whole elevation.
+// Delete a rack. Placed items cascade (FK ON DELETE CASCADE) - name-confirmed
+// since that silently discards the whole elevation.
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
-  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
   const cur = await db.query('SELECT * FROM ipmgt_racks WHERE id = $1', [id])
   if (!cur.rows.length) throw createError({ statusCode: 404, statusMessage: 'Rack not found' })
+  await requireDeleteConfirm(event, 'ipmgt.rack', { name: cur.rows[0].name })
   const itemCount = await db.query('SELECT count(*)::int AS c FROM ipmgt_rack_items WHERE rack_id = $1', [id])
 
   await db.query('DELETE FROM ipmgt_racks WHERE id = $1', [id])

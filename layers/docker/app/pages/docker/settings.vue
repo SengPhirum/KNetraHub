@@ -219,18 +219,14 @@ async function testChannel(id: string) {
   }
 }
 
-async function deleteChannel(ch: AlertChannel) {
-  if (!confirm(`Delete channel "${ch.name}"?`)) return
-  deletingChannelId.value = ch.id
-  try {
-    await $fetch(`/api/alerts/channels/${ch.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Channel deleted', color: 'primary' })
-    await refreshChannels()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally {
-    deletingChannelId.value = null
-  }
+const channelToDelete = ref<AlertChannel | null>(null)
+async function confirmDeleteChannel(headers: Record<string, string>) {
+  const ch = channelToDelete.value
+  if (!ch) return
+  await $fetch(`/api/alerts/channels/${ch.id}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Channel deleted', color: 'primary' })
+  channelToDelete.value = null
+  await refreshChannels()
 }
 
 // ─── Alerts: rules ─────────────────────────────────────────────────────────────
@@ -380,7 +376,7 @@ async function resetRule(type: string) {
                 <div class="flex items-center gap-2">
                   <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-send" label="Test" :loading="testingChannelId === ch.id" @click="testChannel(ch.id)" />
                   <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-pencil" aria-label="Edit channel" @click="openEditChannel(ch)" />
-                  <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete channel" :loading="deletingChannelId === ch.id" @click="deleteChannel(ch)" />
+                  <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete channel" :loading="deletingChannelId === ch.id" @click="channelToDelete = ch" />
                 </div>
               </div>
             </div>
@@ -495,5 +491,15 @@ async function resetRule(type: string) {
         </UModal>
       </template>
     </UTabs>
+
+    <ConfirmDeleteModal
+      type="alert-channel"
+      :item-name="channelToDelete?.name"
+      :open="!!channelToDelete"
+      @update:open="(v: boolean) => { if (!v) channelToDelete = null }"
+      title="Delete channel"
+      :message="channelToDelete ? `Channel ${channelToDelete.name} will be deleted. Rules using it stop delivering through this channel.` : ''"
+      :action="confirmDeleteChannel"
+    />
   </div>
 </template>

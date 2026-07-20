@@ -34,18 +34,13 @@ function openCreate() { editing.value = null; formOpen.value = true }
 function openEdit(s: any) { editing.value = s; formOpen.value = true }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete(force = false) {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/ipmgt/subnets/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE' })
-    toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = false }
+  const force = !!deleteTarget.value?.usage?.used
+  await $fetch(`/api/ipmgt/subnets/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -121,22 +116,17 @@ async function confirmDelete(force = false) {
 
     <IpamSubnetFormModal v-model:open="formOpen" :subnet="editing" :preset-section-id="filters.section_id || null" @saved="refresh" />
 
-    <UModal :open="!!deleteTarget" @update:open="(v: boolean) => { if (!v) deleteTarget = null }" title="Delete subnet">
-      <template #body>
-        <p class="text-sm text-(--color-muted)">
-          Delete subnet <span class="font-mono text-foam">{{ deleteTarget?.network }}</span>?
-          <template v-if="deleteTarget?.usage?.used">
-            It contains <span class="text-foam">{{ deleteTarget.usage.used }}</span> address(es) — force delete removes them too.
-          </template>
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-3">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton v-if="deleteTarget?.usage?.used" color="error" variant="soft" :loading="deleting" @click="confirmDelete(true)">Force delete</UButton>
-          <UButton v-else color="error" :loading="deleting" @click="confirmDelete(false)">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmDeleteModal
+      type="ipmgt.subnet"
+      :item-name="deleteTarget?.network"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete subnet"
+      :message="deleteTarget
+        ? `Subnet ${deleteTarget.network}${deleteTarget.usage?.used ? ` and all ${deleteTarget.usage.used} address(es) in it` : ''} will be permanently removed.`
+        : ''"
+      confirm-label="Delete subnet"
+      :action="confirmDelete"
+    />
   </div>
 </template>

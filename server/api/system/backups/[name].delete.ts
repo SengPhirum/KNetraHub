@@ -1,4 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { backupTargetFromName, deleteBackup, logBackupOp } from '~~/server/utils/backups'
 import { audit } from '~~/server/utils/store'
 
@@ -6,6 +7,7 @@ import { audit } from '~~/server/utils/store'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'admin')
   const name = decodeURIComponent(getRouterParam(event, 'name') ?? '')
+  await requireDeleteConfirm(event, 'backup', { name })
   const target = backupTargetFromName(name)
   await deleteBackup(name)
   await logBackupOp({ operation: 'delete', target, filename: name, actor: user.username, status: 'success' })

@@ -1,16 +1,16 @@
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, usedByRows, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 
 // Delete a customer. Blocked (409, with the referencing records named) if any
 // subnet/VLAN/VRF/address/device still points at it - detach those first.
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
-  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
   const cur = await db.query('SELECT * FROM ipmgt_customers WHERE id = $1', [id])
   if (!cur.rows.length) throw createError({ statusCode: 404, statusMessage: 'Customer not found' })
+  await requireDeleteConfirm(event, 'ipmgt.customer', { name: cur.rows[0].name })
 
   const users = await usedByRows(id, [
     { table: 'ipmgt_subnets', col: 'customer_id', type: 'subnet', nameCol: 'network' },

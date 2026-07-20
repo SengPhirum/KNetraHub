@@ -29,15 +29,12 @@ const displayData = computed(() => {
 const dataLines = computed(() => displayData.value ? displayData.value.split(/\r?\n/) : [])
 const lineNumberWidth = computed(() => `${String(Math.max(dataLines.value.length, 1)).length}ch`)
 
-async function remove() {
-  if (!data.value || !confirm(`Delete config "${data.value.name}"?`)) return
-  try {
-    await $fetch(`/api/configs/${id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
-    navigateTo('/configs')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
-  }
+const deleteOpen = ref(false)
+async function confirmRemove(headers: Record<string, string>) {
+  if (!data.value) return
+  await $fetch(`/api/configs/${id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
+  navigateTo('/configs')
 }
 </script>
 
@@ -51,7 +48,7 @@ async function remove() {
         </div>
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/configs" label="Back" />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
-        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="remove" />
+        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="deleteOpen = true" />
       </template>
     </PageHeader>
 
@@ -95,5 +92,14 @@ async function remove() {
         <ResourceServicesTable :services="data?.services" empty-label="No services use this config." />
       </div>
     </DataState>
+
+    <ConfirmDeleteModal
+      type="docker.config"
+      :item-name="data?.name"
+      v-model:open="deleteOpen"
+      title="Delete config"
+      :message="data ? `Config ${data.name} will be permanently removed.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

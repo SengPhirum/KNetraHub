@@ -49,18 +49,12 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete() {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/monitoring/v1/locations/${deleteTarget.value.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Location deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = false }
+  await $fetch(`/api/monitoring/v1/locations/${deleteTarget.value.id}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Location deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -127,19 +121,14 @@ async function confirmDelete() {
       </template>
     </UModal>
 
-    <UModal :open="!!deleteTarget" title="Delete location" @update:open="(v) => !v && (deleteTarget = null)">
-      <template #body>
-        <p class="text-sm text-muted">
-          Delete <strong>{{ deleteTarget?.name }}</strong>?
-          {{ deleteTarget?.device_count ? `${deleteTarget.device_count} device(s) keep running with no location.` : 'No devices reference it.' }}
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmDeleteModal
+      type="monitoring.location"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete location"
+      :message="deleteTarget ? `Location ${deleteTarget.name} will be deleted. ${deleteTarget.device_count ? `${deleteTarget.device_count} device(s) keep running with no location.` : 'No devices reference it.'}` : ''"
+      :action="confirmDelete"
+    />
   </div>
 </template>

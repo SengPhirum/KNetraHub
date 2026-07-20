@@ -31,13 +31,14 @@ async function create() {
   } catch (e: any) { toast.add({ title: 'Create failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
 
-async function remove(c: any) {
-  if (!confirm(`Delete config "${c.name}"?`)) return
-  try {
-    await $fetch(`/api/configs/${c.id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${c.name}`, color: 'primary' })
-    refresh()
-  } catch (e: any) { toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } }) }
+const deleteTarget = ref<any>(null)
+async function confirmRemove(headers: Record<string, string>) {
+  const c = deleteTarget.value
+  if (!c) return
+  await $fetch(`/api/configs/${c.id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${c.name}`, color: 'primary' })
+  deleteTarget.value = null
+  refresh()
 }
 
 function openConfig(c: any) {
@@ -87,7 +88,7 @@ function openConfig(c: any) {
           <div class="sm:col-span-4 text-xs text-faint">Created {{ relative(c.created) }}</div>
           <div class="col-span-2 sm:col-span-2 flex justify-end gap-1">
             <UButton icon="i-lucide-eye" color="neutral" variant="ghost" size="sm" :to="`/configs/${c.id}`" @click.stop />
-            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(c)" />
+            <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="deleteTarget = c" />
           </div>
         </div>
       </div>
@@ -107,5 +108,15 @@ function openConfig(c: any) {
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="docker.config"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete config"
+      :message="deleteTarget ? `Config ${deleteTarget.name} will be permanently removed.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

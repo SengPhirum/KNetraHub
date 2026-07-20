@@ -95,16 +95,14 @@ async function createBackup() {
   } finally { creating.value = false }
 }
 
-async function deleteBackup(name: string) {
-  if (!confirm(`Delete backup ${name}? This cannot be undone.`)) return
-  deleting.value = name
-  try {
-    await $fetch(`/api/system/backups/${encodeURIComponent(name)}`, { method: 'DELETE' })
-    toast.add({ title: 'Backup deleted', description: name, color: 'primary', icon: 'i-lucide-check' })
-    await loadBackups()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = null }
+const backupToDelete = ref<string | null>(null)
+async function confirmDeleteBackup(headers: Record<string, string>) {
+  const name = backupToDelete.value
+  if (!name) return
+  await $fetch(`/api/system/backups/${encodeURIComponent(name)}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Backup deleted', description: name, color: 'primary', icon: 'i-lucide-check' })
+  backupToDelete.value = null
+  await loadBackups()
 }
 
 function onFilePicked(e: Event) {
@@ -285,7 +283,7 @@ function fmtBytes(n?: number | string | null): string {
                   <UButton size="xs" variant="soft" color="warning" icon="i-lucide-history"
                     :disabled="restoring" @click="askRestoreExisting(b.name, b.target)">Restore</UButton>
                   <UButton size="xs" variant="soft" color="error" icon="i-lucide-trash-2"
-                    :loading="deleting === b.name" @click="deleteBackup(b.name)">Delete</UButton>
+                    :loading="deleting === b.name" @click="backupToDelete = b.name">Delete</UButton>
                 </div>
               </div>
             </div>
@@ -373,5 +371,15 @@ function fmtBytes(n?: number | string | null): string {
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="backup"
+      :item-name="backupToDelete || undefined"
+      :open="!!backupToDelete"
+      @update:open="(v: boolean) => { if (!v) backupToDelete = null }"
+      title="Delete backup"
+      :message="backupToDelete ? `Backup ${backupToDelete} will be permanently deleted. This cannot be undone.` : ''"
+      :action="confirmDeleteBackup"
+    />
   </div>
 </template>

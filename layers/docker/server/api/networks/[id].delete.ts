@@ -1,4 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { networkUsers, formatResourceUsers } from '~~/layers/docker/server/utils/resourceUsage'
 import { audit } from '~~/server/utils/store'
@@ -9,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const docker = useDocker()
   const name = (await docker.getNetwork(id).inspect().catch(() => null))?.Name || id
+  await requireDeleteConfirm(event, 'docker.network', { name })
 
   // Refuse to delete a network something is still attached to, and name the
   // exact users - Docker's own "in use" error doesn't say who.

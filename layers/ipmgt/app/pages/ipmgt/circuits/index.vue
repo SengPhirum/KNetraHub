@@ -70,10 +70,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const c = deleteTarget.value
   if (!c) return
-  await $fetch(`/api/ipmgt/circuits/${c.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/circuits/${c.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Circuit deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -217,7 +217,9 @@ function expiryClass(date: string | null) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.circuit"
+      :item-name="deleteTarget?.circuit_ref"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete circuit"

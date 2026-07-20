@@ -471,22 +471,18 @@ async function saveProvider(provider: SettingsProvider) {
   }
 }
 
-async function resetProvider(provider: SettingsProvider) {
-  if (!confirm(`Reset ${provider.toUpperCase()} settings to environment defaults?`)) return
-  resettingProvider.value = provider
-  try {
-    await $fetch(`/api/auth/settings?provider=${provider}`, { method: 'DELETE' })
-    toast.add({
-      title: `${provider.toUpperCase()} now follows environment defaults`,
-      color: 'primary',
-      icon: 'i-lucide-rotate-ccw'
-    })
-    await refreshAuth()
-  } catch (e: any) {
-    toast.add({ title: 'Reset failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally {
-    resettingProvider.value = null
-  }
+const resetTarget = ref<SettingsProvider | null>(null)
+async function confirmResetProvider(headers: Record<string, string>) {
+  const provider = resetTarget.value
+  if (!provider) return
+  await $fetch(`/api/auth/settings?provider=${provider}`, { method: 'DELETE', headers })
+  toast.add({
+    title: `${provider.toUpperCase()} now follows environment defaults`,
+    color: 'primary',
+    icon: 'i-lucide-rotate-ccw'
+  })
+  resetTarget.value = null
+  await refreshAuth()
 }
 
 async function copyLocalRecoveryUrl() {
@@ -602,7 +598,7 @@ async function copyLocalRecoveryUrl() {
               icon="i-lucide-rotate-ccw"
               :disabled="!auth?.local.overridden"
               :loading="resettingProvider === 'local'"
-              @click="resetProvider('local')"
+              @click="resetTarget = 'local'"
             />
             <UButton
               color="primary"
@@ -744,7 +740,7 @@ async function copyLocalRecoveryUrl() {
                   icon="i-lucide-rotate-ccw"
                   :disabled="!auth?.oidc.overridden"
                   :loading="resettingProvider === 'oidc'"
-                  @click="resetProvider('oidc')"
+                  @click="resetTarget = 'oidc'"
                 />
                 <UButton
                   color="primary"
@@ -874,7 +870,7 @@ async function copyLocalRecoveryUrl() {
               icon="i-lucide-rotate-ccw"
               :disabled="!auth?.ldap.overridden"
               :loading="resettingProvider === 'ldap'"
-              @click="resetProvider('ldap')"
+              @click="resetTarget = 'ldap'"
             />
             <UButton
               color="primary"
@@ -1246,5 +1242,15 @@ async function copyLocalRecoveryUrl() {
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="auth-settings"
+      :open="!!resetTarget"
+      @update:open="(v: boolean) => { if (!v) resetTarget = null }"
+      title="Reset authentication settings"
+      :message="resetTarget ? `${resetTarget.toUpperCase()} settings will revert to environment defaults. Existing sign-ins may be affected.` : ''"
+      confirm-label="Reset"
+      :action="confirmResetProvider"
+    />
   </div>
 </template>

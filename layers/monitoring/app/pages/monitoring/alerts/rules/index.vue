@@ -151,18 +151,12 @@ async function toggleEnabled(r: any) {
 }
 
 const deleteTarget = ref<any>(null)
-const deleting = ref(false)
-async function confirmDelete() {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
-  deleting.value = true
-  try {
-    await $fetch(`/api/monitoring/v1/alerts/rules/${deleteTarget.value.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Rule deleted', color: 'primary', icon: 'i-lucide-check' })
-    deleteTarget.value = null
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = false }
+  await $fetch(`/api/monitoring/v1/alerts/rules/${deleteTarget.value.id}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Rule deleted', color: 'primary', icon: 'i-lucide-check' })
+  deleteTarget.value = null
+  await refresh()
 }
 </script>
 
@@ -277,18 +271,14 @@ async function confirmDelete() {
       </template>
     </UModal>
 
-    <UModal :open="!!deleteTarget" title="Delete alert rule" @update:open="(v) => !v && (deleteTarget = null)">
-      <template #body>
-        <p class="text-sm text-muted">
-          Delete <strong>{{ deleteTarget?.name }}</strong>? Its open incidents and their history are removed with it.
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="deleteTarget = null">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="confirmDelete">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmDeleteModal
+      type="monitoring.alert-rule"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete alert rule"
+      :message="deleteTarget ? `Alert rule ${deleteTarget.name} will be deleted. Its open incidents and their history are removed with it.` : ''"
+      :action="confirmDelete"
+    />
   </div>
 </template>

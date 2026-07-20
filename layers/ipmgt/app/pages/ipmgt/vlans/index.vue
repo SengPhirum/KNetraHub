@@ -42,9 +42,9 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
-  await $fetch(`/api/ipmgt/vlans/${deleteTarget.value.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/vlans/${deleteTarget.value.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'VLAN deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -142,11 +142,13 @@ async function confirmDelete(password: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.vlan"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete VLAN"
-      :message="deleteTarget ? `VLAN ${deleteTarget.vlan_id} will be removed. Subnets referencing it are detached, not deleted.` : ''"
+      :message="deleteTarget ? `VLAN ${deleteTarget.vlan_id} (${deleteTarget.name}) will be removed. Subnets referencing it are detached, not deleted.` : ''"
       confirm-label="Delete"
       :action="confirmDelete"
     />

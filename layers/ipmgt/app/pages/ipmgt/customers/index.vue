@@ -48,10 +48,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const c = deleteTarget.value
   if (!c) return
-  await $fetch(`/api/ipmgt/customers/${c.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/customers/${c.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Customer deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -163,7 +163,9 @@ function statusClass(s: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.customer"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete customer"

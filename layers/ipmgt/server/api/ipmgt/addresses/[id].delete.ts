@@ -1,5 +1,6 @@
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, recordIpHistory, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 
 // Release/delete an address (frees it — free addresses are not stored).
 export default defineEventHandler(async (event) => {
@@ -10,6 +11,7 @@ export default defineEventHandler(async (event) => {
   const cur = await db.query('SELECT * FROM ipmgt_ips WHERE id = $1', [id])
   if (!cur.rows.length) throw createError({ statusCode: 404, statusMessage: 'Address not found' })
   const row = cur.rows[0]
+  await requireDeleteConfirm(event, 'ipmgt.address', { name: row.ip })
 
   await db.query('DELETE FROM ipmgt_ips WHERE id = $1', [id])
   await deleteCustomFieldValues('address', id)

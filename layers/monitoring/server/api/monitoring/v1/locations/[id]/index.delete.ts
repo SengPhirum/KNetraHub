@@ -1,4 +1,5 @@
 import { requireMonitoring } from '../../../../../utils/monitoringAuth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { monDb, idParam, auditMonitoring, notFound } from '../../../../../utils/monApi'
 
 /**
@@ -7,6 +8,7 @@ import { monDb, idParam, auditMonitoring, notFound } from '../../../../../utils/
  */
 export default defineEventHandler(async (event) => {
   const user = await requireMonitoring(event, 'admin')
+  await requireDeleteConfirm(event, 'monitoring.location')
   const db = await monDb()
   const id = idParam(event)
   const res = await db.query(`DELETE FROM monitoring.locations WHERE id = $1 RETURNING name`, [id])

@@ -72,10 +72,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
   const force = !!deleteTarget.value.subnet_count
-  await $fetch(`/api/ipmgt/sections/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/sections/${deleteTarget.value.id}${force ? '?force=true' : ''}`, { method: 'DELETE', headers })
   toast.add({ title: 'Section deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -174,7 +174,9 @@ async function confirmDelete(password: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.section"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete section"

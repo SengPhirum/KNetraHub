@@ -18,15 +18,12 @@ useIntervalFn(() => {
 
 const title = computed(() => `Secret ${data.value?.name || short(id, 12)}`)
 
-async function remove() {
-  if (!data.value || !confirm(`Delete secret "${data.value.name}"? Services using it must be updated first.`)) return
-  try {
-    await $fetch(`/api/secrets/${id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
-    navigateTo('/secrets')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
-  }
+const deleteOpen = ref(false)
+async function confirmRemove(headers: Record<string, string>) {
+  if (!data.value) return
+  await $fetch(`/api/secrets/${id}`, { method: 'DELETE', headers })
+  toast.add({ title: `Deleted ${data.value.name}`, color: 'primary' })
+  navigateTo('/secrets')
 }
 </script>
 
@@ -40,7 +37,7 @@ async function remove() {
         </div>
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/secrets" label="Back" />
         <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="refreshing" @click="refresh()" />
-        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="remove" />
+        <UButton v-if="can('operator')" icon="i-lucide-trash-2" color="error" variant="soft" label="Delete" @click="deleteOpen = true" />
       </template>
     </PageHeader>
 
@@ -69,5 +66,14 @@ async function remove() {
         <ResourceServicesTable :services="data?.services" empty-label="No services use this secret." />
       </div>
     </DataState>
+
+    <ConfirmDeleteModal
+      type="docker.secret"
+      :item-name="data?.name"
+      v-model:open="deleteOpen"
+      title="Delete secret"
+      :message="data ? `Secret ${data.name} will be permanently removed. Services using it must be updated first.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

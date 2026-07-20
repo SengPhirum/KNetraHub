@@ -51,10 +51,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const l = deleteTarget.value
   if (!l) return
-  await $fetch(`/api/ipmgt/locations/${l.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/locations/${l.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Location deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -178,7 +178,9 @@ async function confirmDelete(password: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.location"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete location"

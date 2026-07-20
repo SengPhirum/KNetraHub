@@ -1,4 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { audit } from '~~/server/utils/store'
 import { logSystem } from '~~/server/utils/moduleLogs'
@@ -8,6 +9,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const docker = useDocker()
   const name = (await docker.getContainer(id).inspect().catch(() => null))?.Name?.replace(/^\//, '') || id
+  await requireDeleteConfirm(event, 'docker.container', { name })
 
   try {
     await docker.getContainer(id).remove({ force: true })

@@ -1,4 +1,5 @@
 import { requireMonitoring } from '../../../../../utils/monitoringAuth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { monDb, auditMonitoring, badRequest, conflict, notFound } from '../../../../../utils/monApi'
 
 /**
@@ -8,6 +9,7 @@ import { monDb, auditMonitoring, badRequest, conflict, notFound } from '../../..
  */
 export default defineEventHandler(async (event) => {
   const user = await requireMonitoring(event, 'admin')
+  await requireDeleteConfirm(event, 'monitoring.poller')
   const db = await monDb()
   const id = String(getRouterParam(event, 'id') ?? '').trim()
   if (!id) badRequest('invalid node id')

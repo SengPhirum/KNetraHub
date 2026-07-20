@@ -56,10 +56,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const v = deleteTarget.value
   if (!v) return
-  await $fetch(`/api/ipmgt/vault/${v.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/vault/${v.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Vault item deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -212,7 +212,9 @@ async function copyRevealed() {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.vault"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete vault item"

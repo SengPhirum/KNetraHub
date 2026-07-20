@@ -1,5 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { useDocker, throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 import { volumeUsers, formatResourceUsers } from '~~/layers/docker/server/utils/resourceUsage'
 import { audit } from '~~/server/utils/store'
@@ -7,8 +7,8 @@ import { logSystem } from '~~/server/utils/moduleLogs'
 
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
-  await requirePasswordConfirm(event)
   const name = getRouterParam(event, 'name')!
+  await requireDeleteConfirm(event, 'docker.volume', { name })
 
   // Refuse to delete a volume something still mounts, and name the exact
   // users - Docker's own "volume is in use" error only lists container IDs.

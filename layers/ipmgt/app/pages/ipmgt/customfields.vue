@@ -72,10 +72,10 @@ async function save() {
 }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const d = deleteTarget.value
   if (!d) return
-  await $fetch(`/api/ipmgt/customfields/defs/${d.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/customfields/defs/${d.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Field deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -180,7 +180,9 @@ async function confirmDelete(password: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.customfield"
+      :item-name="deleteTarget?.label"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete custom field"

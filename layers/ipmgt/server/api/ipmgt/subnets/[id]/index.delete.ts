@@ -1,14 +1,14 @@
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, loadSubnet, deleteCustomFieldValues } from '~~/layers/ipmgt/server/utils/ipamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 
 // Delete (truncate) a subnet. Blocked when it holds addresses or child subnets
 // unless ?force=true. Addresses cascade via FK; children are detached.
 export default defineEventHandler(async (event) => {
   const user = await requireIpam(event, 'admin')
-  await requirePasswordConfirm(event)
   const id = getRouterParam(event, 'id')!
   const subnet = await loadSubnet(id)
+  await requireDeleteConfirm(event, 'ipmgt.subnet', { name: subnet.network })
   const force = getQuery(event).force === 'true'
   const db = getDb()
 

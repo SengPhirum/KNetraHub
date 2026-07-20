@@ -74,19 +74,13 @@ const bulkItems = computed(() => [[
 ]])
 
 const deleteConfirmOpen = ref(false)
-const deleting = ref(false)
-async function confirmBulkDelete() {
-  deleting.value = true
-  try {
-    const ids = [...selected.value]
-    const res = await $fetch<any>('/api/monitoring/v1/devices', { method: 'DELETE', body: { ids } })
-    toast.add({ title: `Deleted ${res.deleted} device(s)`, color: 'primary', icon: 'i-lucide-check' })
-    selected.value = new Set()
-    deleteConfirmOpen.value = false
-    await refresh()
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally { deleting.value = false }
+async function confirmBulkDelete(headers: Record<string, string>) {
+  const ids = [...selected.value]
+  const res = await $fetch<any>('/api/monitoring/v1/devices', { method: 'DELETE', body: { ids }, headers })
+  toast.add({ title: `Deleted ${res.deleted} device(s)`, color: 'primary', icon: 'i-lucide-check' })
+  selected.value = new Set()
+  deleteConfirmOpen.value = false
+  await refresh()
 }
 
 const statusItems = [
@@ -340,19 +334,13 @@ const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total ?? 0)
       </template>
     </UModal>
 
-    <UModal v-model:open="deleteConfirmOpen" title="Delete devices">
-      <template #body>
-        <p class="text-sm text-muted">
-          Delete <strong>{{ selected.size }}</strong> device(s) and all their collected data (ports, sensors, metrics,
-          alerts, history)? This cannot be undone.
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="deleteConfirmOpen = false">Cancel</UButton>
-          <UButton color="error" :loading="deleting" @click="confirmBulkDelete">Delete</UButton>
-        </div>
-      </template>
-    </UModal>
+    <ConfirmDeleteModal
+      type="monitoring.device-bulk"
+      v-model:open="deleteConfirmOpen"
+      title="Delete devices"
+      :message="`${selected.size} device(s) and all their collected data (ports, sensors, metrics, alerts, history) will be permanently deleted. This cannot be undone.`"
+      confirm-label="Delete devices"
+      :action="confirmBulkDelete"
+    />
   </div>
 </template>

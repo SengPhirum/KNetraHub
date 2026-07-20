@@ -1,5 +1,5 @@
 import { requireRole } from '~~/server/utils/auth'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { removeStack } from '~~/layers/docker/server/utils/stack'
 import { gitlabEnabled, deleteStackFile } from '~~/layers/docker/server/utils/gitlab'
 import { deleteStackHistory } from '~~/layers/docker/server/utils/stackHistory'
@@ -9,8 +9,8 @@ import { logSystem } from '~~/server/utils/moduleLogs'
 import { throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
-  await requirePasswordConfirm(event)
   const name = getRouterParam(event, 'name')!
+  await requireDeleteConfirm(event, 'docker.stack', { name })
   // ?git=true - also erase the stack from version control (GitLab file AND
   // local history rows), not just stop its services.
   const removeFromGit = getQuery(event).git === 'true'

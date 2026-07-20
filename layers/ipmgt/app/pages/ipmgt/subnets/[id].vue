@@ -119,9 +119,9 @@ async function confirmRelease() {
 // ── Edit / delete subnet ────────────────────────────────────────────────────
 const subnetFormOpen = ref(false)
 const deleteOpen = ref(false)
-async function deleteSubnet(password: string) {
+async function deleteSubnet(headers: Record<string, string>) {
   const force = !!subnet.value?.usage?.used
-  await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/subnets/${id.value}${force ? '?force=true' : ''}`, { method: 'DELETE', headers })
   toast.add({ title: 'Subnet deleted', color: 'primary', icon: 'i-lucide-check' })
   await navigateTo('/ipmgt/subnets')
 }
@@ -357,7 +357,9 @@ const facts = computed(() => {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.subnet"
+      :item-name="subnet?.network"
       v-model:open="deleteOpen"
       title="Delete subnet"
       :message="subnet ? `Subnet ${subnet.network} and all ${subnet.usage?.used || 0} defined address(es) will be permanently removed.` : ''"

@@ -1,9 +1,11 @@
 import { requireMonitoring } from '../../../../../utils/monitoringAuth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { monDb, idParam, notFound, auditMonitoring } from '../../../../../utils/monApi'
 
 /** DELETE /api/monitoring/v1/devices/:id — remove a device and all its data. */
 export default defineEventHandler(async (event) => {
   const user = await requireMonitoring(event, 'admin')
+  await requireDeleteConfirm(event, 'monitoring.device')
   const db = await monDb()
   const id = idParam(event)
 

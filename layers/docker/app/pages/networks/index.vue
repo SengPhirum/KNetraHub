@@ -49,17 +49,14 @@ async function create() {
   }
 }
 
-async function remove(n: any) {
-  if (!confirm(`Delete network "${n.name}"?`)) return
-  const saved = [...(data.value ?? [])]
-  data.value = saved.filter((x) => x.id !== n.id)
-  try {
-    await $fetch(`/api/networks/${n.id}`, { method: 'DELETE' })
-    toast.add({ title: `Deleted ${n.name}`, color: 'primary' })
-  } catch (e: any) {
-    data.value = saved
-    toast.add({ title: 'Delete failed', description: deleteErrorDescription(e), color: 'error', ui: { description: 'whitespace-pre-line' } })
-  }
+const deleteTarget = ref<any>(null)
+async function confirmRemove(headers: Record<string, string>) {
+  const n = deleteTarget.value
+  if (!n) return
+  await $fetch(`/api/networks/${n.id}`, { method: 'DELETE', headers })
+  data.value = (data.value ?? []).filter((x) => x.id !== n.id)
+  toast.add({ title: `Deleted ${n.name}`, color: 'primary' })
+  deleteTarget.value = null
 }
 
 function openNetwork(n: any) {
@@ -116,7 +113,7 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
           <div class="sm:col-span-2 text-xs text-(--color-muted)">{{ n.scope || '—' }}</div>
           <div class="sm:col-span-3 font-mono text-xs text-faint">{{ n.subnet || '—' }}</div>
           <div class="col-span-2 sm:col-span-1 flex justify-end">
-            <UButton v-if="can('operator') && !SYSTEM.includes(n.name)" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="remove(n)" />
+            <UButton v-if="can('operator') && !SYSTEM.includes(n.name)" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click.stop="deleteTarget = n" />
           </div>
         </div>
       </TransitionGroup>
@@ -141,5 +138,15 @@ const SYSTEM = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress']
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="docker.network"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Delete network"
+      :message="deleteTarget ? `Network ${deleteTarget.name} will be permanently removed.` : ''"
+      :action="confirmRemove"
+    />
   </div>
 </template>

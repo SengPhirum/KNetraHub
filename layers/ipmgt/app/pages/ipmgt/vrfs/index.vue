@@ -33,9 +33,9 @@ async function save() {
 }
 
 const deleteTarget = ref<any>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   if (!deleteTarget.value) return
-  await $fetch(`/api/ipmgt/vrfs/${deleteTarget.value.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/vrfs/${deleteTarget.value.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'VRF deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -132,7 +132,9 @@ async function confirmDelete(password: string) {
       </template>
     </UModal>
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.vrf"
+      :item-name="deleteTarget?.name"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete VRF"

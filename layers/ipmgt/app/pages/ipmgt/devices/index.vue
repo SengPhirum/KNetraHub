@@ -35,10 +35,10 @@ function openCreate() { editing.value = null; formOpen.value = true }
 function openEdit(d: any) { editing.value = d; formOpen.value = true }
 
 const deleteTarget = ref<any | null>(null)
-async function confirmDelete(password: string) {
+async function confirmDelete(headers: Record<string, string>) {
   const d = deleteTarget.value
   if (!d) return
-  await $fetch(`/api/ipmgt/devices/${d.id}`, { method: 'DELETE', headers: { 'x-confirm-password': password } })
+  await $fetch(`/api/ipmgt/devices/${d.id}`, { method: 'DELETE', headers })
   toast.add({ title: 'Device deleted', color: 'primary', icon: 'i-lucide-check' })
   deleteTarget.value = null
   await refresh()
@@ -142,7 +142,9 @@ async function discoverSnmp(d: any) {
 
     <IpamDeviceFormModal v-model:open="formOpen" :device="editing" @saved="refresh" />
 
-    <ConfirmPasswordModal
+    <ConfirmDeleteModal
+      type="ipmgt.device"
+      :item-name="deleteTarget?.hostname"
       :open="!!deleteTarget"
       @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
       title="Delete device"

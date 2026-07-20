@@ -79,17 +79,14 @@ async function verifyRegistryEntry(r: any) {
   }
 }
 
-async function removeRegistryEntry(r: any) {
-  if (!confirm(`Remove registry "${r.name}"?`)) return
-  const saved = [...(registries.value ?? [])]
-  registries.value = saved.filter((x: any) => x.id !== r.id)
-  try {
-    await $fetch(`/api/registries/${r.id}`, { method: 'DELETE' })
-    toast.add({ title: `Removed ${r.name}`, color: 'primary' })
-  } catch (e: any) {
-    registries.value = saved
-    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+const regDeleteTarget = ref<any>(null)
+async function confirmRemoveRegistry(headers: Record<string, string>) {
+  const r = regDeleteTarget.value
+  if (!r) return
+  await $fetch(`/api/registries/${r.id}`, { method: 'DELETE', headers })
+  registries.value = (registries.value ?? []).filter((x: any) => x.id !== r.id)
+  toast.add({ title: `Removed ${r.name}`, color: 'primary' })
+  regDeleteTarget.value = null
 }
 
 const regParam = computed(() => (route.query.reg as string) || '')
@@ -529,7 +526,7 @@ const pageIcon = computed(() =>
               />
               <template v-if="canManageRegistries">
                 <UButton icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="Edit registry" @click="openEditRegistry(r)" />
-                <UButton icon="i-lucide-trash-2" size="xs" color="error" variant="ghost" aria-label="Delete registry" @click="removeRegistryEntry(r)" />
+                <UButton icon="i-lucide-trash-2" size="xs" color="error" variant="ghost" aria-label="Delete registry" @click="regDeleteTarget = r" />
               </template>
             </div>
           </div>
@@ -561,5 +558,16 @@ const pageIcon = computed(() =>
         </div>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="docker.registry"
+      :item-name="regDeleteTarget?.name"
+      :open="!!regDeleteTarget"
+      @update:open="(v: boolean) => { if (!v) regDeleteTarget = null }"
+      title="Remove registry"
+      :message="regDeleteTarget ? `Registry ${regDeleteTarget.name} will be removed.` : ''"
+      confirm-label="Remove"
+      :action="confirmRemoveRegistry"
+    />
   </div>
 </template>

@@ -418,15 +418,11 @@ async function testDevice() {
   } finally { deviceTesting.value = false }
 }
 
-async function deleteDevice() {
-  if (!confirm(`Delete ${d.value?.display_name || d.value?.hostname} and all its collected data? This cannot be undone.`)) return
-  try {
-    await $fetch(`/api/monitoring/v1/devices/${id.value}`, { method: 'DELETE' })
-    toast.add({ title: 'Device deleted', color: 'primary', icon: 'i-lucide-check' })
-    navigateTo('/monitoring/devices')
-  } catch (e: any) {
-    toast.add({ title: 'Delete failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+const deleteOpen = ref(false)
+async function deleteDevice(headers: Record<string, string>) {
+  await $fetch(`/api/monitoring/v1/devices/${id.value}`, { method: 'DELETE', headers })
+  toast.add({ title: 'Device deleted', color: 'primary', icon: 'i-lucide-check' })
+  navigateTo('/monitoring/devices')
 }
 
 function severityColor(sev: string): string {
@@ -1169,10 +1165,20 @@ function severityColor(sev: string): string {
         </div>
 
         <div class="flex items-center justify-between">
-          <UButton color="error" variant="soft" icon="i-lucide-trash-2" @click="deleteDevice">Delete device</UButton>
+          <UButton color="error" variant="soft" icon="i-lucide-trash-2" @click="deleteOpen = true">Delete device</UButton>
           <UButton icon="i-lucide-save" :loading="saving" @click="saveSettings">Save changes</UButton>
         </div>
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      type="monitoring.device"
+      :item-name="d?.display_name || d?.hostname"
+      v-model:open="deleteOpen"
+      title="Delete device"
+      :message="d ? `${d.display_name || d.hostname} and all its collected data will be permanently deleted. This cannot be undone.` : ''"
+      confirm-label="Delete device"
+      :action="deleteDevice"
+    />
   </div>
 </template>

@@ -1,9 +1,11 @@
 import { requireMonitoring } from '../../../../utils/monitoringAuth'
+import { requireDeleteConfirm } from '~~/server/utils/deleteConfirm'
 import { monDb, badRequest, auditMonitoring } from '../../../../utils/monApi'
 
 /** DELETE /api/monitoring/v1/devices — bulk-remove devices (admin tier). Body: { ids: number[] }. */
 export default defineEventHandler(async (event) => {
   const user = await requireMonitoring(event, 'admin')
+  await requireDeleteConfirm(event, 'monitoring.device-bulk')
   const db = await monDb()
   const body = await readBody(event)
 

@@ -42,22 +42,19 @@ async function viewLogs(c: any) {
   finally { logsLoading.value = false }
 }
 
-async function remove(c: any) {
-  if (!confirm(`Remove container "${c.name}"?`)) return
-  const saved = [...(data.value ?? [])]
-  data.value = saved.filter((x) => x.id !== c.id)
-  try {
-    await $fetch(`/api/containers/${c.id}?force=true`, { method: 'DELETE' })
-    toast.add({ title: `Removed ${c.name}`, color: 'primary' })
-  } catch (e: any) {
-    data.value = saved
-    toast.add({ title: 'Remove failed', description: e?.data?.statusMessage, color: 'error' })
-  }
+const deleteTarget = ref<any>(null)
+async function confirmRemove(headers: Record<string, string>) {
+  const c = deleteTarget.value
+  if (!c) return
+  await $fetch(`/api/containers/${c.id}?force=true`, { method: 'DELETE', headers })
+  data.value = (data.value ?? []).filter((x) => x.id !== c.id)
+  toast.add({ title: `Removed ${c.name}`, color: 'primary' })
+  deleteTarget.value = null
 }
 
 function menu(c: any) {
   const items: any[] = [[{ label: 'Logs', icon: 'i-lucide-scroll-text', onSelect: () => viewLogs(c) }]]
-  if (can('operator')) items.push([{ label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => remove(c) }])
+  if (can('operator')) items.push([{ label: 'Remove', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => { deleteTarget.value = c } }])
   return items
 }
 </script>
@@ -118,5 +115,16 @@ function menu(c: any) {
         <pre v-else class="logstream max-h-[55vh] overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap">{{ logs || 'No output.' }}</pre>
       </template>
     </UModal>
+
+    <ConfirmDeleteModal
+      type="docker.container"
+      :item-name="deleteTarget?.name"
+      :open="!!deleteTarget"
+      @update:open="(v: boolean) => { if (!v) deleteTarget = null }"
+      title="Remove container"
+      :message="deleteTarget ? `Container ${deleteTarget.name} will be force-removed.` : ''"
+      confirm-label="Remove"
+      :action="confirmRemove"
+    />
   </div>
 </template>
