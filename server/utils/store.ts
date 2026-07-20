@@ -384,6 +384,58 @@ export async function clearSecurityPassword(userId: string): Promise<void> {
   if (result.rowCount === 0) throw createError({ statusCode: 404, statusMessage: 'User not found' })
 }
 
+// How long an admin-issued security-password reset link stays valid.
+const SECURITY_RESET_TTL_HOURS = 24
+
+const hashResetToken = (token: string) => createHash('sha256').update(token).digest('hex')
+
+/** Mint a single-use security-password reset token for a user (emailed as a
+ *  link), invalidating any earlier one. Returns the raw token and its expiry. */
+export async function createSecurityPasswordReset(userId: string): Promise<{ token: string; expiresAt: string; ttlHours: number }> {
+  const token = randomBytes(32).toString('hex')
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + SECURITY_RESET_TTL_HOURS * 3_600_000).toISOString()
+  await getDb().query('DELETE FROM security_password_resets WHERE user_id = $1', [userId])
+  await getDb().query(
+    'INSERT INTO security_password_resets (token_hash, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)',
+    [hashResetToken(token), userId, now.toISOString(), expiresAt]
+  )
+  return { token, expiresAt, ttlHours: SECURITY_RESET_TTL_HOURS }
+}
+
+/** Look up a valid (unused, unexpired) reset token without consuming it -
+ *  used to validate the link before showing the set-password form. */
+export async function peekSecurityPasswordReset(token: string): Promise<{ userId: string; username: string } | null> {
+  if (!token) return null
+  const { rows } = await getDb().query(
+    `SELECT r.user_id, u.username
+       FROM security_password_resets r
+       JOIN users u ON u.id = r.user_id
+      WHERE r.token_hash = $1 AND r.used_at IS NULL AND r.expires_at > $2`,
+    [hashResetToken(token), new Date().toISOString()]
+  )
+  return rows.length ? { userId: rows[0].user_id, username: rows[0].username } : null
+}
+
+/** Consume a valid reset token and set the new security password. Returns false
+ *  if the token is missing, already used, or expired. */
+export async function consumeSecurityPasswordReset(token: string, password: string): Promise<{ username: string } | null> {
+  const found = await peekSecurityPasswordReset(token)
+  if (!found) return null
+  await setSecurityPassword(found.userId, password)
+  await getDb().query(
+    'UPDATE security_password_resets SET used_at = $2 WHERE token_hash = $1',
+    [hashResetToken(token), new Date().toISOString()]
+  )
+  return { username: found.username }
+}
+
+/** Fetch a single user by id (or null). */
+export async function getUserById(id: string): Promise<User | null> {
+  const { rows } = await getDb().query('SELECT * FROM users WHERE id = $1', [id])
+  return rows.length ? rowToUser(rows[0]) : null
+}
+
 export async function touchLogin(username: string): Promise<void> {
   await getDb().query('UPDATE users SET last_login = $1 WHERE lower(username) = lower($2)', [new Date().toISOString(), username])
 }

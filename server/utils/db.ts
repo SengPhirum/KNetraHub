@@ -236,6 +236,19 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);
 
+    -- One-time tokens an admin mints to let a user (re)set the portal security
+    -- password from an emailed link. Only the SHA-256 of the token is stored;
+    -- rows are single-use (used_at) and time-boxed (expires_at).
+    CREATE TABLE IF NOT EXISTS security_password_resets (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sec_pw_resets_user ON security_password_resets (user_id);
+
     -- Browser login sessions, so a stateless JWT can be revoked ("sign out
     -- everywhere" / per-device) by deleting its row. The JWT carries this id as
     -- its sid claim; readSession rejects a token whose session row is gone.

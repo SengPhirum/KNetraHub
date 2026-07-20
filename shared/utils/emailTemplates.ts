@@ -18,6 +18,7 @@
 export type EmailTemplateKey =
   | 'welcome'
   | 'password-changed'
+  | 'security-password-reset'
   | 'new-login'
   | 'alert'
   | 'test'
@@ -129,6 +130,50 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplate> = 
       user: { displayName: 'Dara Sok', username: 'dara.sok', email: 'dara.sok@example.com' },
       actor: 'dara.sok',
       request: { ip: '10.20.4.87' }
+    }
+  },
+
+  'security-password-reset': {
+    key: 'security-password-reset',
+    name: 'Security password reset',
+    description: "Sent when an administrator resets a user's portal security password, with a one-time link to choose a new one.",
+    subject: 'Reset your {{app.name}} security password',
+    format: 'markdown',
+    body: [
+      '# Security password reset',
+      '',
+      'Hi {{user.displayName}},',
+      '',
+      'A portal administrator ({{actor}}) reset the **security password** on your **{{app.name}}** account (`{{user.username}}`).',
+      'This is the second secret used to confirm deleting critical records - it is separate from your sign-in password.',
+      '',
+      'Use the link below to choose a new one. It can be used once and expires in **{{expiryHours}} hours**.',
+      '',
+      '[Set a new security password]({{resetUrl}})',
+      '',
+      'If the button does not work, copy this address into your browser:',
+      '',
+      '{{resetUrl}}',
+      '',
+      'If you were not expecting this, you can ignore this email — you will simply be asked to set a new security password the next time you sign in.',
+      '',
+      '---',
+      '',
+      '{{app.name}} · {{year}}'
+    ].join('\n'),
+    variables: [
+      { path: 'user.displayName', description: "The user's display name" },
+      { path: 'user.username', description: 'Login username' },
+      { path: 'resetUrl', description: 'One-time link to set a new security password' },
+      { path: 'expiryHours', description: 'Hours until the link expires' },
+      { path: 'actor', description: 'Administrator who triggered the reset' }
+    ],
+    sample: {
+      ...COMMON_SAMPLE,
+      user: { displayName: 'Dara Sok', username: 'dara.sok', email: 'dara.sok@example.com' },
+      resetUrl: 'https://knetrahub.example.com/security-password/reset?token=EXAMPLE',
+      expiryHours: '24',
+      actor: 'admin'
     }
   },
 

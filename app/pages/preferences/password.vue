@@ -18,12 +18,6 @@ const passwordRuleSummary = computed(() => passwordPolicySummary(effectivePasswo
 
 const canChangePassword = computed(() => user.value?.source === 'local')
 
-// Portal security password (a second secret, separate from the login password,
-// used to confirm critical deletes). Applies to every account type - including
-// SSO/LDAP - which is why this card lives on a page reachable by all users.
-const { configured: securityConfigured, promptOpen: securityPromptOpen, fetchStatus: fetchSecurityStatus } = useSecurityPassword()
-onMounted(() => { if (securityConfigured.value === null) fetchSecurityStatus() })
-
 const pwd = reactive({ a: '', b: '' })
 const saving = ref(false)
 async function changePassword() {
@@ -45,7 +39,7 @@ async function changePassword() {
 
 <template>
   <div>
-    <PageHeader title="Password & security" subtitle="Your login password and portal security password" icon="i-lucide-key-round" />
+    <PageHeader title="Password" subtitle="Your sign-in password" icon="i-lucide-key-round" />
 
     <div class="panel p-5 max-w-2xl">
       <div v-if="canChangePassword" class="grid gap-3 sm:grid-cols-2 max-w-md">
@@ -65,32 +59,9 @@ async function changePassword() {
       </p>
     </div>
 
-    <div class="panel mt-5 max-w-2xl p-5">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <h2 class="flex items-center gap-2 font-display text-sm font-semibold text-foam">
-            <UIcon name="i-lucide-shield-check" class="size-4 text-beacon" />
-            Security password
-          </h2>
-          <p class="mt-1 text-sm text-(--color-muted)">
-            A separate secret you key in to confirm deleting critical records in any app. Shared
-            across every app; distinct from your login password.
-          </p>
-          <p class="mt-2 text-xs" :class="securityConfigured ? 'text-running' : 'text-faint'">
-            <UIcon :name="securityConfigured ? 'i-lucide-check-circle' : 'i-lucide-circle-dashed'" class="mr-1 inline size-3.5 align-text-bottom" />
-            {{ securityConfigured === null ? 'Checking…' : securityConfigured ? 'Configured' : 'Not set up yet' }}
-          </p>
-        </div>
-        <UButton
-          color="primary"
-          variant="soft"
-          :icon="securityConfigured ? 'i-lucide-pencil' : 'i-lucide-shield-plus'"
-          :label="securityConfigured ? 'Change' : 'Set up'"
-          @click="securityPromptOpen = true"
-        />
-      </div>
-    </div>
-
-    <SecurityPasswordModal v-model:open="securityPromptOpen" :dismissible="true" />
+    <p class="mt-3 max-w-2xl text-xs text-faint">
+      Looking for your secret password (used to confirm critical deletes)? It now lives under
+      <NuxtLink to="/preferences/security-password" class="text-beacon hover:underline">Security → Secret password</NuxtLink>.
+    </p>
   </div>
 </template>

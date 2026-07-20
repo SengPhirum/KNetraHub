@@ -28,14 +28,20 @@ watch(user, async (u) => {
   if (u) {
     await fetchPreferences().catch(() => null)
     await userNotifications.start()
-    // Client-only: the status endpoint is per-session and must not run during SSR.
-    if (import.meta.client) {
-      const configured = await fetchSecurityStatus()
-      if (configured === false) securityPromptOpen.value = true
-    }
   } else {
     userNotifications.stop()
   }
+}, { immediate: true })
+
+// Mandatory security-password set-up prompt, checked on its own watcher so a
+// hiccup loading preferences or notifications can never suppress it. Client-only
+// because the status endpoint is per-session and must not run during SSR; the
+// immediate run also fires on the client during hydration when the user is
+// already signed in.
+watch(user, async (u) => {
+  if (!u || !import.meta.client) return
+  const configured = await fetchSecurityStatus()
+  if (configured === false) securityPromptOpen.value = true
 }, { immediate: true })
 
 // System maintenance state (Admin > System > Maintenance): notification

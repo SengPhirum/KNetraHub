@@ -9,6 +9,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isPublicDocs = to.path === '/documentation'
   if (isPublicDocs) return
 
+  // Security-password reset link (emailed with a one-time token): reachable
+  // without a session - the token is the authorization, and the user may be
+  // setting their secret before they can sign in.
+  if (to.path === '/security-password/reset') return
+
   // First-run setup wizard: takes priority over the normal auth redirect -
   // there's no one to log in as yet. Cached in useState so this only ever
   // fetches once per session, same pattern as the user session hydration below.

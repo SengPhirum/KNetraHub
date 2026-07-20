@@ -104,7 +104,7 @@ export async function buildBaseContext(event?: H3Event): Promise<Record<string, 
 }
 
 /** Configured base URL wins; otherwise fall back to the serving host. */
-function resolvePortalUrl(event?: H3Event): string {
+export function resolvePortalUrl(event?: H3Event): string {
   const configured = String(useRuntimeConfig().public.appUrl || '').trim()
   if (configured) return configured.replace(/\/$/, '')
   if (!event) return ''

@@ -263,14 +263,15 @@ const PREFERENCES_GROUPS: NavGroup[] = [
   {
     label: 'Account',
     items: [
-      { label: 'Profile',            to: '/preferences/profile',       icon: 'i-lucide-user-round' },
-      { label: 'Password & security', to: '/preferences/password',     icon: 'i-lucide-key-round' },
-      { label: 'Notifications',      to: '/preferences/notifications', icon: 'i-lucide-bell' }
+      { label: 'Profile',       to: '/preferences/profile',       icon: 'i-lucide-user-round' },
+      { label: 'Password',      to: '/preferences/password',      icon: 'i-lucide-key-round' },
+      { label: 'Notifications', to: '/preferences/notifications', icon: 'i-lucide-bell' }
     ]
   },
   {
     label: 'Security',
     items: [
+      { label: 'Secret password', to: '/preferences/security-password', icon: 'i-lucide-lock-keyhole' },
       { label: 'API tokens',      to: '/preferences/tokens',         icon: 'i-lucide-square-asterisk' },
       { label: 'Two-factor auth', to: '/preferences/two-factor',     icon: 'i-lucide-shield-check' },
       { label: 'Active sessions', to: '/preferences/sessions',       icon: 'i-lucide-monitor-smartphone' },

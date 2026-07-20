@@ -136,12 +136,17 @@ async function saveEdit() {
 const resettingSecurity = ref(false)
 async function resetSecurityPassword() {
   if (!editTarget.value) return
+  const username = editTarget.value.username
   resettingSecurity.value = true
   try {
-    const updated = await $fetch<any>(`/api/users/${editTarget.value.id}/reset-security-password`, { method: 'POST' })
+    const updated = await $fetch<{ id: string; emailed: boolean; emailError?: string }>(`/api/users/${editTarget.value.id}/reset-security-password`, { method: 'POST' })
     data.value = (data.value ?? []).map((u) => u.id === updated.id ? { ...u, securityPasswordSet: false } : u)
     editTarget.value = { ...editTarget.value, securityPasswordSet: false }
-    toast.add({ title: `Security password reset for ${editTarget.value.username}`, description: 'They will be asked to set a new one on next login.', color: 'primary', icon: 'i-lucide-shield-x' })
+    if (updated.emailed) {
+      toast.add({ title: `Reset link emailed to ${username}`, description: 'They can set a new secret password from the link (valid 24h). The old one is cleared, so they will also be prompted on next login.', color: 'primary', icon: 'i-lucide-mail-check' })
+    } else {
+      toast.add({ title: `Secret password cleared for ${username}`, description: `${updated.emailError || 'No email sent'} — they will be asked to set a new one on their next login.`, color: 'warning', icon: 'i-lucide-shield-x' })
+    }
   } catch (e: any) {
     toast.add({ title: 'Reset failed', description: e?.data?.statusMessage, color: 'error' })
   } finally {
@@ -318,8 +323,9 @@ async function confirmDelete(headers: Record<string, string>) {
                 >{{ editTarget?.securityPasswordSet ? 'Configured' : 'Not set' }}</span>
               </p>
               <p class="mt-1 text-faint">
-                The secret this user confirms critical deletes with. Reset it if they've forgotten it —
-                they'll be prompted to set a new one on their next login.
+                The secret this user confirms critical deletes with. Reset it if they've forgotten it — we
+                email them a one-time link (valid 24h) to set a new one, and clear the old one so they're
+                also prompted on their next login.
               </p>
             </div>
             <UButton
