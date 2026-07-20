@@ -133,24 +133,25 @@ async function saveEdit() {
   } catch (e: any) { toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' }) }
 }
 
-const resettingSecurity = ref(false)
-async function resetSecurityPassword() {
-  if (!editTarget.value) return
-  const username = editTarget.value.username
-  resettingSecurity.value = true
+// Reset a user's secret password straight from the list row (shown only when
+// they have one). Emails them a one-time link and clears the current secret.
+const resettingSecurityId = ref<string | null>(null)
+async function resetSecurityPassword(u: any) {
+  if (!u) return
+  resettingSecurityId.value = u.id
   try {
-    const updated = await $fetch<{ id: string; emailed: boolean; emailError?: string }>(`/api/users/${editTarget.value.id}/reset-security-password`, { method: 'POST' })
-    data.value = (data.value ?? []).map((u) => u.id === updated.id ? { ...u, securityPasswordSet: false } : u)
-    editTarget.value = { ...editTarget.value, securityPasswordSet: false }
+    const updated = await $fetch<{ id: string; emailed: boolean; emailError?: string }>(`/api/users/${u.id}/reset-security-password`, { method: 'POST' })
+    data.value = (data.value ?? []).map((x) => x.id === updated.id ? { ...x, securityPasswordSet: false } : x)
+    if (editTarget.value?.id === updated.id) editTarget.value = { ...editTarget.value, securityPasswordSet: false }
     if (updated.emailed) {
-      toast.add({ title: `Reset link emailed to ${username}`, description: 'They can set a new secret password from the link (valid 24h). The old one is cleared, so they will also be prompted on next login.', color: 'primary', icon: 'i-lucide-mail-check' })
+      toast.add({ title: `Reset link emailed to ${u.username}`, description: 'They can set a new secret password from the link (valid 24h). The old one is cleared, so they will also be prompted on next login.', color: 'primary', icon: 'i-lucide-mail-check' })
     } else {
-      toast.add({ title: `Secret password cleared for ${username}`, description: `${updated.emailError || 'No email sent'} — they will be asked to set a new one on their next login.`, color: 'warning', icon: 'i-lucide-shield-x' })
+      toast.add({ title: `Secret password cleared for ${u.username}`, description: `${updated.emailError || 'No email sent'} — they will be asked to set a new one on their next login.`, color: 'warning', icon: 'i-lucide-shield-x' })
     }
   } catch (e: any) {
     toast.add({ title: 'Reset failed', description: e?.data?.statusMessage, color: 'error' })
   } finally {
-    resettingSecurity.value = false
+    resettingSecurityId.value = null
   }
 }
 
@@ -243,6 +244,17 @@ async function confirmDelete(headers: Record<string, string>) {
             <span>{{ u.lastLogin ? relative(u.lastLogin) : 'never' }}</span>
           </div>
           <div class="col-span-2 sm:col-span-1 flex justify-end gap-1">
+            <UButton
+              v-if="u.securityPasswordSet"
+              icon="i-lucide-shield-x"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :loading="resettingSecurityId === u.id"
+              title="Reset secret password — emails a one-time link"
+              aria-label="Reset secret password"
+              @click="resetSecurityPassword(u)"
+            />
             <UButton icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(u)" />
             <UButton v-if="u.username !== me?.username" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="deleteTarget = u" />
           </div>
@@ -261,7 +273,7 @@ async function confirmDelete(headers: Record<string, string>) {
             <USelect v-model="form.role" :items="ROLES" class="w-full" />
             <template #hint><p class="text-xs text-faint mt-1">{{ ROLE_META[form.role]?.description }}</p></template>
           </UFormField>
-          <UFormField label="Password" required :description="passwordRuleSummary"><UInput v-model="form.password" type="password" class="w-full" /></UFormField>
+          <UFormField label="Password" required :description="passwordRuleSummary"><UInput v-model="form.password" type="password" autocomplete="new-password" class="w-full" /></UFormField>
 
           <div class="border-t border-hull-soft pt-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted) mb-2">App access</p>
@@ -312,36 +324,8 @@ async function confirmDelete(headers: Record<string, string>) {
               @click="resetRole"
             />
           </div>
-          <div class="panel-flush flex items-center justify-between gap-3 p-3 text-xs">
-            <div class="min-w-0">
-              <p class="font-medium text-foam flex items-center gap-1.5">
-                <UIcon name="i-lucide-shield" class="size-3.5 shrink-0" />
-                Security password
-                <span
-                  class="rounded px-1.5 py-0.5"
-                  :class="editTarget?.securityPasswordSet ? 'bg-running/10 text-running' : 'bg-surface-2 text-faint'"
-                >{{ editTarget?.securityPasswordSet ? 'Configured' : 'Not set' }}</span>
-              </p>
-              <p class="mt-1 text-faint">
-                The secret this user confirms critical deletes with. Reset it if they've forgotten it — we
-                email them a one-time link (valid 24h) to set a new one, and clear the old one so they're
-                also prompted on their next login.
-              </p>
-            </div>
-            <UButton
-              v-if="editTarget?.securityPasswordSet"
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-shield-x"
-              label="Reset"
-              :loading="resettingSecurity"
-              @click="resetSecurityPassword"
-            />
-          </div>
-
           <UFormField v-if="editTarget?.source === 'local'" label="New password" :description="`Leave blank to keep current. ${passwordRuleSummary}`">
-            <UInput v-model="editForm.password" type="password" class="w-full" />
+            <UInput v-model="editForm.password" type="password" autocomplete="new-password" class="w-full" />
           </UFormField>
           <p v-else class="text-xs text-faint">{{ (editTarget?.source || 'external').toUpperCase() }} user — password is managed by your identity provider.</p>
 

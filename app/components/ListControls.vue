@@ -76,7 +76,9 @@ const groupClass = computed(() => {
     <div :class="inline ? 'contents' : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'">
       <UInput
         v-model="searchModel"
+        type="search"
         icon="i-lucide-search"
+        autocomplete="off"
         :placeholder="placeholder"
         :class="inline ? 'w-full sm:w-48 lg:w-64' : 'w-full sm:max-w-xs'"
       />
