@@ -276,6 +276,15 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
     );
     CREATE INDEX IF NOT EXISTS idx_notification_templates_scope ON notification_templates (scope);
 
+    -- Which apps have opted in to use a shared (scope='global') channel. An
+    -- app-scoped channel is always used by its own app; a Global channel is
+    -- used by an app only if a row here selects it. Rows drop with the channel.
+    CREATE TABLE IF NOT EXISTS notification_channel_apps (
+      channel_id TEXT NOT NULL REFERENCES notification_channels(id) ON DELETE CASCADE,
+      app_key TEXT NOT NULL,
+      PRIMARY KEY (channel_id, app_key)
+    );
+
     -- Browser login sessions, so a stateless JWT can be revoked ("sign out
     -- everywhere" / per-device) by deleting its row. The JWT carries this id as
     -- its sid claim; readSession rejects a token whose session row is gone.

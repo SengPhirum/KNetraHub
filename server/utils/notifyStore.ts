@@ -43,13 +43,48 @@ export async function getChannelWithConfig(id: string): Promise<NotificationChan
   return rows[0] ? rowToChannel(rows[0]) : null
 }
 
-/** Global + the given app's enabled channels - what a sub-app can deliver to. */
+/** Enabled channels an app delivers to: its own app-scoped channels, plus the
+ *  Global channels it has opted in to (notification_channel_apps). */
 export async function channelsForScope(scope: string): Promise<NotificationChannel[]> {
   const { rows } = await getDb().query(
-    'SELECT * FROM notification_channels WHERE enabled = true AND (scope = $1 OR scope = $2) ORDER BY name',
-    [NOTIFICATION_SCOPE_GLOBAL, scope]
+    `SELECT c.* FROM notification_channels c
+      WHERE c.enabled = true AND (
+        c.scope = $1
+        OR (c.scope = $2 AND EXISTS (
+          SELECT 1 FROM notification_channel_apps a WHERE a.channel_id = c.id AND a.app_key = $1
+        ))
+      )
+      ORDER BY c.name`,
+    [scope, NOTIFICATION_SCOPE_GLOBAL]
   )
   return rows.map(rowToChannel)
+}
+
+/** Global channels with a `selected` flag for the given app - drives the app's
+ *  "use pre-configured" picker. Summaries only (no config). */
+export async function listGlobalChannelsForApp(app: string): Promise<Array<NotificationChannelSummary & { selected: boolean }>> {
+  const { rows } = await getDb().query(
+    `SELECT c.id, c.name, c.type, c.scope, c.enabled, c.created_at, c.updated_at,
+            (a.app_key IS NOT NULL) AS selected
+       FROM notification_channels c
+       LEFT JOIN notification_channel_apps a ON a.channel_id = c.id AND a.app_key = $1
+      WHERE c.scope = $2
+      ORDER BY c.name`,
+    [app, NOTIFICATION_SCOPE_GLOBAL]
+  )
+  return rows.map((r: any) => ({ ...rowToSummary(r), selected: r.selected === true }))
+}
+
+/** Opt an app in or out of using a Global channel. */
+export async function setChannelApp(channelId: string, app: string, use: boolean): Promise<void> {
+  if (use) {
+    await getDb().query(
+      'INSERT INTO notification_channel_apps (channel_id, app_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [channelId, app]
+    )
+  } else {
+    await getDb().query('DELETE FROM notification_channel_apps WHERE channel_id = $1 AND app_key = $2', [channelId, app])
+  }
 }
 
 export async function createChannel(input: { name: string; type: string; scope: string; enabled: boolean; config: Record<string, any> }): Promise<NotificationChannelSummary> {

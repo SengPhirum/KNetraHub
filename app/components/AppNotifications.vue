@@ -15,9 +15,23 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
-const key = computed(() => `app-notif-channels:${props.scope}`)
-const { data, status, error, refresh, refreshing } = useApiCache(key.value, () => $fetch<any[]>('/api/notifications/channels', { query: { scope: props.scope } }))
-onMounted(refresh)
+// This app's own channels (full CRUD).
+const { data, status, error, refresh, refreshing } = useApiCache(`app-notif-channels:${props.scope}`, () => $fetch<any[]>('/api/notifications/channels', { query: { scope: props.scope } }))
+// Shared (Global) channels a portal admin created — this app opts in per channel.
+const { data: shared, refresh: refreshShared } = useApiCache(`app-notif-shared:${props.scope}`, () => $fetch<any[]>('/api/notifications/available', { query: { app: props.scope } }))
+onMounted(() => { refresh(); refreshShared() })
+
+const togglingId = ref<string | null>(null)
+async function toggleUse(ch: any, use: boolean) {
+  togglingId.value = ch.id
+  try {
+    await $fetch(`/api/notifications/channels/${ch.id}/use`, { method: 'PUT', body: { app: props.scope, use } })
+    ch.selected = use
+    toast.add({ title: use ? `Now using “${ch.name}” here` : `Stopped using “${ch.name}”`, color: 'primary', icon: 'i-lucide-check' })
+  } catch (e: any) {
+    toast.add({ title: 'Update failed', description: e?.data?.statusMessage, color: 'error' })
+  } finally { togglingId.value = null }
+}
 
 const typeOptions = NOTIFICATION_CHANNEL_TYPES.map((t) => ({ label: CHANNEL_TYPE_META[t].label, value: t }))
 
@@ -85,26 +99,44 @@ async function confirmDelete(headers: Record<string, string>) {
 </script>
 
 <template>
-  <section class="panel p-5">
-    <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h3 class="flex items-center gap-2 font-display text-sm font-semibold text-foam">
-          <UIcon name="i-lucide-satellite-dish" class="size-4 text-beacon" />
-          Notification channels
-        </h3>
-        <p class="mt-1 text-xs text-(--color-muted)">
-          Where this app’s alerts are delivered. Add your own below, or reuse the shared
-          <NuxtLink to="/admin/notifications/channels" class="text-beacon hover:underline">Global channels</NuxtLink>
-          — those deliver here too.
-        </p>
-      </div>
-      <UButton icon="i-lucide-plus" color="primary" variant="soft" label="Add channel" @click="openCreate" />
+  <section class="panel space-y-5 p-5">
+    <header>
+      <h3 class="flex items-center gap-2 font-display text-sm font-semibold text-foam">
+        <UIcon name="i-lucide-satellite-dish" class="size-4 text-beacon" />
+        Notification channels
+      </h3>
+      <p class="mt-1 text-xs text-(--color-muted)">Where this app’s alerts are delivered. Turn on shared channels a portal admin set up, and/or add your own.</p>
     </header>
 
-    <DataState :status="status" :error="error" :empty="!data?.length" :refreshing="refreshing"
-      empty-label="No channels owned by this app yet. Global channels still apply." empty-icon="i-lucide-satellite-dish">
-      <div class="divide-y divide-hull">
-        <div v-for="c in data" :key="c.id" class="flex flex-wrap items-center justify-between gap-3 py-3">
+    <!-- Use pre-configured (Global) channels -->
+    <div v-if="shared?.length">
+      <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Shared channels</p>
+      <div class="divide-y divide-hull rounded-lg bg-surface-2/30 ring-1 ring-hull-soft">
+        <div v-for="ch in shared" :key="ch.id" class="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+          <div class="flex min-w-0 items-center gap-3">
+            <UIcon :name="CHANNEL_TYPE_META[ch.type as NotificationChannelType]?.icon || 'i-lucide-bell'" class="size-4 shrink-0 text-(--color-muted)" />
+            <div class="min-w-0">
+              <p class="truncate text-sm text-foam">{{ ch.name }}</p>
+              <p class="text-xs text-faint">{{ channelTypeLabel(ch.type) }} · Global</p>
+            </div>
+            <UBadge v-if="!ch.enabled" color="neutral" variant="subtle" label="Disabled" />
+          </div>
+          <USwitch :model-value="ch.selected" :disabled="togglingId === ch.id || !ch.enabled" color="primary" @update:model-value="(v: boolean) => toggleUse(ch, v)" />
+        </div>
+      </div>
+      <p class="mt-1.5 text-xs text-faint">Toggle on to deliver this app’s alerts to a channel a portal admin configured.</p>
+    </div>
+
+    <!-- This app's own channels -->
+    <div>
+      <div class="mb-2 flex items-center justify-between">
+        <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted)">This app’s channels</p>
+        <UButton icon="i-lucide-plus" color="primary" variant="soft" size="xs" label="Add channel" @click="openCreate" />
+      </div>
+      <DataState :status="status" :error="error" :empty="!data?.length" :refreshing="refreshing"
+        empty-label="None yet — add one, or use a shared channel above." empty-icon="i-lucide-satellite-dish">
+        <div class="divide-y divide-hull">
+          <div v-for="c in data" :key="c.id" class="flex flex-wrap items-center justify-between gap-3 py-3">
           <div class="flex min-w-0 items-center gap-3">
             <UIcon :name="CHANNEL_TYPE_META[c.type as NotificationChannelType]?.icon || 'i-lucide-bell'" class="size-4 shrink-0 text-beacon" />
             <div class="min-w-0">
@@ -121,6 +153,7 @@ async function confirmDelete(headers: Record<string, string>) {
         </div>
       </div>
     </DataState>
+    </div>
 
     <UModal v-model:open="modalOpen" :title="editingId ? `Edit ${form.name}` : 'Add channel'">
       <template #body>
