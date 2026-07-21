@@ -1,7 +1,8 @@
 import { nanoid } from 'nanoid'
 import { getDockerDb } from './moduleDb'
 import { getAlertRule, renderTemplate, type AlertRuleType } from './alertRules'
-import { listAlertChannelsWithConfig, type AlertChannelWithConfig } from './alertChannels'
+import { channelsForScope } from './notifyStore'
+import { deliverToChannel } from './notify'
 import { logSystem } from './moduleLogs'
 
 export interface TelegramConfig { botToken: string; chatId: string }
@@ -66,18 +67,23 @@ export async function fireAlert(input: FireAlertInput): Promise<void> {
     ).catch((err: any) => logSystem('portal', 'error', 'alert.record.failed',
       `Could not record alert_events row for ${input.ruleType}: ${err?.message || err}`))
 
-    const channels = await listAlertChannelsWithConfig().catch(() => [] as AlertChannelWithConfig[])
-    const enabled = channels.filter((c) => c.enabled)
-    const results = await Promise.allSettled(enabled.map((c) => notifyChannel(c, message)))
+    // Deliver through the central notification library: Global + Docker-scoped
+    // enabled channels (config already decrypted). Legacy Docker alert_channels
+    // are copied in by the notificationsBackfill startup plugin.
+    const enabled = await channelsForScope('docker').catch(() => [])
+    const notifyMsg = {
+      title: `[${input.severity.toUpperCase()}] ${input.ruleType.replace(/_/g, ' ')}${input.target ? ` — ${input.target}` : ''}`,
+      body: message,
+      severity: input.severity,
+      kind: 'alert' as const
+    }
     let delivered = 0
-    for (const [i, r] of results.entries()) {
-      if (r.status === 'rejected') {
-        // A silently-dead notification channel is worse than a noisy one.
-        await logSystem('portal', 'error', 'alert.notify.failed',
-          `Channel "${enabled[i]!.name}" (${enabled[i]!.type}) failed for ${input.ruleType}: ${(r.reason as any)?.message || r.reason}`)
-      } else {
-        delivered++
-      }
+    for (const channel of enabled) {
+      const res = await deliverToChannel(channel, notifyMsg)
+      if (res.ok) delivered++
+      // A silently-dead notification channel is worse than a noisy one.
+      else await logSystem('portal', 'error', 'alert.notify.failed',
+        `Channel "${channel.name}" (${channel.type}) failed for ${input.ruleType}: ${res.error}`)
     }
     await logSystem('portal', 'info', 'alert.fired',
       `${input.severity.toUpperCase()} ${input.ruleType}${input.target ? ` "${input.target}"` : ''} - notified ${delivered}/${enabled.length} channel(s)`)

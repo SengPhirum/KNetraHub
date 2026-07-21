@@ -26,15 +26,6 @@ interface GitlabStatus {
   overridden: boolean
 }
 
-interface AlertChannel {
-  id: string
-  name: string
-  type: 'telegram' | 'teams' | 'webhook'
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
 interface AlertRule {
   type: string
   enabled: boolean
@@ -129,104 +120,16 @@ async function resetGitlab() {
   }
 }
 
-// ─── Alerts: channels ──────────────────────────────────────────────────────────
-const { data: channels, refresh: refreshChannels } = useFetch<AlertChannel[]>('/api/alerts/channels', { lazy: true, default: () => [] })
+// ─── Alerts: channels are managed by the embedded <AppNotifications> panel,
+// which reads the central library (Docker-scoped + Global). Only the rule
+// thresholds below stay here. ─────────────────────────────────────────────────
 const { data: rules, refresh: refreshRules } = useFetch<AlertRule[]>('/api/alerts/rules', { lazy: true, default: () => [] })
-
-const channelTypeItems = [
-  { label: 'Telegram', value: 'telegram' },
-  { label: 'Microsoft Teams', value: 'teams' },
-  { label: 'Webhook', value: 'webhook' }
-]
-
-const channelModalOpen = ref(false)
-const channelModalMode = ref<'create' | 'edit'>('create')
-const channelForm = reactive({ id: '', name: '', type: 'telegram' as 'telegram' | 'teams' | 'webhook', enabled: true, botToken: '', chatId: '', webhookUrl: '', url: '', headersText: '' })
-const savingChannel = ref(false)
-const testingChannelId = ref<string | null>(null)
-const deletingChannelId = ref<string | null>(null)
-
-function channelTypeIcon(type: string) {
-  if (type === 'telegram') return 'i-lucide-send'
-  if (type === 'teams') return 'i-lucide-users'
-  return 'i-lucide-webhook'
-}
-function channelTypeLabel(type: string) {
-  return channelTypeItems.find((i) => i.value === type)?.label || type
-}
 
 // Vue's template parser closes a mustache interpolation at the first "}}"
 // it sees, even inside a JS string - a literal "{{x}}" placeholder chip
 // can't be built inline in the template, so it's built here instead.
 function placeholderChip(name: string) {
   return '{' + '{' + name + '}' + '}'
-}
-
-function openCreateChannel() {
-  channelModalMode.value = 'create'
-  Object.assign(channelForm, { id: '', name: '', type: 'telegram', enabled: true, botToken: '', chatId: '', webhookUrl: '', url: '', headersText: '' })
-  channelModalOpen.value = true
-}
-function openEditChannel(ch: AlertChannel) {
-  channelModalMode.value = 'edit'
-  Object.assign(channelForm, { id: ch.id, name: ch.name, type: ch.type, enabled: ch.enabled, botToken: '', chatId: '', webhookUrl: '', url: '', headersText: '' })
-  channelModalOpen.value = true
-}
-
-function buildChannelConfig(): Record<string, any> {
-  if (channelForm.type === 'telegram') return { botToken: channelForm.botToken, chatId: channelForm.chatId }
-  if (channelForm.type === 'teams') return { webhookUrl: channelForm.webhookUrl }
-  const headers: Record<string, string> = {}
-  for (const line of channelForm.headersText.split('\n')) {
-    const idx = line.indexOf(':')
-    if (idx === -1) continue
-    const key = line.slice(0, idx).trim()
-    if (key) headers[key] = line.slice(idx + 1).trim()
-  }
-  return { url: channelForm.url, headers }
-}
-
-async function saveChannel() {
-  savingChannel.value = true
-  try {
-    const config = buildChannelConfig()
-    if (channelModalMode.value === 'create') {
-      await $fetch('/api/alerts/channels', { method: 'POST', body: { name: channelForm.name, type: channelForm.type, enabled: channelForm.enabled, config } })
-      toast.add({ title: 'Channel added', color: 'primary', icon: 'i-lucide-check' })
-    } else {
-      await $fetch(`/api/alerts/channels/${channelForm.id}`, { method: 'PATCH', body: { name: channelForm.name, enabled: channelForm.enabled, config } })
-      toast.add({ title: 'Channel updated', color: 'primary', icon: 'i-lucide-check' })
-    }
-    channelModalOpen.value = false
-    await refreshChannels()
-  } catch (e: any) {
-    toast.add({ title: 'Save failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally {
-    savingChannel.value = false
-  }
-}
-
-async function testChannel(id: string) {
-  testingChannelId.value = id
-  try {
-    const res = await $fetch<{ ok: boolean; error?: string }>(`/api/alerts/channels/${id}/test`, { method: 'POST' })
-    if (res.ok) toast.add({ title: 'Test message sent', color: 'primary', icon: 'i-lucide-check' })
-    else toast.add({ title: 'Test failed', description: res.error, color: 'error' })
-  } catch (e: any) {
-    toast.add({ title: 'Test failed', description: e?.data?.statusMessage, color: 'error' })
-  } finally {
-    testingChannelId.value = null
-  }
-}
-
-const channelToDelete = ref<AlertChannel | null>(null)
-async function confirmDeleteChannel(headers: Record<string, string>) {
-  const ch = channelToDelete.value
-  if (!ch) return
-  await $fetch(`/api/alerts/channels/${ch.id}`, { method: 'DELETE', headers })
-  toast.add({ title: 'Channel deleted', color: 'primary' })
-  channelToDelete.value = null
-  await refreshChannels()
 }
 
 // ─── Alerts: rules ─────────────────────────────────────────────────────────────
@@ -348,39 +251,7 @@ async function resetRule(type: string) {
 
       <template #alerts>
         <div class="space-y-5 pt-4">
-          <section class="panel p-5">
-            <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 class="font-display text-sm font-semibold text-foam flex items-center gap-2">
-                  <UIcon name="i-lucide-send" class="size-4 text-beacon" />
-                  Notification channels
-                </h3>
-                <p class="mt-1 text-xs text-(--color-muted)">Where alerts are delivered. Every enabled channel receives every fired alert.</p>
-              </div>
-              <UButton color="primary" variant="soft" icon="i-lucide-plus" label="Add channel" @click="openCreateChannel" />
-            </header>
-
-            <div v-if="!channels?.length" class="rounded-lg border border-dashed border-hull p-6 text-center text-sm text-(--color-muted)">
-              No channels configured yet.
-            </div>
-            <div v-else class="divide-y divide-hull">
-              <div v-for="ch in channels" :key="ch.id" class="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div class="flex min-w-0 items-center gap-3">
-                  <UIcon :name="channelTypeIcon(ch.type)" class="size-4 shrink-0 text-beacon" />
-                  <div class="min-w-0">
-                    <p class="truncate text-sm text-foam">{{ ch.name }}</p>
-                    <p class="text-xs text-faint">{{ channelTypeLabel(ch.type) }}</p>
-                  </div>
-                  <UBadge :color="ch.enabled ? 'primary' : 'neutral'" variant="subtle" :label="ch.enabled ? 'Enabled' : 'Disabled'" />
-                </div>
-                <div class="flex items-center gap-2">
-                  <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-send" label="Test" :loading="testingChannelId === ch.id" @click="testChannel(ch.id)" />
-                  <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-pencil" aria-label="Edit channel" @click="openEditChannel(ch)" />
-                  <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete channel" :loading="deletingChannelId === ch.id" @click="channelToDelete = ch" />
-                </div>
-              </div>
-            </div>
-          </section>
+          <AppNotifications scope="docker" />
 
           <section class="panel p-5">
             <h3 class="font-display text-sm font-semibold text-foam flex items-center gap-2 mb-1">
@@ -445,61 +316,7 @@ async function resetRule(type: string) {
           </section>
         </div>
 
-        <UModal v-model:open="channelModalOpen" :title="channelModalMode === 'create' ? 'Add channel' : 'Edit channel'">
-          <template #body>
-            <div class="space-y-4">
-              <UFormField label="Name">
-                <UInput v-model="channelForm.name" class="w-full" placeholder="Ops Telegram" />
-              </UFormField>
-              <UFormField label="Type">
-                <USelect v-model="channelForm.type" :items="channelTypeItems" value-key="value" label-key="label" class="w-full" :disabled="channelModalMode === 'edit'" />
-              </UFormField>
-
-              <template v-if="channelForm.type === 'telegram'">
-                <UFormField label="Bot token">
-                  <UInput v-model="channelForm.botToken" type="password" class="w-full font-mono" :placeholder="channelModalMode === 'edit' ? 'Leave blank to keep existing' : ''" />
-                </UFormField>
-                <UFormField label="Chat ID">
-                  <UInput v-model="channelForm.chatId" class="w-full font-mono" :placeholder="channelModalMode === 'edit' ? 'Leave blank to keep existing' : ''" />
-                </UFormField>
-              </template>
-              <template v-else-if="channelForm.type === 'teams'">
-                <UFormField label="Webhook URL">
-                  <UInput v-model="channelForm.webhookUrl" type="password" class="w-full font-mono" :placeholder="channelModalMode === 'edit' ? 'Leave blank to keep existing' : ''" />
-                </UFormField>
-              </template>
-              <template v-else>
-                <UFormField label="URL">
-                  <UInput v-model="channelForm.url" type="password" class="w-full font-mono" :placeholder="channelModalMode === 'edit' ? 'Leave blank to keep existing' : ''" />
-                </UFormField>
-                <UFormField label="Headers" description="One per line, key: value">
-                  <UTextarea v-model="channelForm.headersText" class="w-full font-mono text-xs" :rows="3" />
-                </UFormField>
-              </template>
-
-              <UFormField label="Enabled">
-                <USwitch v-model="channelForm.enabled" color="primary" />
-              </UFormField>
-            </div>
-          </template>
-          <template #footer>
-            <div class="flex w-full justify-end gap-2">
-              <UButton color="neutral" variant="ghost" label="Cancel" @click="channelModalOpen = false" />
-              <UButton color="primary" label="Save" icon="i-lucide-save" :loading="savingChannel" @click="saveChannel" />
-            </div>
-          </template>
-        </UModal>
       </template>
     </UTabs>
-
-    <ConfirmDeleteModal
-      type="alert-channel"
-      :item-name="channelToDelete?.name"
-      :open="!!channelToDelete"
-      @update:open="(v: boolean) => { if (!v) channelToDelete = null }"
-      title="Delete channel"
-      :message="channelToDelete ? `Channel ${channelToDelete.name} will be deleted. Rules using it stop delivering through this channel.` : ''"
-      :action="confirmDeleteChannel"
-    />
   </div>
 </template>

@@ -20,7 +20,6 @@ export type EmailTemplateKey =
   | 'password-changed'
   | 'security-password-reset'
   | 'new-login'
-  | 'alert'
   | 'test'
 
 export interface EmailTemplateVariable {
@@ -214,48 +213,6 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplate> = 
       ...COMMON_SAMPLE,
       user: { displayName: 'Dara Sok', username: 'dara.sok', email: 'dara.sok@example.com' },
       request: { ip: '10.20.4.87', userAgent: 'Chrome 139 on Windows 11', method: 'Local password' }
-    }
-  },
-
-  alert: {
-    key: 'alert',
-    name: 'Alert notification',
-    description: 'Sent for monitoring alerts and action outcomes routed to email.',
-    subject: '[{{alert.severity}}] {{alert.title}}',
-    format: 'markdown',
-    body: [
-      '# {{alert.title}}',
-      '',
-      '**Severity:** {{alert.severity}}  ',
-      '**Source:** {{alert.source}}  ',
-      '**Opened:** {{alert.openedAt}}',
-      '',
-      '{{alert.message}}',
-      '',
-      '[Open in {{app.name}}]({{alert.url}})',
-      '',
-      '---',
-      '',
-      '{{app.name}} · {{year}}'
-    ].join('\n'),
-    variables: [
-      { path: 'alert.title', description: 'Short alert headline' },
-      { path: 'alert.severity', description: 'critical, warning, or info' },
-      { path: 'alert.source', description: 'Device, service, or app that raised it' },
-      { path: 'alert.message', description: 'Full alert body' },
-      { path: 'alert.openedAt', description: 'When the alert opened' },
-      { path: 'alert.url', description: 'Deep link to the alert in the portal' }
-    ],
-    sample: {
-      ...COMMON_SAMPLE,
-      alert: {
-        title: 'CPU above 90% for 10 minutes',
-        severity: 'critical',
-        source: 'edge-sw-01.example.com',
-        message: 'Processor load has stayed above the 90% threshold since 09:18 UTC. Current value: 96%.',
-        openedAt: '2026-07-20 09:18 UTC',
-        url: 'https://knetrahub.example.com/monitoring/alerts'
-      }
     }
   },
 

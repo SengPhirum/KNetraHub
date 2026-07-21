@@ -290,15 +290,10 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
 
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
-    CREATE TABLE IF NOT EXISTS alert_channels (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      config TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+    -- alert_channels retired: Docker alerts now use the central notification
+    -- library (notification_channels, portal DB). The notificationsBackfill
+    -- plugin copies any legacy rows across, then drops this table only after a
+    -- confirmed successful copy - see server/plugins/notificationsBackfill.ts.
 
     -- Runtime lifecycle and encrypted connection configuration for built-in
     -- subsystem databases. Absence of a row means never initialized/disabled.
