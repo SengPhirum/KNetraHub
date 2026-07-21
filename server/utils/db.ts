@@ -250,8 +250,8 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
     CREATE INDEX IF NOT EXISTS idx_sec_pw_resets_user ON security_password_resets (user_id);
 
     -- Centralized notification library (KNetraHub). One channel/template store
-    -- for every app; `scope` is 'global' (shared) or an app key (docker |
-    -- monitoring | ipmgt) so a record's owner is always explicit. Channel
+    -- for every app; scope is 'global' (shared) or an app key (docker,
+    -- monitoring, ipmgt) so a record's owner is always explicit. Channel
     -- config (webhook URLs, bot tokens, recipients) is AES-encrypted at rest.
     CREATE TABLE IF NOT EXISTS notification_channels (
       id TEXT PRIMARY KEY,

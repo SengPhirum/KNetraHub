@@ -19,6 +19,10 @@ const scopeOptions = computed(() => [
 // Common placeholders every message context provides.
 const COMMON_VARS = ['title', 'message', 'severity', 'app', 'time']
 
+// Vue closes a mustache at the first "}}", even inside a string literal, so a
+// literal "{{placeholders}}" chip is built by concatenation and interpolated.
+const placeholderExample = '{' + '{placeholders}' + '}'
+
 const modalOpen = ref(false)
 const editingId = ref<string | null>(null)
 const form = reactive({ name: '', scope: 'global', title: '', body: '' })
@@ -76,7 +80,7 @@ async function confirmDelete(headers: Record<string, string>) {
 
     <div class="notice-info panel-flush mb-5 flex items-start gap-2 p-3 text-xs">
       <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0" />
-      <span>A template is a title + body with <code class="font-mono">{{ '{{placeholders}}' }}</code>. Rules fill in the values at send time. Keep one Global default and add app-specific wording as needed.</span>
+      <span>A template is a title + body with <code class="font-mono">{{ placeholderExample }}</code> fields. Rules fill in the values at send time. Keep one Global default and add app-specific wording as needed.</span>
     </div>
 
     <DataState :status="status" :error="error" :empty="!data?.length" :refreshing="refreshing" empty-label="No templates yet." empty-icon="i-lucide-layout-template">
