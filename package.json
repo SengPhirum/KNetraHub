@@ -1,6 +1,6 @@
 {
   "name": "knetrahub-portal",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "KNetraHub - portal shell hosting KNetraHub-Docker (Docker Swarm management) and Module-Federation-loaded subsystem UIs",
   "author": "Seng Phirum <sengphirum143@gmail.com>",
