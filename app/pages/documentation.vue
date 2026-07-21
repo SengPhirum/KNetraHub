@@ -576,7 +576,7 @@ const configurationSections = [
           'Copy .env.example to .env before the first run.',
           'Set NUXT_JWT_SECRET and the first-run admin credentials before production use.',
           'Point NUXT_DB_* at a reachable Postgres + TimescaleDB instance before starting the app.',
-          'Use Settings for LDAP, OIDC, GitLab, Alerts, and Appearance changes that should be stored in the database instead of container env.'
+          'Use the in-app admin pages (Settings, and the Dock Alerts section) for LDAP, OIDC, GitLab, alerting, and Appearance changes that should be stored in the database instead of container env.'
         ],
         env: ['NUXT_JWT_SECRET', 'NUXT_ADMIN_USERNAME', 'NUXT_ADMIN_PASSWORD', 'NUXT_DB_HOST', 'NUXT_DB_PORT', 'NUXT_DB_NAME', 'NUXT_DB_USER', 'NUXT_DB_PASSWORD', 'NUXT_METRICS_RETENTION_DAYS', 'NUXT_PUBLIC_APP_NAME']
       },
@@ -650,7 +650,7 @@ const configurationSections = [
         id: 'alerts-config',
         title: 'Alerts & notifications',
         icon: 'i-lucide-bell',
-        summary: 'Notify Telegram, Microsoft Teams, or any generic webhook when something needs attention. Configure channels and per-rule thresholds from Settings > Alerts; channel credentials are encrypted at rest.',
+        summary: 'Notify Telegram, Microsoft Teams, or any generic webhook when something needs attention. Configure delivery channels and per-rule thresholds from the Dock app\'s Alerts section (Channels and Alert Rules); channel credentials are encrypted at rest.',
         options: [
           ['Channels', 'Telegram (bot token + chat ID), Microsoft Teams (incoming webhook URL), or generic Webhook (URL + custom headers). Add as many as needed - every enabled channel receives every alert.'],
           ['Deploy failed', 'Fires immediately when a stack deploy, rollback, redeploy, image update, or scale operation fails.'],
@@ -662,7 +662,7 @@ const configurationSections = [
           ['NUXT_ALERTS_INTERVAL_MINUTES', 'How often that poller runs, in minutes. Defaults to 3.']
         ] as [string, string][],
         steps: [
-          'Open Settings > Alerts and add a channel (Telegram, Teams, or Webhook).',
+          'Open the Dock app\'s Alerts > Channels and add a channel (Telegram, Teams, or Webhook).',
           'Use the channel\'s Test action to confirm delivery before relying on it.',
           'Enable or disable each rule and adjust its threshold where applicable.',
           'Open Customize message on a rule to edit its template using the listed {{placeholder}} fields, or Reset to restore the default.',
@@ -685,7 +685,7 @@ const configurationSections = [
           'Choose a display name and a username ending in "bot", then copy the bot token BotFather replies with.',
           'Add the bot to the target group or channel (or just open a direct chat with it), and send any message so the bot can see that chat.',
           'Visit https://api.telegram.org/bot<token>/getUpdates in a browser (with your token in place of <token>) and read the chat.id value from the JSON response - that is the chat ID.',
-          'In KNetraHub, go to Settings > Alerts > Add channel, choose Telegram, paste the bot token and chat ID, then save.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Telegram, paste the bot token and chat ID, then save.',
           'Use the channel\'s Test action and confirm the message arrives in the chat before relying on it.'
         ],
         env: [] as string[]
@@ -704,7 +704,7 @@ const configurationSections = [
           'In Teams, open the target channel, click the "..." menu, and choose Connectors (or Workflows on tenants where classic connectors are retired).',
           'Add/configure "Incoming Webhook", give it a name such as KNetraHub Alerts, and optionally upload an icon.',
           'Copy the generated webhook URL - Teams only displays it once, so save it somewhere safe immediately.',
-          'In KNetraHub, go to Settings > Alerts > Add channel, choose Microsoft Teams, paste the webhook URL, then save.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Microsoft Teams, paste the webhook URL, then save.',
           'Use the channel\'s Test action and confirm a card posts to the channel before relying on it.'
         ],
         env: [] as string[]
@@ -722,7 +722,7 @@ const configurationSections = [
         steps: [
           'Stand up or choose an endpoint that accepts a POST with a JSON body and returns a 2xx status.',
           'If the endpoint needs authentication, note the exact header name and value it expects, for example Authorization: Bearer <token>.',
-          'In KNetraHub, go to Settings > Alerts > Add channel, choose Webhook, enter the URL, and add any headers one per line as Key: Value.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Webhook, enter the URL, and add any headers one per line as Key: Value.',
           'Use the channel\'s Test action and confirm your endpoint receives the request and returns success.',
           'For Slack, paste its "Incoming Webhook" app URL directly into the URL field - no extra headers are needed.'
         ],
@@ -1329,7 +1329,7 @@ const qaGroups: Array<{ id: string; label: string; icon: string; items: QaItem[]
       {
         id: 'qa-alerts',
         q: 'How do I get notified when something breaks?',
-        a: 'Add a channel in Settings → Alerts — Telegram, Microsoft Teams, or any generic webhook — then enable the rules you care about: deploy failures, service usage thresholds, node down, degraded replicas, and disk pressure. Use each channel’s Test action before relying on it.',
+        a: 'Add a channel in the Dock app\'s Alerts → Channels — Telegram, Microsoft Teams, or any generic webhook — then open Alert Rules and enable the ones you care about: deploy failures, service usage thresholds, node down, degraded replicas, and disk pressure. Use each channel’s Test action before relying on it.',
         link: { section: 'configuration', anchor: 'alerts-config', label: 'Alerts & notifications' }
       }
     ]

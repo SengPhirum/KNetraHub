@@ -46,6 +46,13 @@ const DOCK_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Alerts',
+    items: [
+      { label: 'Alert Rules', to: '/docker/alerts',          icon: 'i-lucide-bell-ring',       permission: 'docker.manage' },
+      { label: 'Channels',    to: '/docker/alerts/channels', icon: 'i-lucide-satellite-dish',  permission: 'docker.manage' }
+    ]
+  },
+  {
     label: 'Administration',
     items: [
       { label: 'Users',      to: '/docker/users',      icon: 'i-lucide-users',       permission: 'docker.audit' },
