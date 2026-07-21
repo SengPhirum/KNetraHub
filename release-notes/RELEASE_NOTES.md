@@ -11,11 +11,13 @@ Date: 2026-07-21 UTC
 
 ## Source
 
-- Commit: `9828d5d`
+- Commit: `2aa471f`
 - Previous tag: none
 
 ## Changes
 
+- Fix build: escape literal braces in template help text and backtick in db.ts SQL comment (2aa471f)
+- Update new release 0.1.7 (339c695)
 - Docs: clarify Monitoring keeps its own alerting engine (9828d5d)
 - Migrate Docker to central notifications; per-app manager; retire legacy channels (f2c3438)
 - Add centralized notification library (Admin > Notifications) (319eac8)
