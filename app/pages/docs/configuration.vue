@@ -99,7 +99,7 @@ const configurationSections = [
         icon: 'i-lucide-bell',
         summary: 'One shared notification library lives in Admin > Notifications: the Email (SMTP) server, a Channels library (13 delivery types including email), and reusable Templates. Every app draws from the same library instead of keeping its own - a Slack webhook or mail server is configured once. Channel credentials are AES-encrypted at rest.',
         options: [
-          ['Where', 'Admin > Notifications - three areas: Email (SMTP), Channels, Templates. Docker and Monitoring alert rules deliver through these shared channels.'],
+          ['Where', 'Admin > Notifications - three areas: Email (SMTP), Channels, Templates. Docker alerts deliver through these shared channels. Monitoring keeps its own dedicated alerting engine (transports, rules, templates) inside the Monitoring app, because it needs per-rule routing, delivery records, and device-aware templates.'],
           ['Channel types', '13 built in: Email, Webhook, Slack, Discord, Telegram, Microsoft Teams, Mattermost, Rocket.Chat, Gotify, ntfy, Pushover, PagerDuty, Opsgenie. Every outbound URL passes an SSRF guard.'],
           ['Scope', 'Each channel and template is Global (available to every app) or scoped to one app (Dock, Monitoring, IP Management) and tagged with that app\'s name, so its owner is always clear.'],
           ['Email is special', 'The SMTP server is portal infrastructure, set once under Email (SMTP). An email channel only carries recipients and an optional From-name override - never server credentials.'],
