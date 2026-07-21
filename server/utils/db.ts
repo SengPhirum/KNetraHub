@@ -249,6 +249,33 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
 
     CREATE INDEX IF NOT EXISTS idx_sec_pw_resets_user ON security_password_resets (user_id);
 
+    -- Centralized notification library (KNetraHub). One channel/template store
+    -- for every app; `scope` is 'global' (shared) or an app key (docker |
+    -- monitoring | ipmgt) so a record's owner is always explicit. Channel
+    -- config (webhook URLs, bot tokens, recipients) is AES-encrypted at rest.
+    CREATE TABLE IF NOT EXISTS notification_channels (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'global',
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      config TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_notification_channels_scope ON notification_channels (scope);
+
+    CREATE TABLE IF NOT EXISTS notification_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'global',
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_notification_templates_scope ON notification_templates (scope);
+
     -- Browser login sessions, so a stateless JWT can be revoked ("sign out
     -- everywhere" / per-device) by deleting its row. The JWT carries this id as
     -- its sid claim; readSession rejects a token whose session row is gone.

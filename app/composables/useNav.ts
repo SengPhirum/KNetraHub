@@ -219,9 +219,11 @@ const ADMIN_GROUPS: NavGroup[] = [
     ]
   },
   {
-    label: 'Configuration',
+    label: 'Notifications',
     items: [
-      { label: 'Email', to: '/admin/configuration/email', icon: 'i-lucide-mail', minRole: 'admin' }
+      { label: 'Email (SMTP)', to: '/admin/configuration/email',  icon: 'i-lucide-mail',           minRole: 'admin' },
+      { label: 'Channels',     to: '/admin/notifications/channels',  icon: 'i-lucide-satellite-dish', minRole: 'admin' },
+      { label: 'Templates',    to: '/admin/notifications/templates', icon: 'i-lucide-layout-template', minRole: 'admin' }
     ]
   },
   {

@@ -27,6 +27,8 @@ export const DELETE_TIERS: Record<string, DeleteTier> = {
   'backup': 'high',               // deleting a backup is irreversible
   'auth-settings': 'high',        // could lock out every SSO/LDAP user
   'alert-channel': 'medium',
+  'notification.channel': 'medium',   // central notification channel (type name)
+  'notification.template': 'low',     // reusable wording, re-creatable
   'email-settings': 'low',        // singleton SMTP config, reconfigurable
   'email-template': 'low',        // reset an override to default, reversible
   'gitlab-settings': 'low',       // disconnect integration, reversible

@@ -95,25 +95,25 @@ const configurationSections = [
       },
       {
         id: 'alerts-config',
-        title: 'Alerts & notifications',
+        title: 'Notifications (centralized)',
         icon: 'i-lucide-bell',
-        summary: 'Notify Telegram, Microsoft Teams, or any generic webhook when something needs attention. Configure channels and per-rule thresholds from Settings > Alerts; channel credentials are encrypted at rest.',
+        summary: 'One shared notification library lives in Admin > Notifications: the Email (SMTP) server, a Channels library (13 delivery types including email), and reusable Templates. Every app draws from the same library instead of keeping its own - a Slack webhook or mail server is configured once. Channel credentials are AES-encrypted at rest.',
         options: [
-          ['Channels', 'Telegram (bot token + chat ID), Microsoft Teams (incoming webhook URL), or generic Webhook (URL + custom headers). Add as many as needed - every enabled channel receives every alert.'],
-          ['Deploy failed', 'Fires immediately when a stack deploy, rollback, redeploy, image update, or scale operation fails.'],
-          ['Service usage threshold', 'Fires when a service\'s CPU and/or memory usage crosses a configurable percentage of its limit, reservation, or node capacity. Default 90%.'],
-          ['Node down', 'Fires when a swarm node stops reporting heartbeats.'],
-          ['Replicas degraded', 'Fires when a service stays under its desired replica count past a configurable grace period.'],
-          ['Disk usage threshold', 'Fires when a node\'s disk usage crosses a configurable percentage. Default 85%.'],
+          ['Where', 'Admin > Notifications - three areas: Email (SMTP), Channels, Templates. Docker and Monitoring alert rules deliver through these shared channels.'],
+          ['Channel types', '13 built in: Email, Webhook, Slack, Discord, Telegram, Microsoft Teams, Mattermost, Rocket.Chat, Gotify, ntfy, Pushover, PagerDuty, Opsgenie. Every outbound URL passes an SSRF guard.'],
+          ['Scope', 'Each channel and template is Global (available to every app) or scoped to one app (Dock, Monitoring, IP Management) and tagged with that app\'s name, so its owner is always clear.'],
+          ['Email is special', 'The SMTP server is portal infrastructure, set once under Email (SMTP). An email channel only carries recipients and an optional From-name override - never server credentials.'],
+          ['Templates', 'A reusable title + body with {{placeholder}} fields (title, message, severity, app, time). Rules reference a template instead of hard-coding wording; unknown placeholders render empty.'],
+          ['Docker rule types', 'Deploy failed, service usage threshold (default 90%), node down, replicas degraded, disk usage threshold (default 85%), and service/task lifecycle events.'],
           ['NUXT_ALERTS_ENABLED', 'Default state of the background poller that checks usage/node/replica/disk conditions. Defaults to true.'],
           ['NUXT_ALERTS_INTERVAL_MINUTES', 'How often that poller runs, in minutes. Defaults to 3.']
         ],
         steps: [
-          'Open Settings > Alerts and add a channel (Telegram, Teams, or Webhook).',
-          'Use the channel\'s Test action to confirm delivery before relying on it.',
-          'Enable or disable each rule and adjust its threshold where applicable.',
-          'Open Customize message on a rule to edit its template using the listed {{placeholder}} fields, or Reset to restore the default.',
-          'Trigger a real deploy failure or threshold breach once to confirm end-to-end delivery.'
+          'Open Admin > Notifications > Email (SMTP) and configure the mail server once.',
+          'Under Channels, add delivery destinations (Slack, Telegram, Email, …). Keep shared ones Global; scope app-specific ones to their app.',
+          'Use each channel\'s Test action to confirm delivery before relying on it.',
+          'Under Templates, keep a Global default and add app-specific wording as needed.',
+          'In each app, enable its rules and point them at the shared channels and template; trigger one real event to confirm end-to-end delivery.'
         ],
         env: ['NUXT_ALERTS_ENABLED', 'NUXT_ALERTS_INTERVAL_MINUTES']
       },
