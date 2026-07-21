@@ -12,14 +12,18 @@ import {
 const props = defineProps<{
   /** App scope key, e.g. 'docker' | 'monitoring' | 'ipmgt'. */
   scope: string
+  /** Render only the shared (Global) channel picker — for apps like Monitoring
+   *  that keep their own native transport CRUD and just want to opt into the
+   *  admin-configured channels. */
+  sharedOnly?: boolean
 }>()
 
 const toast = useToast()
-// This app's own channels (full CRUD).
+// This app's own channels (full CRUD). Skipped entirely in shared-only mode.
 const { data, status, error, refresh, refreshing } = useApiCache(`app-notif-channels:${props.scope}`, () => $fetch<any[]>('/api/notifications/channels', { query: { scope: props.scope } }))
 // Shared (Global) channels a portal admin created — this app opts in per channel.
 const { data: shared, refresh: refreshShared } = useApiCache(`app-notif-shared:${props.scope}`, () => $fetch<any[]>('/api/notifications/available', { query: { app: props.scope } }))
-onMounted(() => { refresh(); refreshShared() })
+onMounted(() => { if (!props.sharedOnly) refresh(); refreshShared() })
 
 const togglingId = ref<string | null>(null)
 async function toggleUse(ch: any, use: boolean) {
@@ -102,16 +106,20 @@ async function confirmDelete(headers: Record<string, string>) {
   <section class="panel space-y-5 p-5">
     <header>
       <h3 class="flex items-center gap-2 font-display text-sm font-semibold text-foam">
-        <UIcon name="i-lucide-satellite-dish" class="size-4 text-beacon" />
-        Notification channels
+        <UIcon :name="sharedOnly ? 'i-lucide-share-2' : 'i-lucide-satellite-dish'" class="size-4 text-beacon" />
+        {{ sharedOnly ? 'Shared channels' : 'Notification channels' }}
       </h3>
-      <p class="mt-1 text-xs text-(--color-muted)">Where this app’s alerts are delivered. Turn on shared channels a portal admin set up, and/or add your own.</p>
+      <p class="mt-1 text-xs text-(--color-muted)">
+        {{ sharedOnly
+          ? 'Deliver this app’s alerts to channels a portal admin pre-configured in Admin ▸ Notifications. Toggle one on to use it alongside this app’s own transports.'
+          : 'Where this app’s alerts are delivered. Turn on shared channels a portal admin set up, and/or add your own.' }}
+      </p>
     </header>
 
     <!-- Use pre-configured (Global) channels -->
-    <div v-if="shared?.length">
-      <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Shared channels</p>
-      <div class="divide-y divide-hull rounded-lg bg-surface-2/30 ring-1 ring-hull-soft">
+    <div v-if="sharedOnly || shared?.length">
+      <p v-if="!sharedOnly" class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--color-muted)">Shared channels</p>
+      <div v-if="shared?.length" class="divide-y divide-hull rounded-lg bg-surface-2/30 ring-1 ring-hull-soft">
         <div v-for="ch in shared" :key="ch.id" class="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
           <div class="flex min-w-0 items-center gap-3">
             <UIcon :name="CHANNEL_TYPE_META[ch.type as NotificationChannelType]?.icon || 'i-lucide-bell'" class="size-4 shrink-0 text-(--color-muted)" />
@@ -124,11 +132,14 @@ async function confirmDelete(headers: Record<string, string>) {
           <USwitch :model-value="ch.selected" :disabled="togglingId === ch.id || !ch.enabled" color="primary" @update:model-value="(v: boolean) => toggleUse(ch, v)" />
         </div>
       </div>
-      <p class="mt-1.5 text-xs text-faint">Toggle on to deliver this app’s alerts to a channel a portal admin configured.</p>
+      <p v-else class="rounded-lg bg-surface-2/30 px-3 py-4 text-center text-xs text-faint ring-1 ring-hull-soft">
+        No shared channels yet — a portal admin can add them in Admin ▸ Notifications ▸ Channels.
+      </p>
+      <p v-if="shared?.length" class="mt-1.5 text-xs text-faint">Toggle on to deliver this app’s alerts to a channel a portal admin configured.</p>
     </div>
 
     <!-- This app's own channels -->
-    <div>
+    <div v-if="!sharedOnly">
       <div class="mb-2 flex items-center justify-between">
         <p class="text-xs font-semibold uppercase tracking-wider text-(--color-muted)">This app’s channels</p>
         <UButton icon="i-lucide-plus" color="primary" variant="soft" size="xs" label="Add channel" @click="openCreate" />
@@ -155,7 +166,7 @@ async function confirmDelete(headers: Record<string, string>) {
     </DataState>
     </div>
 
-    <UModal v-model:open="modalOpen" :title="editingId ? `Edit ${form.name}` : 'Add channel'">
+    <UModal v-if="!sharedOnly" v-model:open="modalOpen" :title="editingId ? `Edit ${form.name}` : 'Add channel'">
       <template #body>
         <div class="space-y-4">
           <UFormField label="Name" required>
@@ -190,6 +201,7 @@ async function confirmDelete(headers: Record<string, string>) {
     </UModal>
 
     <ConfirmDeleteModal
+      v-if="!sharedOnly"
       type="notification.channel"
       :item-name="deleteTarget?.name"
       :open="!!deleteTarget"

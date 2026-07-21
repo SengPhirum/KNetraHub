@@ -99,12 +99,13 @@ const configurationSections = [
         icon: 'i-lucide-bell',
         summary: 'One shared notification library lives in Admin > Notifications: the Email (SMTP) server, a Channels library (13 delivery types including email), and reusable Templates. Every app draws from the same library instead of keeping its own - a Slack webhook or mail server is configured once. Channel credentials are AES-encrypted at rest.',
         options: [
-          ['Where', 'Admin > Notifications - three areas: Email (SMTP), Channels, Templates. Docker alerts deliver through these shared channels. Monitoring keeps its own dedicated alerting engine (transports, rules, templates) inside the Monitoring app, because it needs per-rule routing, delivery records, and device-aware templates.'],
+          ['Where', 'Admin > Notifications - three areas: Email (SMTP), Channels, Templates. Docker and IP Management each have their own Alerts section (Alert Rules + Alert Transports) and deliver through these shared channels. Monitoring keeps its own dedicated alerting engine (per-rule routing, delivery records, device-aware templates) but its Alert Transports page can now also opt into the shared Global channels.'],
           ['Channel types', '13 built in: Email, Webhook, Slack, Discord, Telegram, Microsoft Teams, Mattermost, Rocket.Chat, Gotify, ntfy, Pushover, PagerDuty, Opsgenie. Every outbound URL passes an SSRF guard.'],
-          ['Scope', 'Each channel and template is Global (available to every app) or scoped to one app (Dock, Monitoring, IP Management) and tagged with that app\'s name, so its owner is always clear.'],
+          ['Scope', 'Each channel and template is Global (available to every app) or scoped to one app (Dock, Monitoring, IP Management) and tagged with that app\'s name, so its owner is always clear. A Global channel is opt-in per app: each app selects which shared channels it uses from its own Alert Transports page.'],
           ['Email is special', 'The SMTP server is portal infrastructure, set once under Email (SMTP). An email channel only carries recipients and an optional From-name override - never server credentials.'],
           ['Templates', 'A reusable title + body with {{placeholder}} fields (title, message, severity, app, time). Rules reference a template instead of hard-coding wording; unknown placeholders render empty.'],
-          ['Docker rule types', 'Deploy failed, service usage threshold (default 90%), node down, replicas degraded, disk usage threshold (default 85%), and service/task lifecycle events.'],
+          ['Docker rule types', 'Deploy failed, service usage threshold (default 90%), node down, replicas degraded, disk usage threshold (default 85%), and service/task lifecycle events. Configured in Dock > Alerts > Alert Rules.'],
+          ['IP Management rule types', 'Subnet utilization threshold (default 90%), subnet full (0 free addresses), and new IP request submitted. Configured in IP Mgt > Alerts > Alert Rules; delivered via IP Mgt > Alerts > Alert Transports.'],
           ['NUXT_ALERTS_ENABLED', 'Default state of the background poller that checks usage/node/replica/disk conditions. Defaults to true.'],
           ['NUXT_ALERTS_INTERVAL_MINUTES', 'How often that poller runs, in minutes. Defaults to 3.']
         ],
@@ -132,7 +133,7 @@ const configurationSections = [
           'Choose a display name and a username ending in "bot", then copy the bot token BotFather replies with.',
           'Add the bot to the target group or channel (or just open a direct chat with it), and send any message so the bot can see that chat.',
           'Visit https://api.telegram.org/bot<token>/getUpdates in a browser (with your token in place of <token>) and read the chat.id value from the JSON response - that is the chat ID.',
-          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Telegram, paste the bot token and chat ID, then save.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Alert Transports > Add channel, choose Telegram, paste the bot token and chat ID, then save.',
           'Use the channel\'s Test action and confirm the message arrives in the chat before relying on it.'
         ],
         env: []
@@ -151,7 +152,7 @@ const configurationSections = [
           'In Teams, open the target channel, click the "..." menu, and choose Connectors (or Workflows on tenants where classic connectors are retired).',
           'Add/configure "Incoming Webhook", give it a name such as KNetraHub Alerts, and optionally upload an icon.',
           'Copy the generated webhook URL - Teams only displays it once, so save it somewhere safe immediately.',
-          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Microsoft Teams, paste the webhook URL, then save.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Alert Transports > Add channel, choose Microsoft Teams, paste the webhook URL, then save.',
           'Use the channel\'s Test action and confirm a card posts to the channel before relying on it.'
         ],
         env: []
@@ -169,7 +170,7 @@ const configurationSections = [
         steps: [
           'Stand up or choose an endpoint that accepts a POST with a JSON body and returns a 2xx status.',
           'If the endpoint needs authentication, note the exact header name and value it expects, for example Authorization: Bearer <token>.',
-          'In KNetraHub, go to the Dock app\'s Alerts > Channels > Add channel, choose Webhook, enter the URL, and add any headers one per line as Key: Value.',
+          'In KNetraHub, go to the Dock app\'s Alerts > Alert Transports > Add channel, choose Webhook, enter the URL, and add any headers one per line as Key: Value.',
           'Use the channel\'s Test action and confirm your endpoint receives the request and returns success.',
           'For Slack, paste its "Incoming Webhook" app URL directly into the URL field - no extra headers are needed.'
         ],

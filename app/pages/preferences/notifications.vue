@@ -2,7 +2,7 @@
 import type { NotificationPreferences } from '~/composables/usePreferences'
 
 // Personal browser/toast delivery preferences. Team-wide alert generation and
-// external channels remain under the Dock app's Alerts > Channels.
+// external channels remain under the Dock app's Alerts > Alert Transports.
 const { prefs, fetchPreferences, updatePreferences } = usePreferences()
 const toast = useToast()
 

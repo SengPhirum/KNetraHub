@@ -1,5 +1,7 @@
 import type { Pool } from 'pg'
 import { decryptSecret } from '~~/server/utils/secretCrypto'
+import { channelsForScope } from '~~/server/utils/notifyStore'
+import { deliverToChannel } from '~~/server/utils/notify'
 import { renderTemplate, DEFAULT_TITLE_TEMPLATE, DEFAULT_BODY_TEMPLATE, type TemplateContext } from './templates'
 import type { TransportType } from '../../shared/constants'
 
@@ -218,7 +220,12 @@ export async function deliverAlert(db: Pool, args: { alert: any; rule: any; kind
      )))`,
     [rule.id]
   )
-  if (!transports.rows.length) {
+
+  // Admin-configured Global channels this app opted into (central notification
+  // library). They receive every Monitoring alert, alongside native transports.
+  const globals = await channelsForScope('monitoring').catch(() => [])
+
+  if (!transports.rows.length && !globals.length) {
     // Alerts may exist with no transport — record that notification was
     // considered and skipped, then advance the counter so reminders don't spin.
     await db.query(`UPDATE monitoring.alerts SET last_notified_at = now() WHERE id = $1`, [alert.id])
@@ -267,6 +274,30 @@ export async function deliverAlert(db: Pool, args: { alert: any; rule: any; kind
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [alert.id, transport.id, transport.type, kind, result.target, result.requestSummary,
         result.status ?? null, Date.now() - startedAt, result.ok, result.error ?? null]
+    )
+  }
+
+  // Deliver to opted-in Global channels via the central engine. These aren't
+  // native transports, so alert_notifications.transport_id stays NULL.
+  for (const channel of globals) {
+    const startedAt = Date.now()
+    let ok = false
+    let error: string | undefined
+    let target = channel.name
+    try {
+      const res = await deliverToChannel(channel, { title, body, severity: rule.severity, kind })
+      ok = res.ok
+      error = res.error
+      target = res.target || channel.name
+    } catch (err: any) {
+      error = String(err?.message ?? err)
+    }
+    anySuccess = anySuccess || ok
+    await db.query(
+      `INSERT INTO monitoring.alert_notifications
+         (alert_id, transport_id, transport_type, kind, target, request_summary, response_status, response_ms, success, error)
+       VALUES ($1, NULL, $2, $3, $4, $5, NULL, $6, $7, $8)`,
+      [alert.id, `global:${channel.type}`, kind, target, `Global channel "${channel.name}"`, Date.now() - startedAt, ok, error ?? null]
     )
   }
 

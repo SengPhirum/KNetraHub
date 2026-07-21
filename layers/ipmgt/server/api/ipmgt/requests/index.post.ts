@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { getIpamDb as getDb } from '~~/server/utils/moduleDb'
 import { requireIpam, ipamAudit, loadSubnet } from '~~/layers/ipmgt/server/utils/ipamStore'
 import { isValidIp } from '~~/layers/ipmgt/server/utils/ipam'
+import { fireIpamAlert } from '~~/layers/ipmgt/server/utils/ipamAlertNotify'
 
 // Submit an IP request against a subnet that allows requests. The requested
 // IP (if any) is stored as-is and only validated/allocated at approval time -
@@ -34,5 +35,21 @@ export default defineEventHandler(async (event) => {
     ]
   )
   await ipamAudit(user, 'ipmgt.request.submit', id, { subnet: subnet.network, requested_ip: body.requested_ip || null })
+
+  // Notify managers a request is waiting for review — best-effort, never blocks
+  // the submission. Delivers via the central notification library (ipmgt scope).
+  void fireIpamAlert({
+    ruleType: 'ip_request_submitted',
+    target: subnet.network,
+    severity: 'info',
+    vars: {
+      target: subnet.network,
+      requester: user.username,
+      requested: body.requested_ip ? ` for ${body.requested_ip}` : '',
+      description: String(body.description || body.justification || '(no description)'),
+      time: now
+    }
+  })
+
   return { id }
 })

@@ -48,8 +48,8 @@ const DOCK_GROUPS: NavGroup[] = [
   {
     label: 'Alerts',
     items: [
-      { label: 'Alert Rules', to: '/docker/alerts',          icon: 'i-lucide-bell-ring',       permission: 'docker.manage' },
-      { label: 'Channels',    to: '/docker/alerts/channels', icon: 'i-lucide-satellite-dish',  permission: 'docker.manage' }
+      { label: 'Alert Rules',      to: '/docker/alerts',            icon: 'i-lucide-bell-ring', permission: 'docker.manage' },
+      { label: 'Alert Transports', to: '/docker/alerts/transports', icon: 'i-lucide-send',      permission: 'docker.manage' }
     ]
   },
   {
@@ -190,6 +190,13 @@ const IPMGT_GROUPS: NavGroup[] = [
     items: [
       { label: 'Search',     to: '/ipmgt/search', icon: 'i-lucide-search',     permission: 'ipmgt.view' },
       { label: 'Calculator', to: '/ipmgt/tools',  icon: 'i-lucide-calculator', permission: 'ipmgt.view' }
+    ]
+  },
+  {
+    label: 'Alerts',
+    items: [
+      { label: 'Alert Rules',      to: '/ipmgt/alerts',            icon: 'i-lucide-bell-ring', permission: 'ipmgt.settings' },
+      { label: 'Alert Transports', to: '/ipmgt/alerts/transports', icon: 'i-lucide-send',      permission: 'ipmgt.settings' }
     ]
   },
   {

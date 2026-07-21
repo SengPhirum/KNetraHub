@@ -130,7 +130,16 @@ async function test(id: number) {
       </template>
     </PageHeader>
     <div v-if="!hasMonitoring" class="panel p-10 text-center text-muted">No access.</div>
-    <div v-else class="panel overflow-x-auto">
+    <div v-else class="space-y-4">
+      <!-- Pre-configured (Global) channels an admin set up in Admin ▸ Notifications.
+           Opting one in here delivers every Monitoring alert to it, alongside the
+           native transports below. Managing the opt-in is a manager action. -->
+      <AppNotifications v-if="canManage" scope="monitoring" shared-only />
+
+      <div class="panel overflow-x-auto">
+        <div class="border-b border-hull px-3 py-2">
+          <p class="text-xs font-semibold uppercase tracking-wider text-faint">This app’s transports</p>
+        </div>
       <table class="w-full text-sm">
         <thead class="bg-surface-2 text-left text-xs uppercase text-faint">
           <tr><th class="px-3 py-2">Name</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Enabled</th>
@@ -154,6 +163,7 @@ async function test(id: number) {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <UModal v-model:open="modalOpen" :title="editingId ? 'Edit transport' : 'Add transport'">
