@@ -79,6 +79,13 @@ async function markRead(item: FeedItem) {
   }
 }
 
+// Clicking a row always marks it read; when it has a destination the popover
+// closes so the navigation isn't hidden behind it.
+function onItemClick(item: FeedItem) {
+  markRead(item)
+  if (notificationLink(item)) open.value = false
+}
+
 const SEVERITY_META: Record<string, { icon: string; dot: string; badge: 'error' | 'warning' | 'info' | 'neutral'; label: string }> = {
   critical: { icon: 'i-lucide-circle-alert', dot: 'bg-rose-500', badge: 'error', label: 'Critical' },
   warning: { icon: 'i-lucide-triangle-alert', dot: 'bg-amber-500', badge: 'warning', label: 'Warning' },
@@ -151,30 +158,48 @@ const badgeLabel = computed(() => (unread.value > 99 ? '99+' : String(unread.val
           </div>
 
           <ul v-else class="divide-y divide-hull">
-            <li
-              v-for="item in items"
-              :key="item.id"
-              class="flex gap-3 px-3 py-3 transition-colors"
-              :class="item.read ? 'hover:bg-surface-2/40' : 'bg-beacon/5 hover:bg-beacon/10'"
-              @click="markRead(item)"
-            >
-              <UIcon :name="severityMeta(item.severity).icon" class="mt-0.5 size-4 shrink-0"
-                :class="item.severity === 'critical' ? 'text-rose-400' : item.severity === 'warning' ? 'text-amber-400' : 'text-sky-400'" />
+            <li v-for="item in items" :key="item.id">
+              <component
+                :is="notificationLink(item) ? 'NuxtLink' : 'div'"
+                :to="notificationLink(item) || undefined"
+                class="flex w-full gap-3 px-3 py-3 text-left transition-colors"
+                :class="[
+                  item.read ? 'hover:bg-surface-2/40' : 'bg-beacon/5 hover:bg-beacon/10',
+                  notificationLink(item) ? 'cursor-pointer' : ''
+                ]"
+                @click="onItemClick(item)"
+              >
+                <UIcon :name="severityMeta(item.severity).icon" class="mt-0.5 size-4 shrink-0"
+                  :class="item.severity === 'critical' ? 'text-rose-400' : item.severity === 'warning' ? 'text-amber-400' : 'text-sky-400'" />
 
-              <div class="min-w-0 flex-1">
-                <div class="mb-1 flex flex-wrap items-center gap-1.5">
-                  <UBadge color="neutral" variant="subtle" size="sm" :label="scopeLabel(item.app)" />
-                  <UBadge :color="severityMeta(item.severity).badge" variant="subtle" size="sm" :label="severityMeta(item.severity).label" />
-                  <span class="text-[11px] text-faint">{{ timeAgo(item.createdAt) }}</span>
+                <div class="min-w-0 flex-1">
+                  <div class="mb-1 flex flex-wrap items-center gap-1.5">
+                    <UBadge color="neutral" variant="subtle" size="sm" :label="scopeLabel(item.app)" />
+                    <UBadge :color="severityMeta(item.severity).badge" variant="subtle" size="sm" :label="severityMeta(item.severity).label" />
+                    <span class="text-[11px] text-faint">{{ timeAgo(item.createdAt) }}</span>
+                  </div>
+                  <p class="truncate text-sm font-medium" :class="item.read ? 'text-(--color-muted)' : 'text-foam'">{{ item.title }}</p>
+                  <p class="line-clamp-2 text-xs text-faint">{{ item.body }}</p>
                 </div>
-                <p class="truncate text-sm font-medium" :class="item.read ? 'text-(--color-muted)' : 'text-foam'">{{ item.title }}</p>
-                <p class="line-clamp-2 text-xs text-faint">{{ item.body }}</p>
-              </div>
 
-              <span v-if="!item.read" class="mt-1.5 size-2 shrink-0 rounded-full" :class="severityMeta(item.severity).dot" aria-label="Unread" />
+                <span v-if="!item.read" class="mt-1.5 size-2 shrink-0 rounded-full" :class="severityMeta(item.severity).dot" aria-label="Unread" />
+              </component>
             </li>
           </ul>
         </div>
+
+        <footer class="border-t border-hull px-3 py-2">
+          <UButton
+            to="/notifications"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            block
+            trailing-icon="i-lucide-arrow-right"
+            label="See all notifications"
+            @click="open = false"
+          />
+        </footer>
       </div>
     </template>
   </UPopover>

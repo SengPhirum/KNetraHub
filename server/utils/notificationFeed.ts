@@ -73,20 +73,48 @@ async function visibleApps(user: SessionUser): Promise<string[]> {
   return apps
 }
 
-export async function listNotifications(user: SessionUser, opts: { limit?: number } = {}): Promise<{ items: FeedNotification[]; unread: number }> {
+export async function listNotifications(
+  user: SessionUser,
+  opts: { limit?: number; offset?: number; app?: string; severity?: string; unreadOnly?: boolean } = {}
+): Promise<{ items: FeedNotification[]; unread: number; total: number }> {
   const apps = await visibleApps(user)
-  if (!apps.length) return { items: [], unread: 0 }
-  const limit = Math.min(100, Math.max(1, opts.limit ?? 30))
+  if (!apps.length) return { items: [], unread: 0, total: 0 }
+  // Coerced to safe integers before interpolation (never NaN, never injectable).
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(opts.limit)) || 30))
+  const offset = Math.max(0, Math.floor(Number(opts.offset)) || 0)
+
+  // Narrowing filters are additive on top of the entitlement scope, which is
+  // always applied — an app filter can never widen what the user may see.
+  const where: string[] = ['n.app = ANY($1::text[])']
+  const params: any[] = [apps, user.id]
+  if (opts.app && apps.includes(opts.app)) {
+    params.push(opts.app)
+    where.push(`n.app = $${params.length}`)
+  }
+  if (opts.severity) {
+    params.push(opts.severity)
+    where.push(`n.severity = $${params.length}`)
+  }
+  if (opts.unreadOnly) where.push('r.user_id IS NULL')
+  const whereSql = where.join(' AND ')
 
   const { rows } = await getDb().query(
     `SELECT n.id, n.app, n.severity, n.title, n.body, n.rule_type, n.target, n.created_at,
             (r.user_id IS NOT NULL) AS read
        FROM notifications n
        LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.user_id = $2
-      WHERE n.app = ANY($1::text[])
+      WHERE ${whereSql}
       ORDER BY n.created_at DESC
-      LIMIT $3`,
-    [apps, user.id, limit]
+      LIMIT ${limit} OFFSET ${offset}`,
+    params
+  )
+
+  const { rows: totalRows } = await getDb().query(
+    `SELECT count(*)::int AS c
+       FROM notifications n
+       LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.user_id = $2
+      WHERE ${whereSql}`,
+    params
   )
 
   const { rows: countRows } = await getDb().query(
@@ -109,7 +137,8 @@ export async function listNotifications(user: SessionUser, opts: { limit?: numbe
       createdAt: r.created_at,
       read: r.read === true
     })),
-    unread: Number(countRows[0]?.c ?? 0)
+    unread: Number(countRows[0]?.c ?? 0),
+    total: Number(totalRows[0]?.c ?? 0)
   }
 }
 

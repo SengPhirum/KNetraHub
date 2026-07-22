@@ -8,6 +8,12 @@ import { listNotifications } from '~~/server/utils/notificationFeed'
  */
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  const limit = Number(getQuery(event).limit) || 30
-  return await listNotifications(user, { limit })
+  const q = getQuery(event)
+  return await listNotifications(user, {
+    limit: Number(q.limit) || 30,
+    offset: Number(q.offset) || 0,
+    app: q.app ? String(q.app) : undefined,
+    severity: q.severity ? String(q.severity) : undefined,
+    unreadOnly: q.unread === '1' || q.unread === 'true'
+  })
 })
