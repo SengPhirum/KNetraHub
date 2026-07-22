@@ -1,6 +1,6 @@
 # KNetraHub v0.1.7
 
-Date: 2026-07-21 UTC
+Date: 2026-07-22 UTC
 
 ## Docker Images
 
@@ -11,11 +11,18 @@ Date: 2026-07-21 UTC
 
 ## Source
 
-- Commit: `2aa471f`
+- Commit: `c52055b`
 - Previous tag: none
 
 ## Changes
 
+- Give the admin portal its own alert engine (c52055b)
+- Move Docker alert engine into its own layer (aae8e7e)
+- Restyle Monitoring Alert Transports to match Dock (engine preserved) (d150549)
+- Unify alert naming, let Monitoring use Global channels, add IPAM alerts (ae4679c)
+- Promote Dock alerts to their own sidebar section (Rules + Channels) (ef6d4e8)
+- Let each sub-app select which admin-created (Global) channels to use (44d9047)
+- Update fixed (314bfa3)
 - Fix build: escape literal braces in template help text and backtick in db.ts SQL comment (2aa471f)
 - Update new release 0.1.7 (339c695)
 - Docs: clarify Monitoring keeps its own alerting engine (9828d5d)
