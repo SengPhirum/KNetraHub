@@ -1,6 +1,7 @@
 import { getIpamAlertRule, renderTemplate, type IpamAlertRuleType } from './ipamAlertRules'
 import { channelsForScope } from '~~/server/utils/notifyStore'
 import { deliverToChannel } from '~~/server/utils/notify'
+import { recordNotification } from '~~/server/utils/notificationFeed'
 import { logSystem } from '~~/server/utils/moduleLogs'
 
 /**
@@ -33,6 +34,17 @@ export async function fireIpamAlert(input: FireIpamAlertInput): Promise<void> {
       severity: input.severity,
       kind: 'alert' as const
     }
+
+    // Central in-portal feed (navbar bell) — visible in-app even when no
+    // external channel is configured for IP Management.
+    await recordNotification({
+      app: 'ipmgt',
+      severity: input.severity,
+      title: `${input.ruleType.replace(/_/g, ' ')}${input.target ? ` — ${input.target}` : ''}`,
+      body: message,
+      ruleType: input.ruleType,
+      target: input.target ?? null
+    })
     let delivered = 0
     for (const channel of enabled) {
       const res = await deliverToChannel(channel, notifyMsg)

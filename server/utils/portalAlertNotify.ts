@@ -1,6 +1,7 @@
 import { getPortalAlertRule, renderTemplate, type PortalAlertRuleType } from './portalAlertRules'
 import { channelsForScope } from './notifyStore'
 import { deliverToChannel } from './notify'
+import { recordNotification } from './notificationFeed'
 import { logSystem } from './moduleLogs'
 import { NOTIFICATION_SCOPE_GLOBAL } from '../../shared/utils/notifications'
 
@@ -33,6 +34,17 @@ export async function firePortalAlert(input: FirePortalAlertInput): Promise<void
       severity: input.severity,
       kind: 'alert' as const
     }
+
+    // Central in-portal feed (navbar bell) — independent of external delivery,
+    // so the alert is visible in-app even with no channels configured.
+    await recordNotification({
+      app: 'portal',
+      severity: input.severity,
+      title: `${input.ruleType.replace(/_/g, ' ')}${input.target ? ` — ${input.target}` : ''}`,
+      body: message,
+      ruleType: input.ruleType,
+      target: input.target ?? null
+    })
     let delivered = 0
     for (const channel of enabled) {
       const res = await deliverToChannel(channel, notifyMsg)

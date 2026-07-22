@@ -2,6 +2,7 @@ import type { Pool } from 'pg'
 import { decryptSecret } from '~~/server/utils/secretCrypto'
 import { channelsForScope } from '~~/server/utils/notifyStore'
 import { deliverToChannel } from '~~/server/utils/notify'
+import { recordNotification } from '~~/server/utils/notificationFeed'
 import { renderTemplate, DEFAULT_TITLE_TEMPLATE, DEFAULT_BODY_TEMPLATE, type TemplateContext } from './templates'
 import type { TransportType } from '../../shared/constants'
 
@@ -225,13 +226,6 @@ export async function deliverAlert(db: Pool, args: { alert: any; rule: any; kind
   // library). They receive every Monitoring alert, alongside native transports.
   const globals = await channelsForScope('monitoring').catch(() => [])
 
-  if (!transports.rows.length && !globals.length) {
-    // Alerts may exist with no transport — record that notification was
-    // considered and skipped, then advance the counter so reminders don't spin.
-    await db.query(`UPDATE monitoring.alerts SET last_notified_at = now() WHERE id = $1`, [alert.id])
-    return
-  }
-
   const device = (await db.query(
     `SELECT d.*, l.name AS location FROM monitoring.devices d
      LEFT JOIN monitoring.locations l ON l.id = d.location_id WHERE d.id = $1`,
@@ -254,6 +248,25 @@ export async function deliverAlert(db: Pool, args: { alert: any; rule: any; kind
   const prefix = kind === 'recovery' ? '[RECOVERED] ' : kind === 'reminder' ? '[STILL ACTIVE] ' : ''
   const title = prefix + renderTemplate(template?.title_template ?? DEFAULT_TITLE_TEMPLATE, ctx)
   const body = renderTemplate(template?.body_template ?? DEFAULT_BODY_TEMPLATE, ctx)
+
+  // Central in-portal feed (navbar bell). Recorded before the no-transport
+  // bail-out below, so a Monitoring alert still reaches the in-app list even
+  // when nothing is wired up for external delivery.
+  await recordNotification({
+    app: 'monitoring',
+    severity: kind === 'recovery' ? 'info' : (rule.severity === 'critical' ? 'critical' : 'warning'),
+    title,
+    body,
+    ruleType: rule.name ?? undefined,
+    target: device?.hostname ?? device?.display_name ?? null
+  })
+
+  if (!transports.rows.length && !globals.length) {
+    // Alerts may exist with no transport — record that notification was
+    // considered and skipped, then advance the counter so reminders don't spin.
+    await db.query(`UPDATE monitoring.alerts SET last_notified_at = now() WHERE id = $1`, [alert.id])
+    return
+  }
 
   let anySuccess = false
   for (const transport of transports.rows) {

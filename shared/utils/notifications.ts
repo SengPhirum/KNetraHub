@@ -14,9 +14,12 @@
 
 export const NOTIFICATION_SCOPE_GLOBAL = 'global' as const
 
-/** App keys that can own a scoped channel/template, plus their display label. */
+/** App keys that can own a scoped channel/template, plus their display label.
+ *  'portal' isn't a channel scope — it tags notifications raised by the admin
+ *  portal's own alert engine in the central feed (the navbar bell). */
 export const NOTIFICATION_APP_LABELS: Record<string, string> = {
   global: 'Global',
+  portal: 'Portal',
   docker: 'Dock',
   monitoring: 'Monitoring',
   ipmgt: 'IP Management'

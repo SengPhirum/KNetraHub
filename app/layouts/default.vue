@@ -282,6 +282,12 @@ const dataMotes = Array.from({ length: 16 }, (_, i) => {
           label="Maintenance mode ON"
         />
 
+        <!-- Centralized cross-app notification feed (portal / Dock / Monitoring
+             / IP Mgt), scoped server-side to what this user may see. -->
+        <ClientOnly>
+          <NotificationBell />
+        </ClientOnly>
+
         <ThemeModeControl compact />
 
         <!-- Admin entry: only on the full-page home, only for portal admins.

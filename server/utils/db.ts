@@ -285,6 +285,34 @@ async function runMigrations(scope: BaseSchemaScope = 'portal', db: Pool = getDb
       PRIMARY KEY (channel_id, app_key)
     );
 
+    -- Centralized in-portal notification feed (the navbar bell). Every alert
+    -- engine - portal, docker, monitoring, ipmgt - records one row here in
+    -- addition to delivering to its external channels, so there is a single
+    -- in-app history. app is the owning module ('portal' or an app key) and
+    -- drives both the badge shown in the list and who may see the row.
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      app TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      rule_type TEXT,
+      target TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_app ON notifications (app);
+
+    -- Per-user read state. Rows are broadcast (one notification is seen by every
+    -- entitled user), so "read" is tracked per user rather than on the row.
+    CREATE TABLE IF NOT EXISTS notification_reads (
+      notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      read_at TEXT NOT NULL,
+      PRIMARY KEY (notification_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads (user_id);
+
     -- Browser login sessions, so a stateless JWT can be revoked ("sign out
     -- everywhere" / per-device) by deleting its row. The JWT carries this id as
     -- its sid claim; readSession rejects a token whose session row is gone.

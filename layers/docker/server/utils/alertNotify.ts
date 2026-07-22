@@ -3,6 +3,7 @@ import { getDockerDb } from '~~/server/utils/moduleDb'
 import { getAlertRule, renderTemplate, type AlertRuleType } from './alertRules'
 import { channelsForScope } from '~~/server/utils/notifyStore'
 import { deliverToChannel } from '~~/server/utils/notify'
+import { recordNotification } from '~~/server/utils/notificationFeed'
 import { logSystem } from '~~/server/utils/moduleLogs'
 
 export interface TelegramConfig { botToken: string; chatId: string }
@@ -77,6 +78,17 @@ export async function fireAlert(input: FireAlertInput): Promise<void> {
       severity: input.severity,
       kind: 'alert' as const
     }
+
+    // Central in-portal feed (navbar bell), alongside the Docker-DB alert_events
+    // row above — the feed is cross-app and drives the in-app notification list.
+    await recordNotification({
+      app: 'docker',
+      severity: input.severity,
+      title: `${input.ruleType.replace(/_/g, ' ')}${input.target ? ` — ${input.target}` : ''}`,
+      body: message,
+      ruleType: input.ruleType,
+      target: input.target ?? null
+    })
     let delivered = 0
     for (const channel of enabled) {
       const res = await deliverToChannel(channel, notifyMsg)
