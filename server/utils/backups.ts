@@ -186,6 +186,26 @@ export async function logBackupOp(entry: {
     [nanoid(), new Date().toISOString(), entry.operation, entry.target, entry.filename ?? null,
       entry.actor, entry.sizeBytes ?? null, entry.status, entry.detail ?? null]
   )
+
+  // Single choke point for every backup/restore/delete outcome, so the portal
+  // alert covers them all. Imported lazily to keep this util free of a cycle
+  // (portalAlertNotify -> notifyStore -> db) at module-init time.
+  if (entry.status === 'failed') {
+    const { firePortalAlert } = await import('./portalAlertNotify')
+    void firePortalAlert({
+      ruleType: 'backup_failed',
+      target: entry.target,
+      severity: 'critical',
+      vars: {
+        target: entry.target,
+        operation: entry.operation,
+        filename: entry.filename ? ` (${entry.filename})` : '',
+        error: entry.detail || 'unknown error',
+        actor: entry.actor,
+        time: new Date().toISOString()
+      }
+    })
+  }
 }
 
 export async function listBackupLog(limit = 100): Promise<BackupLogEntry[]> {

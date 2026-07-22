@@ -237,7 +237,9 @@ const ADMIN_GROUPS: NavGroup[] = [
     items: [
       { label: 'Email (SMTP)', to: '/admin/configuration/email',  icon: 'i-lucide-mail',           minRole: 'admin' },
       { label: 'Channels',     to: '/admin/notifications/channels',  icon: 'i-lucide-satellite-dish', minRole: 'admin' },
-      { label: 'Templates',    to: '/admin/notifications/templates', icon: 'i-lucide-layout-template', minRole: 'admin' }
+      { label: 'Templates',    to: '/admin/notifications/templates', icon: 'i-lucide-layout-template', minRole: 'admin' },
+      // The portal's own alert engine — peer of each sub-app's Alert Rules.
+      { label: 'Alert Rules',  to: '/admin/alerts',                  icon: 'i-lucide-bell-ring',    minRole: 'admin' }
     ]
   },
   {
