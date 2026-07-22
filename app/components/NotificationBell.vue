@@ -19,6 +19,8 @@ interface FeedItem {
 
 const { user } = useAuth()
 const open = ref(false)
+/** Full-history modal opened from "See all notifications". */
+const allOpen = ref(false)
 const items = ref<FeedItem[]>([])
 const unread = ref(0)
 const loading = ref(false)
@@ -85,6 +87,14 @@ function onItemClick(item: FeedItem) {
   markRead(item)
   if (notificationLink(item)) open.value = false
 }
+
+// "See all" hands off from the popover to the full-screen modal.
+function openAll() {
+  open.value = false
+  allOpen.value = true
+}
+// Re-sync the badge after the modal closes (it can mark things read).
+watch(allOpen, (isOpen) => { if (!isOpen) load() })
 
 const SEVERITY_META: Record<string, { icon: string; dot: string; badge: 'error' | 'warning' | 'info' | 'neutral'; label: string }> = {
   critical: { icon: 'i-lucide-circle-alert', dot: 'bg-rose-500', badge: 'error', label: 'Critical' },
@@ -190,17 +200,33 @@ const badgeLabel = computed(() => (unread.value > 99 ? '99+' : String(unread.val
 
         <footer class="border-t border-hull px-3 py-2">
           <UButton
-            to="/notifications"
             size="xs"
             color="neutral"
             variant="ghost"
             block
-            trailing-icon="i-lucide-arrow-right"
+            trailing-icon="i-lucide-maximize-2"
             label="See all notifications"
-            @click="open = false"
+            @click="openAll"
           />
         </footer>
       </div>
     </template>
   </UPopover>
+
+  <!-- Full history as a near-full-screen modal rather than a route change, so
+       the user never loses the page they were on. Same NotificationList the
+       /notifications route renders. -->
+  <UModal
+    v-model:open="allOpen"
+    title="Notifications"
+    description="Alerts from the portal and every app you have access to"
+    :ui="{
+      content: 'w-[95vw] max-w-[1600px] h-[90vh] max-h-[90vh] sm:max-h-[90vh] flex flex-col',
+      body: 'flex-1 min-h-0 overflow-hidden'
+    }"
+  >
+    <template #body>
+      <NotificationList fill @navigate="allOpen = false" @changed="load" />
+    </template>
+  </UModal>
 </template>
