@@ -11,11 +11,15 @@ Date: 2026-07-22 UTC
 
 ## Source
 
-- Commit: `c52055b`
+- Commit: `db70484`
 - Previous tag: none
 
 ## Changes
 
+- Open full notification history in a near-full-screen modal (db70484)
+- Make notifications actionable: deep links and full history page (6586d5b)
+- Add centralized notification store and navbar bell (751d811)
+- Update (19297ce)
 - Give the admin portal its own alert engine (c52055b)
 - Move Docker alert engine into its own layer (aae8e7e)
 - Restyle Monitoring Alert Transports to match Dock (engine preserved) (d150549)
