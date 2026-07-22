@@ -4,7 +4,7 @@ import { removeStack } from '~~/layers/docker/server/utils/stack'
 import { gitlabEnabled, deleteStackFile } from '~~/layers/docker/server/utils/gitlab'
 import { deleteStackHistory } from '~~/layers/docker/server/utils/stackHistory'
 import { audit } from '~~/server/utils/store'
-import { fireAlert } from '~~/server/utils/alertNotify'
+import { fireAlert } from '~~/layers/docker/server/utils/alertNotify'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import { throwDockerError, dockerErrorMessage } from '~~/layers/docker/server/utils/docker'
 export default defineEventHandler(async (event) => {

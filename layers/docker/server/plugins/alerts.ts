@@ -2,8 +2,8 @@ import { useDocker } from '~~/layers/docker/server/utils/docker'
 import { getDockerDb as getDb, isModuleEnabled } from '~~/server/utils/moduleDb'
 import { logSystem } from '~~/server/utils/moduleLogs'
 import { getAgentReport } from '~~/layers/docker/server/utils/agentReports'
-import { fireAlert } from '~~/server/utils/alertNotify'
-import { getAlertRule } from '~~/server/utils/alertRules'
+import { fireAlert } from '~~/layers/docker/server/utils/alertNotify'
+import { getAlertRule } from '~~/layers/docker/server/utils/alertRules'
 import { latestServiceUsageRows, nodeCapacityById, type UsageRow } from '~~/layers/docker/server/api/services/usage.get'
 
 // Polls for the threshold/health-style alert conditions (usage, node down,

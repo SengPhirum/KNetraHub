@@ -1,6 +1,6 @@
 import { requireRole } from '~~/server/utils/auth'
-import { saveAlertRule, DEFAULT_RULES } from '~~/server/utils/alertRules'
-import type { AlertRuleType } from '~~/server/utils/alertRules'
+import { saveAlertRule, DEFAULT_RULES } from '~~/layers/docker/server/utils/alertRules'
+import type { AlertRuleType } from '~~/layers/docker/server/utils/alertRules'
 import { audit } from '~~/server/utils/store'
 
 export default defineEventHandler(async (event) => {

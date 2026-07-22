@@ -1,9 +1,9 @@
 import { nanoid } from 'nanoid'
-import { getDockerDb } from './moduleDb'
+import { getDockerDb } from '~~/server/utils/moduleDb'
 import { getAlertRule, renderTemplate, type AlertRuleType } from './alertRules'
-import { channelsForScope } from './notifyStore'
-import { deliverToChannel } from './notify'
-import { logSystem } from './moduleLogs'
+import { channelsForScope } from '~~/server/utils/notifyStore'
+import { deliverToChannel } from '~~/server/utils/notify'
+import { logSystem } from '~~/server/utils/moduleLogs'
 
 export interface TelegramConfig { botToken: string; chatId: string }
 export interface TeamsConfig { webhookUrl: string }

@@ -1,9 +1,14 @@
-import { getModuleSetting, setModuleSetting } from './moduleSettings'
+import { getModuleSetting, setModuleSetting } from '~~/server/utils/moduleSettings'
+import { renderTemplate } from '~~/server/utils/alertTemplate'
 
 /**
  * Docker alert rule configuration. Defaults live in code and overrides stay
  * in the Docker database so portal-only backups never contain subsystem data.
  * All rule types share one settings row because the set is small and fixed.
+ *
+ * Lives inside the Docker layer: every sub-app owns its own alert engine
+ * (rules + firing + poller + API) and only the shared notification library
+ * (channels/templates configured in the admin portal) is portal-level.
  */
 
 export type AlertRuleType =
@@ -135,10 +140,9 @@ export const DEFAULT_RULES: Record<AlertRuleType, AlertRuleDef> = {
   }
 }
 
-/** Replaces {{key}} tokens; unmatched placeholders are left as-is. */
-export function renderTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => vars[key] ?? match)
-}
+// Interpolation is shared portal-level infrastructure (used by every app's
+// engine); re-exported here so existing Docker callers keep one import site.
+export { renderTemplate }
 
 type RuleOverride = Partial<Pick<AlertRuleDef, 'enabled' | 'config' | 'template'>>
 

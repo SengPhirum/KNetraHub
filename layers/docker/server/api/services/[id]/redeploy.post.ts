@@ -1,7 +1,7 @@
 import { requireRole } from '~~/server/utils/auth'
 import { withServiceSpec } from '~~/layers/docker/server/utils/serviceMutation'
 import { audit } from '~~/server/utils/store'
-import { fireAlert } from '~~/server/utils/alertNotify'
+import { fireAlert } from '~~/layers/docker/server/utils/alertNotify'
 export default defineEventHandler(async (event) => {
   const user = await requireRole(event, 'operator')
   const id = getRouterParam(event, 'id')!

@@ -1,12 +1,15 @@
 import { getModuleSetting, setModuleSetting } from '~~/server/utils/moduleSettings'
-import { renderTemplate } from '~~/server/utils/alertRules'
+import { renderTemplate } from '~~/server/utils/alertTemplate'
 
 /**
  * IP Management alert rule configuration. Mirrors the Docker alert-rule model
- * (server/utils/alertRules.ts): defaults live in code, per-rule overrides stay
- * in the IPAM database (ipmgt_settings) so portal backups never contain
- * subsystem data. Delivery goes through the central notification library
- * (channelsForScope('ipmgt')) — see ipamAlertNotify.ts.
+ * (layers/docker/server/utils/alertRules.ts): defaults live in code, per-rule
+ * overrides stay in the IPAM database (ipmgt_settings) so portal backups never
+ * contain subsystem data. Delivery goes through the central notification
+ * library (channelsForScope('ipmgt')) — see ipamAlertNotify.ts.
+ *
+ * This engine lives entirely inside the IPAM layer and never imports another
+ * app's layer; only portal-level shared infrastructure is used.
  */
 
 export type IpamAlertRuleType =
