@@ -62,12 +62,12 @@ export function isSafeBackupName(name: string): boolean {
 
 export function backupTargetFromName(name: string): BackupTarget {
   const prefix = name.split('__', 1)[0]
-  if (prefix === 'docker' || prefix === 'monitoring' || prefix === 'ipmgt' || prefix === 'pam' || prefix === 'portal') return prefix
+  if (prefix === 'docker' || prefix === 'monitoring' || prefix === 'ipmgt' || prefix === 'pam' || prefix === 'work' || prefix === 'portal') return prefix
   return 'portal' // legacy backups created before database separation
 }
 
 export function isBackupTarget(value: unknown): value is BackupTarget {
-  return value === 'portal' || value === 'docker' || value === 'monitoring' || value === 'ipmgt' || value === 'pam'
+  return value === 'portal' || value === 'docker' || value === 'monitoring' || value === 'ipmgt' || value === 'pam' || value === 'work'
 }
 
 export function backupDir(): string {

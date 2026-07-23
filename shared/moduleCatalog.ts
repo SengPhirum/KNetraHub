@@ -32,6 +32,18 @@ export const BUILTIN_MODULES: readonly ModuleDefinition[] = [
     defaultPoolMax: 40
   },
   {
+    key: 'work',
+    name: 'Work',
+    description: 'Centralized work management - tasks, projects, spaces, views, Docs, and team collaboration.',
+    routePath: '/work',
+    icon: 'i-lucide-panels-top-left',
+    permission: 'work.view',
+    type: 'local',
+    order: 25,
+    defaultDatabase: 'knetrahub_work',
+    defaultPoolMax: 30
+  },
+  {
     key: 'pam',
     name: 'Privileged Access',
     description: 'Privileged accounts, secured credentials, access requests, isolated sessions, recordings, and secrets.',

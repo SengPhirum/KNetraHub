@@ -39,5 +39,13 @@ export function notificationLink(item: { app: string; ruleType?: string; target?
     return '/ipmgt/subnets'
   }
 
+  if (item.app === 'work') {
+    // Task-scoped events carry the task id as the target; land on the task page.
+    if (item.target && (rule.startsWith('task_') || rule === 'comment_mention' || rule === 'comment_assigned')) {
+      return `/work/tasks/${encodeURIComponent(item.target)}`
+    }
+    return '/work/my-tasks'
+  }
+
   return null
 }

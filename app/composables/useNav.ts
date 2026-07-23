@@ -288,6 +288,51 @@ const PAM_GROUPS: NavGroup[] = [
   }
 ]
 
+// The Work app's navigation (ClickUp-equivalent work management). Grouped by
+// function — personal work (home/my tasks/everything), the workspace hierarchy
+// (spaces → folders → lists), collaboration (Docs), tools (search) and
+// administration. Only implemented destinations are listed here; sections of
+// the reference product that are not built yet (Chat, Whiteboards, Goals,
+// Dashboards, Forms, Automations, Sprints, migration) are deliberately absent
+// rather than shown as dead menu items — see docs/work/feature-parity-matrix.md.
+// Data lives under /api/work/v1.
+const WORK_GROUPS: NavGroup[] = [
+  {
+    label: 'Home',
+    items: [
+      { label: 'Overview',  to: '/work',          icon: 'i-lucide-house',        permission: 'work.view' },
+      { label: 'My Tasks',  to: '/work/my-tasks', icon: 'i-lucide-circle-user',  permission: 'work.view' }
+    ]
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { label: 'Spaces',     to: '/work/spaces',     icon: 'i-lucide-layout-grid',  permission: 'work.view' },
+      { label: 'Everything', to: '/work/everything', icon: 'i-lucide-list-checks',  permission: 'work.view' }
+    ]
+  },
+  {
+    label: 'Collaboration',
+    items: [
+      { label: 'Docs', to: '/work/docs', icon: 'i-lucide-file-text', permission: 'work.view' }
+    ]
+  },
+  {
+    label: 'Tools',
+    items: [
+      { label: 'Search', to: '/work/search', icon: 'i-lucide-search', permission: 'work.view' }
+    ]
+  },
+  {
+    label: 'Administration',
+    items: [
+      { label: 'Settings', to: '/work/settings', icon: 'i-lucide-settings',    permission: 'work.settings' },
+      { label: 'Activity', to: '/work/activity', icon: 'i-lucide-history',     permission: 'work.audit' },
+      { label: 'Logs',     to: '/work/logs',     icon: 'i-lucide-scroll-text', permission: 'work.audit' }
+    ]
+  }
+]
+
 // The portal admin area's sidebar, grouped into sections. Shown on the admin
 // setting pages (/admin/*) and the existing /users and /audit pages - i.e.
 // whenever the user is at the portal level rather than inside an app. Every
@@ -396,6 +441,7 @@ export function useNav(): ComputedRef<NavGroup[]> {
       else if (currentApp === 'monitoring') groups.push(...MONITORING_GROUPS)
       else if (currentApp === 'ipmgt') groups.push(...IPMGT_GROUPS)
       else if (currentApp === 'pam') groups.push(...PAM_GROUPS)
+      else if (currentApp === 'work') groups.push(...WORK_GROUPS)
     } else if (inPreferences) {
       // User preferences: the sectioned preferences menu (no Apps link).
       groups.push(...PREFERENCES_GROUPS)

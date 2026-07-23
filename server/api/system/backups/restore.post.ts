@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const size = (await stat(file)).size
-    const suspendedTargets = target === 'portal' ? (['docker', 'monitoring', 'ipmgt', 'pam'] as AppKey[]) : [target]
+    const suspendedTargets = target === 'portal' ? (['docker', 'monitoring', 'ipmgt', 'pam', 'work'] as AppKey[]) : [target]
     for (const key of suspendedTargets) suspendModuleRuntime(key)
     if (target === 'portal' || target === 'monitoring') suspendMonitoringRuntime()
     if (target === 'portal') await closeAllModuleDbs()
@@ -79,7 +79,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: `Restore failed: ${detail}` })
   } finally {
     await refreshModuleDatabaseConfigs().catch(() => {})
-    const suspendedTargets = target === 'portal' ? (['docker', 'monitoring', 'ipmgt', 'pam'] as AppKey[]) : [target]
+    const suspendedTargets = target === 'portal' ? (['docker', 'monitoring', 'ipmgt', 'pam', 'work'] as AppKey[]) : [target]
     for (const key of suspendedTargets) resumeModuleRuntime(key)
     if (target === 'portal' || target === 'monitoring') resumeMonitoringRuntime()
     if (uploadedTemp) await unlink(uploadedTemp).catch(() => {})

@@ -5,7 +5,7 @@
 // system events (what the system did on its own - system_log).
 // Tab styling follows the module settings pages (UTabs variant="link").
 const props = withDefaults(defineProps<{
-  module: 'docker' | 'monitoring' | 'ipmgt' | 'pam' | 'portal'
+  module: 'docker' | 'monitoring' | 'ipmgt' | 'pam' | 'work' | 'portal'
   initialView?: 'activity' | 'system'
   showSwitcher?: boolean
 }>(), {

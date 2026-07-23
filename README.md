@@ -73,6 +73,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 - **Encrypted Credentials:** LDAP bind password, OIDC client secret, registry auth, GitLab token, and alert channel configs are all encrypted at rest (AES-256-GCM, derived from `NUXT_JWT_SECRET`).
 - **Audit Log:** Every state-changing action is recorded with actor, target, and detail.
 - **Privileged Access (PAM):** Enterprise privileged-access management — a cryptographic credential vault (envelope encryption, versioned master key, online rotation), safes with granular membership, privileged-account onboarding/discovery, automated credential change/verify/reconcile via a durable job worker, access requests with multi-level approvals + ticket validation, brokered isolated sessions with recording, just-in-time access, break-glass, application/workload secrets, deterministic threat analytics, and a tamper-evident hash-chained audit trail. See [docs/pam/](docs/pam/README.md).
+- **Work:** Centralized work/project management (clean-room ClickUp-equivalent) — spaces → folders → lists hierarchy with private-space sharing, tasks with subtasks/multi-assignees/tags/checklists/dependencies/custom fields, List/Board/Table views, threaded comments with mentions and assigned comments, Docs with page version history, time tracking, permission-aware search, and a full activity trail. Implementation status is tracked honestly in [docs/work/feature-parity-matrix.md](docs/work/feature-parity-matrix.md). See [layers/work/](layers/work/README.md).
 
 ---
 
@@ -148,6 +149,8 @@ layers/
 │                                   containers, networks, volumes, secrets, configs, registries)
 ├── monitoring/                  <- LibreNMS-equivalent monitoring (/monitoring, /api/monitoring/v1):
 │                                   unified devices, discovery/polling engines, alerting, traps, syslog
+├── work/                        <- Work management (/work, /api/work/v1): spaces/folders/lists,
+│                                   tasks, views, Docs, comments, time - see layers/work/README.md
 └── ipmgt/                       <- IP address management (/ipmgt, /api/ipmgt) - see layers/ipmgt/README.md
 ```
 
@@ -188,7 +191,7 @@ An iframe isolates a remote's CSS/DOM cleanly, but it can't share the portal's l
 KNetraHub uses a database-per-system boundary:
 
 - `knetrahub` contains portal identity, preferences, admin settings, audit, and module lifecycle metadata only.
-- Docker, Monitoring, and IP Management each receive a dedicated database when first enabled.
+- Docker, Monitoring, Work, IP Management, and Privileged Access each receive a dedicated database when first enabled.
 - Module databases may share one PostgreSQL/TimescaleDB host or use separate hosts, as selected by an admin.
 - Disabling a module stops access and background work but retains its database. Re-enabling reconnects without repeating first-time initialization.
 - Maintenance backup and restore always targets one database, so restoring a module never overwrites portal or other module data.

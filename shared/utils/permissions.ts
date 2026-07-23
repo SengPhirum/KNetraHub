@@ -27,6 +27,13 @@ export const PERMISSIONS = [
   // KNetraHub-IPMgt
   'ipmgt.view', 'ipmgt.create', 'ipmgt.update', 'ipmgt.delete', 'ipmgt.assign', 'ipmgt.export',
   'ipmgt.import', 'ipmgt.scan', 'ipmgt.request', 'ipmgt.approve', 'ipmgt.settings',
+  // KNetraHub Work (centralized work / project management). The app tier is the
+  // outer boundary; inside Work, private spaces and object-level sharing are
+  // additionally enforced server-side (layers/work/server/utils/workAccess.ts).
+  'work.view', 'work.export', 'work.comment', 'work.create', 'work.update', 'work.assign',
+  'work.time', 'work.docs', 'work.chat', 'work.forms', 'work.goals', 'work.dashboard',
+  'work.automate', 'work.approve', 'work.share', 'work.audit',
+  'work.delete', 'work.settings', 'work.integrations', 'work.migrate',
   // KNetraHub PAM (Privileged Access Management). The KNetraHub app tier is only
   // the first authorization layer; every privileged action is additionally gated
   // by safe membership, account permissions, platform policy, approval state,
@@ -66,7 +73,7 @@ export type Permission = typeof PERMISSIONS[number]
 type AppTier = 'viewer' | 'operator' | 'manager' | 'admin'
 type AppTierPermissions = Record<AppTier, Permission[]>
 
-export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt' | 'pam', AppTierPermissions> = {
+export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'work' | 'ipmgt' | 'pam', AppTierPermissions> = {
   docker: {
     viewer: ['docker.view'],
     operator: ['docker.manage', 'docker.deploy'],
@@ -78,6 +85,22 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt' | 'pam', 
     operator: ['monitoring.scan', 'monitoring.metrics'],
     manager: ['monitoring.alert'],
     admin: ['monitoring.manage', 'monitoring.configure', 'monitoring.service.manage']
+  },
+  // Work tiers, cumulative (viewer ⊂ operator ⊂ manager ⊂ admin):
+  //  viewer   - see shared content, export what they can see.
+  //  operator - create/update work, comment, use Docs/Chat/Forms, track time.
+  //  manager  - team planning: Goals, Dashboards, Automations, approvals,
+  //             sharing, and the Work audit trail.
+  //  admin    - destructive deletes, workspace configuration, integrations,
+  //             and the ClickUp migration engine.
+  work: {
+    viewer: ['work.view', 'work.export'],
+    operator: [
+      'work.comment', 'work.create', 'work.update', 'work.assign',
+      'work.time', 'work.docs', 'work.chat', 'work.forms'
+    ],
+    manager: ['work.goals', 'work.dashboard', 'work.automate', 'work.approve', 'work.share', 'work.audit'],
+    admin: ['work.delete', 'work.settings', 'work.integrations', 'work.migrate']
   },
   ipmgt: {
     viewer: ['ipmgt.view', 'ipmgt.export'],

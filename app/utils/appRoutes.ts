@@ -27,6 +27,7 @@ export const DOCKER_ROUTE_PREFIXES = [
 export const MONITORING_ROUTE_PREFIXES = ['/monitoring']
 export const IPMGT_ROUTE_PREFIXES = ['/ipmgt']
 export const PAM_ROUTE_PREFIXES = ['/pam']
+export const WORK_ROUTE_PREFIXES = ['/work']
 
 // The portal-admin area (Users, Audit, Admin > ...) - not an AppKey/module
 // (it has no per-app permission tier), but the layout still treats it like
@@ -43,6 +44,7 @@ export function appKeyForRoute(path: string): AppKey | null {
   if (MONITORING_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'monitoring'
   if (IPMGT_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'ipmgt'
   if (PAM_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'pam'
+  if (WORK_ROUTE_PREFIXES.some((p) => matches(path, p))) return 'work'
   return null
 }
 

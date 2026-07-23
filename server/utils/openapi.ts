@@ -227,7 +227,8 @@ export function buildOpenApiSpec() {
       { name: 'registries', description: 'Docker registry credentials' },
       { name: 'users', description: 'User management (admin only)' },
       { name: 'preferences', description: 'Current user preferences and profile' },
-      { name: 'ipam', description: 'IP Address Management: sections, subnets, addresses, VLANs, VRFs, devices, locations, customers, racks, circuits, NAT, requests, custom fields, and vault' }
+      { name: 'ipam', description: 'IP Address Management: sections, subnets, addresses, VLANs, VRFs, devices, locations, customers, racks, circuits, NAT, requests, custom fields, and vault' },
+      { name: 'work', description: 'Work management: workspaces, spaces, folders, lists, tasks, subtasks, checklists, dependencies, comments, custom fields, tags, views, Docs, favorites, and search (/api/work/v1)' }
     ],
     paths: {
       // ─── Auth ─────────────────────────────────────────────────────────────

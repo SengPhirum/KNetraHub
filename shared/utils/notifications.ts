@@ -22,7 +22,9 @@ export const NOTIFICATION_APP_LABELS: Record<string, string> = {
   portal: 'Portal',
   docker: 'Dock',
   monitoring: 'Monitoring',
-  ipmgt: 'IP Management'
+  work: 'Work',
+  ipmgt: 'IP Management',
+  pam: 'Privileged Access'
 }
 
 export function scopeLabel(scope: string): string {

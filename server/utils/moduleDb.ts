@@ -170,6 +170,7 @@ export const getDockerDb = () => getModuleDb('docker')
 export const getMonitoringDb = () => getModuleDb('monitoring')
 export const getIpamDb = () => getModuleDb('ipmgt')
 export const getPamDb = () => getModuleDb('pam')
+export const getWorkDb = () => getModuleDb('work')
 
 export async function isModuleEnabled(key: AppKey): Promise<boolean> {
   if (runtimeSuspensions.has(key)) return false
