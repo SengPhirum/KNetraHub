@@ -11,11 +11,12 @@ Date: 2026-07-23 UTC
 
 ## Source
 
-- Commit: `eb0215f`
+- Commit: `bed0ca7`
 - Previous tag: none
 
 ## Changes
 
+- Add KNetraHub Work project management subsystem (ClickUp-style foundation) (bed0ca7)
 - Add KNetraHub PAM privileged access management subsystem (eb0215f)
 - Update (a1eb280)
 - Open full notification history in a near-full-screen modal (db70484)
