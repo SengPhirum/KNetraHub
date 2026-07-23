@@ -1,0 +1,168 @@
+# KNetraHub PAM — Swarm overlay stack.
+#
+# Deployed ALONGSIDE the main stack, never replacing it:
+#   docker stack deploy -c docker-compose.yml -c docker-compose.pam.yml knetrahub
+#
+# Adds the out-of-process PAM services (credential worker, SSH gateway, guacd
+# browser-session gateway, connector-runner) and an optional MinIO for encrypted
+# recordings. The vault, audit chain and session control-plane run inside the
+# main `app` service; these are the isolation/scale sidecars.
+#
+# Security posture (spec §11/§13):
+#   - a dedicated internal overlay network (pam-internal); no public DB/guacd/
+#     worker/runner/gateway ports;
+#   - Docker secrets for the master key, recording-signing key and gateway TLS;
+#   - non-root containers, dropped capabilities, read-only rootfs where possible;
+#   - the Docker socket is NEVER mounted into any PAM sidecar.
+version: "3.8"
+
+services:
+  # Dedicated credential worker: the same KNetraHub image, internal only, with
+  # the web role idle and the worker claiming jobs from pam.credential_jobs
+  # (FOR UPDATE SKIP LOCKED lets any number of these cooperate with the app).
+  pam-worker:
+    image: registry.kdsb.com.kh/knetrahub/portal:latest
+    networks: [net, pam-internal]
+    environment:
+      NUXT_DB_HOST: timescaledb
+      NUXT_DB_PASSWORD_FILE: /run/secrets/knetrahub_db_password
+      NUXT_JWT_SECRET_FILE: /run/secrets/knetrahub_jwt_secret
+      NUXT_PAM_MASTER_KEY_FILE: /run/secrets/knetrahub_pam_master_key
+      NUXT_PAM_RECORDING_SIGNING_KEY_FILE: /run/secrets/knetrahub_pam_recording_signing_key
+      NUXT_PAM_WORKER_ENABLED: "true"
+      NUXT_PAM_WORKER_NAME: "swarm-worker"
+      # This replica should not receive public web traffic (route only the app
+      # service at the ingress); it exists to process the credential queue.
+    secrets:
+      - knetrahub_db_password
+      - knetrahub_jwt_secret
+      - knetrahub_pam_master_key
+      - knetrahub_pam_recording_signing_key
+    deploy:
+      mode: replicated
+      replicas: 2
+      restart_policy: { condition: on-failure, delay: 5s }
+      update_config: { order: start-first, parallelism: 1 }
+      resources:
+        reservations: { cpus: '0.25', memory: 256M }
+        limits: { cpus: '1.00', memory: 1024M }
+
+  # SSH session gateway (bastion). Internal only; the app proxies the browser
+  # WebSocket to it. Retrieves credentials from the control plane server-side.
+  pam-ssh-gateway:
+    image: registry.kdsb.com.kh/knetrahub/pam-ssh-gateway:latest
+    build:
+      context: ../services/pam/ssh-gateway
+    networks: [net, pam-internal]
+    environment:
+      PAM_CONTROL_PLANE_URL: http://app:3000
+      PAM_GATEWAY_LISTEN: ":4222"
+      NUXT_JWT_SECRET_FILE: /run/secrets/knetrahub_jwt_secret
+    secrets:
+      - knetrahub_jwt_secret
+    healthcheck:
+      test: ["CMD", "/pam-ssh-gateway", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    read_only: true
+    cap_drop: [ALL]
+    deploy:
+      mode: replicated
+      replicas: 2
+      restart_policy: { condition: on-failure, delay: 5s }
+      # Drain in-flight sessions before replacing a gateway task.
+      update_config: { order: start-first, parallelism: 1, delay: 30s }
+      resources:
+        reservations: { cpus: '0.25', memory: 128M }
+        limits: { cpus: '1.00', memory: 512M }
+
+  # Apache guacd for browser RDP/VNC. Internal only — never expose its port.
+  guacd:
+    image: guacamole/guacd:1.5.5
+    networks: [pam-internal]
+    read_only: true
+    cap_drop: [ALL]
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy: { condition: on-failure, delay: 5s }
+      resources:
+        reservations: { cpus: '0.1', memory: 64M }
+        limits: { cpus: '0.5', memory: 256M }
+
+  # Connector-runner: isolates custom connectors. NO Docker socket. Read-only
+  # rootfs, all caps dropped, non-root. Mount trusted connector bundles at
+  # /connectors read-only.
+  pam-connector-runner:
+    image: registry.kdsb.com.kh/knetrahub/pam-connector-runner:latest
+    build:
+      context: ../services/pam/connector-runner
+    networks: [pam-internal]
+    environment:
+      PAM_CONTROL_PLANE_URL: http://app:3000
+      PAM_RUNNER_TOKEN_FILE: /run/secrets/knetrahub_pam_runner_token
+    secrets:
+      - knetrahub_pam_runner_token
+    read_only: true
+    cap_drop: [ALL]
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy: { condition: on-failure, delay: 10s }
+      resources:
+        reservations: { cpus: '0.1', memory: 128M }
+        limits: { cpus: '0.5', memory: 256M }
+
+  # Optional object storage for encrypted session recordings. Enable with the
+  # `recordings` profile, or point PAM at an external S3-compatible endpoint.
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    profiles: [recordings]
+    command: server /data --console-address ":9001"
+    networks: [pam-internal]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/knetrahub_pam_minio_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/knetrahub_pam_minio_password
+    volumes:
+      - pam-recordings:/data
+    secrets:
+      - knetrahub_pam_minio_user
+      - knetrahub_pam_minio_password
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement: { constraints: [node.role == manager] }
+      restart_policy: { condition: on-failure, delay: 5s }
+      resources:
+        limits: { cpus: '1.00', memory: 1024M }
+
+networks:
+  # Reuse the existing app/db overlay for control-plane traffic.
+  net:
+    external: true
+    name: knetrahub_net
+  # Dedicated internal overlay for PAM sidecar-to-sidecar traffic.
+  pam-internal:
+    driver: overlay
+    internal: true
+    attachable: false
+
+volumes:
+  pam-recordings:
+
+secrets:
+  knetrahub_db_password:
+    external: true
+  knetrahub_jwt_secret:
+    external: true
+  knetrahub_pam_master_key:
+    external: true
+  knetrahub_pam_recording_signing_key:
+    external: true
+  knetrahub_pam_runner_token:
+    external: true
+  knetrahub_pam_minio_user:
+    external: true
+  knetrahub_pam_minio_password:
+    external: true

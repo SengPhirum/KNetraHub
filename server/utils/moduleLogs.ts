@@ -18,8 +18,8 @@ import { getAppSetting, setAppSetting } from './store'
  * LogHousekeeping below; runLogHousekeeping() enforces it daily.
  */
 
-export type LogModule = 'docker' | 'monitoring' | 'ipmgt' | 'portal'
-export const LOG_MODULES: LogModule[] = ['docker', 'monitoring', 'ipmgt', 'portal']
+export type LogModule = 'docker' | 'monitoring' | 'ipmgt' | 'pam' | 'portal'
+export const LOG_MODULES: LogModule[] = ['docker', 'monitoring', 'ipmgt', 'pam', 'portal']
 
 export interface ActivityEntry {
   id: string
@@ -83,6 +83,7 @@ export async function setModuleDebug(module: LogModule, enabled: boolean, actor:
 
 // Route-prefix → module. Everything not matched belongs to the portal itself.
 const MODULE_PREFIXES: [string, LogModule][] = [
+  ['/api/pam', 'pam'],
   ['/api/ipmgt', 'ipmgt'],
   ['/api/monitoring', 'monitoring'],
   ['/api/sse/monitoring', 'monitoring'],

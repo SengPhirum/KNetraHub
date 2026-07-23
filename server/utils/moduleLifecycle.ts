@@ -153,7 +153,7 @@ async function assertDedicatedDatabase(key: AppKey, connection: DatabaseConnecti
     throw createError({ statusCode: 409, statusMessage: 'A subsystem cannot use the portal database. Choose a dedicated database name.' })
   }
   await ensureModuleDatabaseConfigs(true)
-  for (const otherKey of ['docker', 'monitoring', 'ipmgt'] as AppKey[]) {
+  for (const otherKey of ['docker', 'monitoring', 'ipmgt', 'pam'] as AppKey[]) {
     if (otherKey === key) continue
     const other = await getModuleDatabaseRecord(otherKey)
     if (other?.initialized_at && sameDatabase(connection, connectionFromRecord(other))) {
@@ -243,6 +243,9 @@ async function initializeSchema(key: AppKey, connection: DatabaseConnection): Pr
       await migrateMetrics(pool, useRuntimeConfig().metrics.retentionDays)
     } else if (key === 'ipmgt') {
       await migrateModuleBase('ipmgt', pool)
+    } else if (key === 'pam') {
+      const { migratePam } = await import('../../layers/pam/server/db/migrate')
+      await migratePam(pool)
     } else {
       const { migrateMonitoring } = await import('../../layers/monitoring/server/db/migrate')
       await migrateMonitoring(pool)

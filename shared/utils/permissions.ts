@@ -27,6 +27,26 @@ export const PERMISSIONS = [
   // KNetraHub-IPMgt
   'ipmgt.view', 'ipmgt.create', 'ipmgt.update', 'ipmgt.delete', 'ipmgt.assign', 'ipmgt.export',
   'ipmgt.import', 'ipmgt.scan', 'ipmgt.request', 'ipmgt.approve', 'ipmgt.settings',
+  // KNetraHub PAM (Privileged Access Management). The KNetraHub app tier is only
+  // the first authorization layer; every privileged action is additionally gated
+  // by safe membership, account permissions, platform policy, approval state,
+  // ticket status, step-up MFA, time window, risk policy and separation-of-duties
+  // (server-side, see layers/pam/server/utils/pamPolicy.ts). Frontend visibility
+  // is never sufficient authorization.
+  'pam.view', 'pam.dashboard.view',
+  'pam.safe.view', 'pam.safe.manage',
+  'pam.account.view', 'pam.account.use', 'pam.account.reveal', 'pam.account.manage',
+  'pam.account.delete', 'pam.account.rotate', 'pam.account.reconcile',
+  'pam.discovery.view', 'pam.discovery.run', 'pam.discovery.manage',
+  'pam.request.create', 'pam.request.view', 'pam.request.approve', 'pam.request.override',
+  'pam.session.connect', 'pam.session.view', 'pam.session.monitor', 'pam.session.terminate',
+  'pam.recording.view', 'pam.recording.export',
+  'pam.platform.view', 'pam.platform.manage',
+  'pam.secret.use', 'pam.secret.manage',
+  'pam.policy.view', 'pam.policy.manage',
+  'pam.connector.view', 'pam.connector.manage',
+  'pam.report.view', 'pam.report.export',
+  'pam.audit.view', 'pam.settings', 'pam.recovery.manage',
   // Admin
   'admin.users', 'admin.roles', 'admin.permissions', 'admin.settings', 'admin.modules'
 ] as const
@@ -46,7 +66,7 @@ export type Permission = typeof PERMISSIONS[number]
 type AppTier = 'viewer' | 'operator' | 'manager' | 'admin'
 type AppTierPermissions = Record<AppTier, Permission[]>
 
-export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierPermissions> = {
+export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt' | 'pam', AppTierPermissions> = {
   docker: {
     viewer: ['docker.view'],
     operator: ['docker.manage', 'docker.deploy'],
@@ -64,6 +84,38 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'ipmgt', AppTierP
     operator: ['ipmgt.create', 'ipmgt.update', 'ipmgt.assign', 'ipmgt.import', 'ipmgt.scan', 'ipmgt.request'],
     manager: ['ipmgt.approve'],
     admin: ['ipmgt.delete', 'ipmgt.settings']
+  },
+  // PAM tiers, cumulative (viewer ⊂ operator ⊂ manager ⊂ admin):
+  //  viewer   - read-only, never retrieves/decrypts a credential.
+  //  operator - request access, connect, use (inject) credentials, run allowed
+  //             discovery, onboard/rotate/reconcile accounts where safe perms permit.
+  //  manager  - approve requests, monitor/terminate sessions, view+export
+  //             recordings and command audits, reveal credentials, review the
+  //             PAM audit trail, export reports and run certifications.
+  //  admin    - manage safes/platforms/policies/connectors/discovery/settings,
+  //             delete accounts, override (emergency) approvals, and perform
+  //             controlled key/DR recovery.
+  pam: {
+    viewer: [
+      'pam.view', 'pam.dashboard.view', 'pam.safe.view', 'pam.account.view',
+      'pam.platform.view', 'pam.policy.view', 'pam.connector.view', 'pam.discovery.view',
+      'pam.request.view', 'pam.session.view', 'pam.report.view'
+    ],
+    operator: [
+      'pam.request.create', 'pam.session.connect', 'pam.account.use',
+      'pam.account.rotate', 'pam.account.reconcile', 'pam.account.manage',
+      'pam.discovery.run', 'pam.secret.use'
+    ],
+    manager: [
+      'pam.request.approve', 'pam.session.monitor', 'pam.session.terminate',
+      'pam.recording.view', 'pam.recording.export', 'pam.account.reveal',
+      'pam.audit.view', 'pam.report.export'
+    ],
+    admin: [
+      'pam.safe.manage', 'pam.account.delete', 'pam.platform.manage', 'pam.policy.manage',
+      'pam.connector.manage', 'pam.discovery.manage', 'pam.secret.manage',
+      'pam.request.override', 'pam.settings', 'pam.recovery.manage'
+    ]
   }
 }
 

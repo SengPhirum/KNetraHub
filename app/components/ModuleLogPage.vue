@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{
-  module: 'docker' | 'monitoring' | 'ipmgt'
+  module: 'docker' | 'monitoring' | 'ipmgt' | 'pam'
   appName: string
   backTo: string
 }>()

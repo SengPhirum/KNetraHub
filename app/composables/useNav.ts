@@ -218,6 +218,76 @@ const IPMGT_GROUPS: NavGroup[] = [
   }
 ]
 
+// The Privileged Access (PAM) app's navigation. Grouped by function — the
+// secured vault (safes/accounts/platforms), discovery/onboarding, access
+// requests and approvals, brokered sessions and recordings, application
+// secrets, risk & compliance, and administration. Every item is
+// permission-aware here for UX only; each API re-enforces the same permission
+// AND the deeper policy layers (safe membership, approval state, ticket, MFA,
+// time window, SoD) server-side. Data lives under /api/pam/v1.
+const PAM_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [
+      { label: 'Dashboard', to: '/pam', icon: 'i-lucide-layout-dashboard', permission: 'pam.dashboard.view' }
+    ]
+  },
+  {
+    label: 'Vault',
+    items: [
+      { label: 'Safes',     to: '/pam/safes',     icon: 'i-lucide-vault',     permission: 'pam.safe.view' },
+      { label: 'Accounts',  to: '/pam/accounts',  icon: 'i-lucide-key-round', permission: 'pam.account.view' },
+      { label: 'Platforms', to: '/pam/platforms', icon: 'i-lucide-layers',    permission: 'pam.platform.view' }
+    ]
+  },
+  {
+    label: 'Discovery',
+    items: [
+      { label: 'Pending accounts', to: '/pam/discovery', icon: 'i-lucide-inbox', permission: 'pam.discovery.view' }
+    ]
+  },
+  {
+    label: 'Access',
+    items: [
+      { label: 'Requests',      to: '/pam/requests',    icon: 'i-lucide-ticket',      permission: 'pam.request.view' },
+      { label: 'Approvals',     to: '/pam/approvals',   icon: 'i-lucide-gavel',       permission: 'pam.request.approve' },
+      { label: 'Active grants', to: '/pam/grants',      icon: 'i-lucide-badge-check', permission: 'pam.request.view' },
+      { label: 'Break glass',   to: '/pam/break-glass', icon: 'i-lucide-siren',       permission: 'pam.request.create' }
+    ]
+  },
+  {
+    label: 'Sessions',
+    items: [
+      { label: 'Active sessions', to: '/pam/sessions',            icon: 'i-lucide-monitor-play', permission: 'pam.session.view' },
+      { label: 'Recordings',      to: '/pam/sessions/recordings', icon: 'i-lucide-clapperboard', permission: 'pam.recording.view' }
+    ]
+  },
+  {
+    label: 'Applications',
+    items: [
+      { label: 'Secrets',      to: '/pam/secrets',      icon: 'i-lucide-file-key-2', permission: 'pam.secret.use' },
+      { label: 'Applications', to: '/pam/applications', icon: 'i-lucide-boxes',      permission: 'pam.secret.use' }
+    ]
+  },
+  {
+    label: 'Risk & Compliance',
+    items: [
+      { label: 'Risk events',     to: '/pam/risk',    icon: 'i-lucide-shield-alert',   permission: 'pam.audit.view' },
+      { label: 'Reports',         to: '/pam/reports', icon: 'i-lucide-file-bar-chart', permission: 'pam.report.view' },
+      { label: 'Audit integrity', to: '/pam/audit',   icon: 'i-lucide-fingerprint',    permission: 'pam.audit.view' }
+    ]
+  },
+  {
+    label: 'Administration',
+    items: [
+      { label: 'Access policies', to: '/pam/policies',   icon: 'i-lucide-scale',       permission: 'pam.policy.view' },
+      { label: 'Connectors',      to: '/pam/connectors', icon: 'i-lucide-plug',        permission: 'pam.connector.view' },
+      { label: 'Settings',        to: '/pam/settings',   icon: 'i-lucide-settings',    permission: 'pam.settings' },
+      { label: 'Logs',            to: '/pam/logs',       icon: 'i-lucide-scroll-text', permission: 'pam.audit.view' }
+    ]
+  }
+]
+
 // The portal admin area's sidebar, grouped into sections. Shown on the admin
 // setting pages (/admin/*) and the existing /users and /audit pages - i.e.
 // whenever the user is at the portal level rather than inside an app. Every
@@ -325,6 +395,7 @@ export function useNav(): ComputedRef<NavGroup[]> {
       if (currentApp === 'docker') groups.push(...DOCK_GROUPS)
       else if (currentApp === 'monitoring') groups.push(...MONITORING_GROUPS)
       else if (currentApp === 'ipmgt') groups.push(...IPMGT_GROUPS)
+      else if (currentApp === 'pam') groups.push(...PAM_GROUPS)
     } else if (inPreferences) {
       // User preferences: the sectioned preferences menu (no Apps link).
       groups.push(...PREFERENCES_GROUPS)

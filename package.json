@@ -1,6 +1,6 @@
 {
   "name": "knetrahub-portal",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "KNetraHub - portal shell hosting KNetraHub-Docker (Docker Swarm management) and Module-Federation-loaded subsystem UIs",
   "author": "Seng Phirum <sengphirum143@gmail.com>",
@@ -17,6 +17,9 @@
     "start": "node .output/server/index.mjs",
     "build:docs": "NUXT_STATIC_DOCS=true nuxt generate",
     "preview:docs": "npx serve .output/public",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e:pam": "node test/e2e/pam-e2e.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

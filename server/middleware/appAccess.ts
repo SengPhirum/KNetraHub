@@ -54,7 +54,7 @@ function appForRoute(path: string): AppKey | null {
   return null
 }
 
-const APP_LABEL: Record<AppKey, string> = { docker: 'Dock', monitoring: 'Monitoring', ipmgt: 'IP Management' }
+const APP_LABEL: Record<AppKey, string> = { docker: 'Dock', monitoring: 'Monitoring', ipmgt: 'IP Management', pam: 'Privileged Access' }
 
 export default defineEventHandler(async (event) => {
   const path = event.path || ''

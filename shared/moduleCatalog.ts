@@ -32,6 +32,18 @@ export const BUILTIN_MODULES: readonly ModuleDefinition[] = [
     defaultPoolMax: 40
   },
   {
+    key: 'pam',
+    name: 'Privileged Access',
+    description: 'Privileged accounts, secured credentials, access requests, isolated sessions, recordings, and secrets.',
+    routePath: '/pam',
+    icon: 'i-lucide-shield-keyhole',
+    permission: 'pam.view',
+    type: 'local',
+    order: 30,
+    defaultDatabase: 'knetrahub_pam',
+    defaultPoolMax: 20
+  },
+  {
     key: 'ipmgt',
     name: 'IP Management',
     description: 'IP address management - subnets, address inventory, assignment, and utilization.',

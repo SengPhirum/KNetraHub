@@ -72,6 +72,7 @@ Built with **Nuxt 4** + **Nuxt UI 4** + **Tailwind v4**.
 - **Auth & RBAC:** Local accounts, LDAP, and OIDC SSO. Includes a global role (`viewer`/`operator`/`admin`) for portal administration.
 - **Encrypted Credentials:** LDAP bind password, OIDC client secret, registry auth, GitLab token, and alert channel configs are all encrypted at rest (AES-256-GCM, derived from `NUXT_JWT_SECRET`).
 - **Audit Log:** Every state-changing action is recorded with actor, target, and detail.
+- **Privileged Access (PAM):** Enterprise privileged-access management — a cryptographic credential vault (envelope encryption, versioned master key, online rotation), safes with granular membership, privileged-account onboarding/discovery, automated credential change/verify/reconcile via a durable job worker, access requests with multi-level approvals + ticket validation, brokered isolated sessions with recording, just-in-time access, break-glass, application/workload secrets, deterministic threat analytics, and a tamper-evident hash-chained audit trail. See [docs/pam/](docs/pam/README.md).
 
 ---
 

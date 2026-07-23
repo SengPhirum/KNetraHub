@@ -161,8 +161,14 @@ if (authenticated) {
   await visit(page, 'Monitoring active alerts', '/monitoring/alerts')
   await visit(page, 'IP Management dashboard', '/ipmgt', 'ipmgt-dashboard.png')
   await visit(page, 'IPAM subnet inventory', '/ipmgt/subnets')
+  await visit(page, 'PAM dashboard', '/pam', 'pam-dashboard.png')
+  await visit(page, 'PAM safes', '/pam/safes')
+  await visit(page, 'PAM accounts', '/pam/accounts')
+  await visit(page, 'PAM audit integrity', '/pam/audit')
 
   if (options.scope === 'full') {
+    await visit(page, 'PAM sessions', '/pam/sessions')
+    await visit(page, 'PAM risk events', '/pam/risk')
     if (dockerAvailable && serviceLinks[0]) await visit(page, 'Service detail', serviceLinks[0], 'service-detail.png')
     else record('Service detail', true, dockerAvailable ? 'Skipped: no services available' : 'Skipped: Docker engine is not an active swarm')
     await visit(page, 'Monitoring data collection coverage', '/monitoring/data-collection')

@@ -6,7 +6,7 @@ import { resolveEntitlements, APP_KEYS, type AppTier } from '../../../../shared/
 import { cumulativeAppPermissions } from '../../../../shared/utils/permissions'
 
 const TIERS: AppTier[] = ['viewer', 'operator', 'manager', 'admin']
-const APP_LABELS: Record<string, string> = { docker: 'Docker', monitoring: 'Monitoring', ipmgt: 'IP Management' }
+const APP_LABELS: Record<string, string> = { docker: 'Docker', monitoring: 'Monitoring', ipmgt: 'IP Management', pam: 'Privileged Access' }
 
 // Manager+ only, mirrors user-authority.get.ts's resolution logic but renders
 // it as a downloadable workbook for offline audit review (three sheets: the
