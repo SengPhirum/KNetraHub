@@ -26,6 +26,9 @@ export interface UserPreferences {
   /** Saved drag/resize grid layouts for customizable dashboards, keyed by an
    *  app-chosen dashboard id (e.g. "docker"). */
   dashboards: Record<string, DashboardGridItem[]>
+  /** Portal home launcher: module keys in the user's preferred display order.
+   *  Modules not listed keep their catalog order after the arranged ones. */
+  appOrder: string[]
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
@@ -39,7 +42,7 @@ const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
   newLogin: false
 }
 
-const DEFAULT_PREFS: UserPreferences = { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS }, dashboards: {} }
+const DEFAULT_PREFS: UserPreferences = { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS }, dashboards: {}, appOrder: [] }
 
 export function usePreferences() {
   const prefs = useState<UserPreferences>('user_prefs', () => ({ ...DEFAULT_PREFS }))
@@ -48,7 +51,7 @@ export function usePreferences() {
   async function fetchPreferences() {
     try {
       const data = await $fetch<UserPreferences>('/api/user/preferences')
-      prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {} }
+      prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {}, appOrder: data.appOrder || [] }
       // Sync theme to Nuxt colorMode
       colorMode.preference = data.theme
     } catch {
@@ -58,7 +61,7 @@ export function usePreferences() {
 
   async function updatePreferences(patch: Partial<UserPreferences>) {
     const data = await $fetch<UserPreferences>('/api/user/preferences', { method: 'PATCH', body: patch })
-    prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {} }
+    prefs.value = { ...DEFAULT_PREFS, ...data, lists: data.lists || {}, notifications: { ...DEFAULT_NOTIFICATIONS, ...data.notifications }, dashboards: data.dashboards || {}, appOrder: data.appOrder || [] }
     if (patch.theme !== undefined) colorMode.preference = patch.theme
     return data
   }

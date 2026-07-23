@@ -65,6 +65,10 @@ export interface UserPreferences {
    *  app-chosen dashboard id (e.g. "docker") - generic so any app's page can
    *  persist its own widget positions without a dedicated table. */
   dashboards: Record<string, DashboardGridItem[]>
+  /** Portal home launcher: module keys in the user's preferred display order.
+   *  Modules not listed here (e.g. enabled after the user last rearranged)
+   *  keep their catalog order after the arranged ones. */
+  appOrder: string[]
 }
 
 export const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
@@ -446,7 +450,7 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
   const row = rows[0]
-  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS }, dashboards: {} }
+  if (!row) return { theme: 'system', refreshInterval: 0, density: 'default', lists: {}, notifications: { ...DEFAULT_NOTIFICATIONS }, dashboards: {}, appOrder: [] }
   const data = parsePreferenceData(row.data)
   return {
     theme: row.theme as UserPreferences['theme'],
@@ -454,7 +458,8 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
     density: row.density as UserPreferences['density'],
     lists: sanitizeListPreferences(data.lists),
     notifications: sanitizeNotifications(data.notifications),
-    dashboards: sanitizeDashboardPreferences(data.dashboards)
+    dashboards: sanitizeDashboardPreferences(data.dashboards),
+    appOrder: sanitizeAppOrder(data.appOrder)
   }
 }
 
@@ -526,6 +531,21 @@ function sanitizeDashboardPreferences(input: any): UserPreferences['dashboards']
   return dashboards
 }
 
+function sanitizeAppOrder(input: any): string[] {
+  if (!Array.isArray(input)) return []
+  const seen = new Set<string>()
+  const order: string[] = []
+  for (const value of input) {
+    if (typeof value !== 'string') continue
+    const key = value.trim()
+    if (!key || key.length > 64 || seen.has(key)) continue
+    seen.add(key)
+    order.push(key)
+    if (order.length >= 100) break
+  }
+  return order
+}
+
 export async function updateUserPreferences(userId: string, patch: Partial<UserPreferences>): Promise<UserPreferences> {
   const db = getDb()
   const { rows } = await db.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId])
@@ -535,7 +555,8 @@ export async function updateUserPreferences(userId: string, patch: Partial<UserP
   if (patch.lists !== undefined) nextData = { ...nextData, lists: sanitizeListPreferences(patch.lists) }
   if (patch.notifications !== undefined) nextData = { ...nextData, notifications: sanitizeNotifications(patch.notifications) }
   if (patch.dashboards !== undefined) nextData = { ...nextData, dashboards: sanitizeDashboardPreferences(patch.dashboards) }
-  const dataChanged = patch.lists !== undefined || patch.notifications !== undefined || patch.dashboards !== undefined
+  if (patch.appOrder !== undefined) nextData = { ...nextData, appOrder: sanitizeAppOrder(patch.appOrder) }
+  const dataChanged = patch.lists !== undefined || patch.notifications !== undefined || patch.dashboards !== undefined || patch.appOrder !== undefined
 
   if (!existing) {
     await db.query(
