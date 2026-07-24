@@ -1,19 +1,36 @@
+# ─────────────────────────────────────────────────────────────────────────────
 # Deploy KNetraHub static documentation to GitHub Pages
+# ─────────────────────────────────────────────────────────────────────────────
 #
-# Triggered on every push to main, or manually via workflow_dispatch.
-# Builds ONLY the /documentation page as fully static HTML — no Docker or
-# database needed at build time.
+# WHAT THIS DOES
+#   Renders ONLY the in-app /documentation route to fully static HTML
+#   (`pnpm run build:docs` → NUXT_STATIC_DOCS=true nuxt generate) and publishes
+#   it to GitHub Pages. No Docker engine and no database are needed at build time
+#   — placeholder secrets below satisfy Nuxt runtime-config validation only.
 #
-# Setup (one-time):
-#   1. Go to your repo → Settings → Pages
-#   2. Under "Build and deployment" select Source: "GitHub Actions"
+# WHEN IT RUNS
+#   • Every push to `main` that touches the docs content or build config
+#     (see the `paths:` filter below).
+#   • Manually, any time, via the Actions tab → "Deploy Docs" → Run workflow
+#     (workflow_dispatch).
+#
+# ONE-TIME SETUP (per repo / fork)
+#   1. Repo → Settings → Pages
+#   2. Build and deployment → Source: "GitHub Actions"
 #   3. Push to main (or run this workflow manually) — done.
 #
-# The published URL will be:
+# PUBLISHED URL
 #   https://<your-username>.github.io/<repo-name>/documentation
+#   (for this repo: https://sengphirum.github.io/KNetraHub/documentation)
 #
-# If you use a custom domain or a user/org site (username.github.io),
-# set NUXT_DOCS_BASE_URL to "/" in the env section below.
+# BASE URL
+#   NUXT_DOCS_BASE_URL is derived from the repo name so case-sensitive Pages
+#   paths always match. If you use a custom domain or a user/org site
+#   (username.github.io), set NUXT_DOCS_BASE_URL to "/" in the build step below.
+#
+# See the "Documentation & GitHub Actions" section of README.md for the
+# human-readable overview.
+# ─────────────────────────────────────────────────────────────────────────────
 
 name: Deploy Docs
 

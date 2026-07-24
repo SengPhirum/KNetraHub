@@ -11,11 +11,12 @@ Date: 2026-07-24 UTC
 
 ## Source
 
-- Commit: `25bbdc0`
+- Commit: `1feb5fd`
 - Previous tag: none
 
 ## Changes
 
+- Complete & harden KNetraHub PAM (stages 2–10) (1feb5fd)
 - Update release (25bbdc0)
 - Add drag-and-drop reordering of home page app cards, saved per user (a6b2648)
 - Add KNetraHub Work project management subsystem (ClickUp-style foundation) (bed0ca7)
