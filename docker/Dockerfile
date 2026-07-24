@@ -27,7 +27,12 @@ RUN --mount=type=secret,id=npm_ca,required=false \
     pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm run build
+# The SSR/Nitro server bundle for this multi-app monorepo exceeds Node's default
+# ~2 GB old-space heap on a clean container build (the client builds fine; the
+# server transform is what OOMs). Give the build headroom. Override on a smaller
+# or larger builder with --build-arg NODE_BUILD_MEMORY=<MB>.
+ARG NODE_BUILD_MEMORY=4096
+RUN NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_MEMORY} pnpm run build
 
 FROM node:22-alpine
 WORKDIR /app
