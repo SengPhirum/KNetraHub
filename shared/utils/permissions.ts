@@ -52,7 +52,9 @@ export const PERMISSIONS = [
   'pam.secret.use', 'pam.secret.manage',
   'pam.policy.view', 'pam.policy.manage',
   'pam.connector.view', 'pam.connector.manage',
-  'pam.report.view', 'pam.report.export',
+  'pam.report.view', 'pam.report.export', 'pam.report.manage',
+  'pam.certification.view', 'pam.certification.manage',
+  'pam.risk.manage',
   'pam.audit.view', 'pam.settings', 'pam.recovery.manage',
   // Admin
   'admin.users', 'admin.roles', 'admin.permissions', 'admin.settings', 'admin.modules'
@@ -122,7 +124,7 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'work' | 'ipmgt' 
     viewer: [
       'pam.view', 'pam.dashboard.view', 'pam.safe.view', 'pam.account.view',
       'pam.platform.view', 'pam.policy.view', 'pam.connector.view', 'pam.discovery.view',
-      'pam.request.view', 'pam.session.view', 'pam.report.view'
+      'pam.request.view', 'pam.session.view', 'pam.report.view', 'pam.certification.view'
     ],
     operator: [
       'pam.request.create', 'pam.session.connect', 'pam.account.use',
@@ -132,7 +134,8 @@ export const APP_PERMISSIONS: Record<'docker' | 'monitoring' | 'work' | 'ipmgt' 
     manager: [
       'pam.request.approve', 'pam.session.monitor', 'pam.session.terminate',
       'pam.recording.view', 'pam.recording.export', 'pam.account.reveal',
-      'pam.audit.view', 'pam.report.export'
+      'pam.audit.view', 'pam.report.export', 'pam.report.manage',
+      'pam.certification.manage', 'pam.risk.manage'
     ],
     admin: [
       'pam.safe.manage', 'pam.account.delete', 'pam.platform.manage', 'pam.policy.manage',

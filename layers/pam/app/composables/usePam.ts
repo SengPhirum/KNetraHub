@@ -36,6 +36,31 @@ export function rotationBadge(status?: string | null): string {
   }
 }
 
+const OK = 'bg-emerald-500/10 text-emerald-400 ring-1 ring-inset ring-emerald-500/30'
+const WARN = 'bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/30'
+const BAD = 'bg-rose-500/10 text-rose-400 ring-1 ring-inset ring-rose-500/30'
+const INFO = 'bg-sky-500/10 text-sky-400 ring-1 ring-inset ring-sky-500/30'
+const MUTE = 'bg-zinc-500/10 text-zinc-400 ring-1 ring-inset ring-zinc-500/30'
+
+/** Shared status→badge map for domain statuses across PAM (campaigns, jit, vendors, requests…). */
+export const STATUS_BADGE: Record<string, string> = {
+  // lifecycle / campaigns
+  open: INFO, in_progress: WARN, completed: OK, overdue: BAD,
+  // decisions / risk events
+  pending: WARN, certified: OK, revoked: BAD, delegated: INFO, dismissed: MUTE, resolved: OK, investigating: WARN,
+  // vendor / generic
+  active: OK, suspended: BAD, expired: MUTE, invited: INFO,
+  // requests / grants
+  approved: OK, rejected: BAD, cancelled: MUTE, exhausted: MUTE, draft: MUTE,
+  // sessions
+  starting: INFO, idle: WARN, ended: MUTE, terminated: BAD, error: BAD,
+  // jit revoke status
+  failed: BAD, reconciled: OK
+}
+export function statusBadge(status?: string | null): string {
+  return STATUS_BADGE[(status || '').toLowerCase()] || 'text-faint ring-1 ring-inset ring-hull'
+}
+
 export function shortTime(iso?: string | null): string {
   if (!iso) return '—'
   return String(iso).slice(0, 16).replace('T', ' ')
@@ -61,7 +86,17 @@ export function usePam() {
     canUseSecrets: computed(() => has('pam.secret.use')),
     canViewAudit: computed(() => has('pam.audit.view')),
     canSettings: computed(() => has('pam.settings')),
+    // Stage 7–8 subsystems
+    canViewCertifications: computed(() => has('pam.certification.view')),
+    canManageCertifications: computed(() => has('pam.certification.manage')),
+    canManageReports: computed(() => has('pam.report.manage')),
+    canExportReports: computed(() => has('pam.report.export')),
+    canManageRisk: computed(() => has('pam.risk.manage')),
+    canManageVendors: computed(() => has('pam.safe.manage')),
+    canViewJit: computed(() => has('pam.request.view')),
+    canManageJit: computed(() => has('pam.request.approve')),
     severityMeta,
-    shortTime
+    shortTime,
+    statusBadge
   }
 }

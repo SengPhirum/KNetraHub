@@ -12,33 +12,12 @@ const { data, status, error, refresh } = useAsyncData(`pamAccount-${id.value}`,
 
 const critBadge = CRITICALITY_BADGE
 
-// ── Reveal flow ──
-const showReveal = ref(false)
-const revealReason = ref('')
-const revealing = ref(false)
-const revealed = ref<any>(null)
-const countdown = ref(0)
-let timer: any = null
-
-async function doReveal() {
-  revealing.value = true
-  try {
-    const res: any = await $fetch(`/api/pam/v1/accounts/${id.value}/reveal`, { method: 'POST', body: { reason: revealReason.value } })
-    revealed.value = res
-    countdown.value = res.displaySeconds || 30
-    timer = setInterval(() => { countdown.value--; if (countdown.value <= 0) closeReveal() }, 1000)
-  } catch (e: any) {
-    toast.add({ title: 'Reveal denied', description: e?.data?.statusMessage, color: 'error' })
-  } finally { revealing.value = false }
+// ── Reveal flow — shared hardened modal; step-up (428) handled inside it ──
+const revealOpen = ref(false)
+async function revealAccount(reason: string, headers: Record<string, string>) {
+  return await $fetch<any>(`/api/pam/v1/accounts/${id.value}/reveal`, { method: 'POST', body: { reason }, headers })
 }
-function closeReveal() {
-  if (timer) clearInterval(timer)
-  revealed.value = null
-  showReveal.value = false
-  revealReason.value = ''
-  if (data.value) refresh()
-}
-onUnmounted(() => { if (timer) clearInterval(timer) })
+watch(revealOpen, (o) => { if (!o && data.value) refresh() })
 
 async function action(kind: 'rotate' | 'verify' | 'reconcile') {
   try {
@@ -66,7 +45,7 @@ async function requestAccess() { navigateTo(`/pam/requests/new?account=${id.valu
         <PageHeader :title="data.account.name" :subtitle="`${data.account.username}${data.account.address ? ' · ' + data.account.address : ''}`" icon="i-lucide-key-round">
           <template #actions>
             <UButton v-if="data.capabilities.canConnect" icon="i-lucide-monitor-play" size="sm" @click="connect">Connect</UButton>
-            <UButton v-if="data.capabilities.canReveal" icon="i-lucide-eye" size="sm" color="warning" variant="soft" @click="showReveal = true">Reveal</UButton>
+            <UButton v-if="data.capabilities.canReveal" icon="i-lucide-eye" size="sm" color="warning" variant="soft" @click="revealOpen = true">Reveal</UButton>
             <UButton icon="i-lucide-ticket" size="sm" color="neutral" variant="soft" @click="requestAccess">Request access</UButton>
           </template>
         </PageHeader>
@@ -118,31 +97,7 @@ async function requestAccess() { navigateTo(`/pam/requests/new?account=${id.valu
       </div>
     </DataState>
 
-    <!-- Reveal modal: reason → guarded plaintext with countdown + watermark -->
-    <UModal v-model:open="showReveal" title="Reveal credential" @close="closeReveal">
-      <template #body>
-        <div v-if="!revealed" class="space-y-3">
-          <UAlert color="warning" variant="soft" icon="i-lucide-shield-alert" title="High-sensitivity action"
-            description="Revealing produces a high-severity audit event. Prefer Connect (credential injection) where possible." />
-          <UFormField label="Reason" required><UTextarea v-model="revealReason" :rows="2" placeholder="Why do you need to see this credential?" /></UFormField>
-        </div>
-        <div v-else class="space-y-3">
-          <div class="relative rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-            <p class="text-xs text-faint">Username</p>
-            <p class="mb-2 font-mono text-foam">{{ revealed.username }}</p>
-            <p class="text-xs text-faint">Credential</p>
-            <p class="select-all break-all font-mono text-lg text-foam" :style="revealed.disableCopy ? 'user-select:none' : ''">{{ revealed.value }}</p>
-            <p v-if="revealed.watermark" class="pointer-events-none absolute inset-0 flex items-center justify-center text-center text-xs text-amber-400/20 rotate-[-12deg]">{{ revealed.watermark }}</p>
-          </div>
-          <p class="text-center text-sm text-amber-400">Hiding in {{ countdown }}s{{ revealed.rotatingAfter ? ' · rotating after view' : '' }}</p>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton color="neutral" variant="ghost" @click="closeReveal">{{ revealed ? 'Close' : 'Cancel' }}</UButton>
-          <UButton v-if="!revealed" :loading="revealing" :disabled="!revealReason.trim()" color="warning" @click="doReveal">Reveal</UButton>
-        </div>
-      </template>
-    </UModal>
+    <!-- Reveal: shared hardened modal (reason → guarded plaintext, countdown, watermark, step-up) -->
+    <PamRevealModal v-model:open="revealOpen" title="Reveal credential" :subject="data?.account?.name" :reveal="revealAccount" />
   </div>
 </template>

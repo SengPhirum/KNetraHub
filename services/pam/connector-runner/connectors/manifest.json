@@ -1,0 +1,26 @@
+[
+  {
+    "key": "ad-ldap",
+    "version": "1.0.0",
+    "sha256": "504e662c4bbc3895bafdec117aca532588dcb1c40175de3a91e4f1d39dfc6298",
+    "entry": "ad-ldap/1.0.0/index.mjs"
+  },
+  {
+    "key": "linux-ssh",
+    "version": "1.0.0",
+    "sha256": "8404929bf8b762fafb3a66ef30691cd52a4673ba949dddc7ddc5554077c95726",
+    "entry": "linux-ssh/1.0.0/index.mjs"
+  },
+  {
+    "key": "mongodb",
+    "version": "1.0.0",
+    "sha256": "801cfd6fd63760caa46c714c7b921e98dddf60e77769366e406e484dd79f877b",
+    "entry": "mongodb/1.0.0/index.mjs"
+  },
+  {
+    "key": "mysql",
+    "version": "1.0.0",
+    "sha256": "5c716cd33649a15bf58bd69a5442b21c659ab12676f4ab6372cabbc10d0b91f8",
+    "entry": "mysql/1.0.0/index.mjs"
+  }
+]

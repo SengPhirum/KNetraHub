@@ -21,10 +21,13 @@ async function create() {
 }
 
 const newToken = ref('')
+const tokenOpen = ref(false)
+watch(tokenOpen, (o) => { if (!o) newToken.value = '' })
 async function issueToken(app: any) {
   try {
     const res: any = await $fetch(`/api/pam/v1/applications/${app.id}/identities`, { method: 'POST', body: { method: 'api_token', name: 'default' } })
     newToken.value = res.token
+    tokenOpen.value = true
     await refresh()
   } catch (e: any) { toast.add({ title: 'Could not issue token', description: e?.data?.statusMessage, color: 'error' }) }
 }
@@ -35,8 +38,7 @@ async function issueToken(app: any) {
     <PageHeader title="Applications" subtitle="Workload identities for the secrets API" icon="i-lucide-boxes">
       <template v-if="canManageSecrets" #actions><UButton icon="i-lucide-plus" size="sm" @click="showCreate = true">Register application</UButton></template>
     </PageHeader>
-    <UAlert v-if="newToken" color="warning" variant="soft" class="mb-3" icon="i-lucide-key" title="Application token (shown once)"
-      :description="newToken" :actions="[{ label: 'Dismiss', onClick: () => (newToken = '') }]" />
+    <PamOneTimeSecretModal v-model:open="tokenOpen" title="Application token" label="application token" :value="newToken" />
     <DataState :status="status" :error="error" :empty="!data?.length" empty-label="No applications.">
       <div class="panel overflow-x-auto">
         <table class="w-full text-left text-sm">

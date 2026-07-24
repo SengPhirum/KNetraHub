@@ -1,8 +1,14 @@
 import { isModuleEnabled } from '~~/server/utils/moduleDb'
 import { migratePam } from '../db/migrate'
 import { seedPam } from '../utils/pamSeed'
+import { seedRunnerConnectorRegistry } from '../utils/pamRunner'
 import { workerTick } from '../utils/pamJobs'
-import { sweepExpiredGrants, sweepJitRevocations, scheduleDueRotations, maybeCheckpoint } from '../utils/pamScheduler'
+import { sweepExpiredGrants, scheduleDueRotations, maybeCheckpoint } from '../utils/pamScheduler'
+import { runDueScans } from '../utils/pamDiscovery'
+import { sweepDueJit } from '../utils/pamJit'
+import { autoSuspendExpired } from '../utils/pamVendor'
+import { evaluateRiskRules } from '../utils/pamRiskEngine'
+import { runDueReportSchedules } from '../utils/pamReports'
 
 /**
  * Reconciles PAM background work with the portal's runtime module state. On
@@ -49,6 +55,10 @@ export default defineNitroPlugin((nitroApp) => {
 
       await migratePam()
       await seedPam()
+      // Populate the signed connector registry for runner-delegated connectors.
+      // Non-fatal: a missing connector-signing key must not block module boot.
+      await seedRunnerConnectorRegistry().catch((err) =>
+        console.warn('[pam] connector registry seeding skipped:', err?.message))
       active = true
       console.log('[pam] module ready; vault + audit initialized')
 
@@ -60,8 +70,12 @@ export default defineNitroPlugin((nitroApp) => {
       maintTimer = setInterval(() => {
         Promise.allSettled([
           sweepExpiredGrants(),
-          sweepJitRevocations(),
+          sweepDueJit(),
           scheduleDueRotations(),
+          runDueScans(),
+          autoSuspendExpired(),
+          evaluateRiskRules(),
+          runDueReportSchedules(),
           maybeCheckpoint()
         ]).catch(() => {})
       }, 30_000)

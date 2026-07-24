@@ -1,6 +1,6 @@
 # KNetraHub v0.1.9
 
-Date: 2026-07-23 UTC
+Date: 2026-07-24 UTC
 
 ## Docker Images
 
@@ -11,11 +11,13 @@ Date: 2026-07-23 UTC
 
 ## Source
 
-- Commit: `bed0ca7`
+- Commit: `25bbdc0`
 - Previous tag: none
 
 ## Changes
 
+- Update release (25bbdc0)
+- Add drag-and-drop reordering of home page app cards, saved per user (a6b2648)
 - Add KNetraHub Work project management subsystem (ClickUp-style foundation) (bed0ca7)
 - Add KNetraHub PAM privileged access management subsystem (eb0215f)
 - Update (a1eb280)

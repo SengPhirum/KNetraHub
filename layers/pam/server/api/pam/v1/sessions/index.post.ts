@@ -1,6 +1,7 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
 import { requirePamPermission, resolveSafePermissions, pamAudit, clientIp, userAgent, newId, nowIso, getPamSetting } from '~~/layers/pam/server/utils/pamStore'
 import { issueGatewayToken } from '~~/layers/pam/server/utils/pamGateway'
+import { resolveProtocol } from '~~/layers/pam/server/utils/pamSessionCore'
 import { sourceNetworkAllowed } from '~~/layers/pam/server/utils/pamPolicy'
 import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
 
@@ -56,10 +57,11 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const protocol = String(body?.protocol || account.account_type === 'database' ? 'db' : 'ssh')
+  const protocol = resolveProtocol(body?.protocol, account.account_type)
   const recordingRequired = grant?.emergency === true || await getPamSetting<boolean>('session.recording_required_default', true, db)
-  const gwRows = await db.query("SELECT id FROM pam.gateways WHERE enabled=true AND drain_mode=false ORDER BY (kind = $1) DESC LIMIT 1", [protocol])
+  const gwRows = await db.query("SELECT id, address FROM pam.gateways WHERE enabled=true AND drain_mode=false ORDER BY (kind = $1) DESC LIMIT 1", [protocol])
   const gatewayId = gwRows.rows[0]?.id ?? null
+  const gatewayAddr = gwRows.rows[0]?.address ?? null
 
   const sessionId = newId()
   const iso = nowIso()
@@ -87,8 +89,14 @@ export default defineEventHandler(async (event) => {
     gatewayToken: token,
     gatewayId,
     recordingRequired,
-    // The gateway endpoint the client connects to (never the credential).
-    connect: { endpoint: `/api/pam/v1/gateway/connect`, tokenTtlSeconds: 300 },
+    tokenTtlSeconds: 300,
+    // Browser clients open the in-app terminal workspace, which proxies the
+    // WebSocket to the gateway server-side (the credential never reaches the
+    // browser). Native/desktop clients may connect to the gateway directly on
+    // the internal network. The old /api/pam/v1/gateway/connect path (which
+    // never existed) has been removed.
+    terminalUrl: protocol === 'ssh' ? `/pam/sessions/${sessionId}/terminal` : `/pam/sessions/${sessionId}/desktop`,
+    gateway: gatewayAddr ? { address: gatewayAddr, path: '/session' } : null,
     note: 'Present gatewayToken to the PAM session gateway. The target credential is injected server-side and never returned to the client.'
   }
 })

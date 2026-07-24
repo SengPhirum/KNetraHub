@@ -1,6 +1,6 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
 import { authenticateAppToken, appMaySeeSecret } from '~~/layers/pam/server/utils/pamAppAuth'
-import { openSecretValue, createLease } from '~~/layers/pam/server/utils/pamVault'
+import { leaseAndOpen } from '~~/layers/pam/server/utils/pamSecrets'
 import { appendAudit } from '~~/layers/pam/server/utils/pamAudit'
 import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
 import { clientIp } from '~~/layers/pam/server/utils/pamStore'
@@ -24,8 +24,9 @@ export default defineEventHandler(async (event) => {
   const secretId = String(body?.secret_id || '').trim()
   if (!path && !secretId) throw createError({ statusCode: 400, statusMessage: 'path or secret_id is required' })
 
+  const cols = 'id, path, revoked, deleted_at, dynamic, dynamic_config, secret_type'
   const sec = await db.query(
-    secretId ? 'SELECT id, path, revoked, deleted_at FROM pam.secrets WHERE id=$1' : 'SELECT id, path, revoked, deleted_at FROM pam.secrets WHERE lower(path)=lower($1)',
+    secretId ? `SELECT ${cols} FROM pam.secrets WHERE id=$1` : `SELECT ${cols} FROM pam.secrets WHERE lower(path)=lower($1)`,
     [secretId || path]
   )
   if (!sec.rows.length || sec.rows[0].deleted_at) throw createError({ statusCode: 404, statusMessage: 'Secret not found' })
@@ -38,11 +39,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'This application is not authorized for that secret' })
   }
 
-  const opened = await openSecretValue(secret.id, body?.version ? Number(body.version) : undefined, db)
-  if (!opened) throw createError({ statusCode: 409, statusMessage: 'Secret has no value version' })
-
-  await createLease({ accountId: secret.id, credentialVersion: opened.version, lessee: `app:${app.applicationName}`, leaseType: 'application', ttlSeconds: decision.leaseTtl, sourceIp: clientIp(event), oneTime: decision.oneTime }, db).catch(() => {})
-  await appendAudit({ actor: `app:${app.applicationName}`, action: 'secret.retrieve', objectType: 'secret', objectId: secret.id, result: 'success', sourceIp: clientIp(event), details: { path: secret.path, version: opened.version, leaseTtl: decision.leaseTtl } }, db)
+  const leased = await leaseAndOpen(
+    { applicationId: app.applicationId, applicationName: app.applicationName },
+    { id: secret.id, path: secret.path, dynamic: secret.dynamic === true, dynamic_config: secret.dynamic_config, secret_type: secret.secret_type },
+    { leaseTtl: decision.leaseTtl, oneTime: decision.oneTime },
+    { version: body?.version ? Number(body.version) : undefined, sourceIp: clientIp(event) },
+    db
+  )
+  await appendAudit({ actor: `app:${app.applicationName}`, action: 'secret.retrieve', objectType: 'secret', objectId: secret.id, result: 'success', sourceIp: clientIp(event), details: { path: secret.path, version: leased.version, leaseId: leased.leaseId, oneTime: leased.oneTime, dynamic: leased.dynamic } }, db)
 
   // Excessive-retrieval heuristic.
   const recent = await db.query(
@@ -54,5 +58,5 @@ export default defineEventHandler(async (event) => {
   }
 
   setResponseHeaders(event, { 'cache-control': 'no-store, private', pragma: 'no-cache' })
-  return { path: secret.path, version: opened.version, value: opened.value, leaseTtlSeconds: decision.leaseTtl, oneTime: decision.oneTime }
+  return { path: secret.path, version: leased.version, value: leased.value, leaseId: leased.leaseId, leaseTtlSeconds: leased.leaseTtlSeconds, oneTime: leased.oneTime, dynamic: leased.dynamic }
 })

@@ -122,6 +122,59 @@ try {
   r = await api.post('/api/pam/v1/sessions', { data: { account_id: acct.id, grant_id: session.grantId } })
   rec('23. Revoked/terminated grant path enforced', true)
 
+  // ── Stage 8 — risk engine + compliance ──────────────────────────────────────
+  // 24. Risk rules are listed and the evaluation engine runs on demand.
+  r = await api.get('/api/pam/v1/risk/rules'); const rules = await j(r)
+  rec('24. Risk rules listed', Array.isArray(rules) && rules.length >= 20)
+  r = await api.post('/api/pam/v1/risk/evaluate', { data: {} }); const evalRes = await j(r)
+  rec('24. Risk engine evaluates', r.ok() && typeof evalRes.evaluated === 'number')
+
+  // 25. Certification campaign over privileged accounts → review an item.
+  r = await api.post('/api/pam/v1/certifications', { data: { name: `E2E Cert ${suffix}`, scope: { type: 'privileged_accounts' } } })
+  const camp = await j(r); rec('25. Create certification campaign', r.ok(), `${camp.itemCount} items`)
+  r = await api.get(`/api/pam/v1/certifications/${camp.id}`); const campDetail = await j(r)
+  if (campDetail.items?.length) {
+    r = await api.post(`/api/pam/v1/certifications/${camp.id}/items/${campDetail.items[0].id}/decide`, { data: { decision: 'certified' } })
+    rec('25. Certify a review item', r.ok())
+  } else rec('25. Certify a review item', true, 'no privileged accounts to certify')
+
+  // 26. Server-side report generation → stored evidence snapshot + re-download.
+  r = await api.post('/api/pam/v1/reports/account-inventory/generate', { data: { format: 'xlsx' } })
+  const ctype = r.headers()['content-type'] || ''
+  rec('26. Server generates XLSX report', r.ok() && ctype.includes('spreadsheet'))
+  r = await api.get('/api/pam/v1/reports/runs?limit=5'); const runList = await j(r)
+  rec('26. Report run stored as evidence', Array.isArray(runList) && runList.length > 0)
+  if (Array.isArray(runList) && runList[0]) {
+    r = await api.get(`/api/pam/v1/reports/runs/${runList[0].id}/download`)
+    rec('26. Stored run re-downloadable', r.ok())
+  }
+  // 27. Schedule create → list → delete.
+  r = await api.post('/api/pam/v1/reports/schedules', { data: { report_key: 'account-inventory', format: 'csv', interval_seconds: 86400, channel: 'notification' } })
+  const sched = await j(r); rec('27. Create report schedule', r.ok())
+  if (sched.id) { r = await api.del(`/api/pam/v1/reports/schedules/${sched.id}`); rec('27. Delete report schedule', r.ok()) }
+
+  // ── Stage 7 — vendor + JIT surfaced via API ─────────────────────────────────
+  // 28. Vendor org + one-time invitation token (returned once).
+  r = await api.post('/api/pam/v1/vendors/organizations', { data: { name: `E2E Vendor ${suffix}`, contract_end: new Date(Date.now() + 30 * 86400000).toISOString() } })
+  const vend = await j(r); rec('28. Create vendor org', r.ok())
+  if (vend.id) {
+    r = await api.post('/api/pam/v1/vendors/invitations', { data: { vendor_id: vend.id, email: `c${suffix}@vendor.example` } })
+    const inv = await j(r); rec('28. Vendor invitation returns one-time token', r.ok() && !!inv.token)
+  }
+  // 29. JIT request (no provision — LDAP not required here).
+  r = await api.post('/api/pam/v1/jit', { data: { entitlement_type: 'ldap_group', target: `cn=e2e-${suffix},ou=groups`, principal: USER, ttl_seconds: 600, provision: false } })
+  rec('29. Request JIT entitlement', r.ok())
+
+  // 30. UI smoke: the new pages render for an admin.
+  for (const [name, path] of [['certifications', '/pam/certifications'], ['risk rules', '/pam/risk/rules'], ['vendors', '/pam/vendors'], ['JIT', '/pam/jit'], ['reports', '/pam/reports'], ['secrets', '/pam/secrets']]) {
+    await page.goto(path); await page.waitForLoadState('networkidle')
+    const has = await page.locator('h1, h2, table, .panel').first().count()
+    rec(`30. UI renders ${name} page`, has > 0)
+  }
+  // 30b. Secrets page must NOT leak a plaintext value into the DOM on load.
+  await page.goto('/pam/secrets'); await page.waitForLoadState('networkidle')
+  rec('30b. Secrets list renders no revealed plaintext by default', !(await page.content()).includes('app-secret-value'))
+
 } catch (e) {
   ok = false
   rec('E2E run', false, e?.message || String(e))

@@ -34,6 +34,10 @@ export interface EnqueueInput {
   runAfter?: string
   payload?: unknown
   createdBy?: string
+  /** in_process (default) or runner-delegated (SSH/WinRM/network/cloud). */
+  handler?: 'in_process' | 'runner'
+  /** Resolved connector key, used to route runner jobs by allowlist. */
+  connectorKey?: string | null
 }
 
 const BACKOFF_BASE_MS = 15_000
@@ -51,13 +55,13 @@ export async function enqueueJob(input: EnqueueInput, db: Pool = getPamDb()): Pr
   await db.query(
     `INSERT INTO pam.credential_jobs
       (id, job_type, account_id, safe_id, platform_id, concurrency_key, idempotency_key,
-       status, priority, trigger, run_after, max_attempts, payload, created_at, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10,$11,$12,$13,$14)`,
+       status, priority, trigger, run_after, max_attempts, payload, created_at, created_by, handler, connector_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [id, input.jobType, input.accountId ?? null, input.safeId ?? null, input.platformId ?? null,
       input.concurrencyKey ?? input.accountId ?? null, input.idempotencyKey ?? null,
       input.priority ?? 100, input.trigger ?? 'manual', input.runAfter ?? nowIso(),
       input.maxAttempts ?? 5, input.payload === undefined ? null : JSON.stringify(input.payload),
-      nowIso(), input.createdBy ?? 'system']
+      nowIso(), input.createdBy ?? 'system', input.handler ?? 'in_process', input.connectorKey ?? null]
   )
   return { id, deduped: false }
 }
@@ -72,7 +76,7 @@ export async function claimJob(worker: string, db: Pool = getPamDb()): Promise<a
             started_at=COALESCE(j.started_at,$2), attempts=j.attempts+1, updated_at=$2
       WHERE j.id = (
         SELECT c.id FROM pam.credential_jobs c
-         WHERE c.status='queued' AND c.run_after <= $2 AND c.cancel_requested = false
+         WHERE c.status='queued' AND c.handler='in_process' AND c.run_after <= $2 AND c.cancel_requested = false
            AND NOT EXISTS (
              SELECT 1 FROM pam.credential_jobs r
               WHERE r.status='running' AND r.concurrency_key IS NOT NULL
@@ -190,10 +194,30 @@ async function doRotate(job: any, db: Pool): Promise<JobOutcome> {
     // requiresRunner is terminal (retrying in-process will never succeed).
     return { ok: false, detail: result.detail ?? 'change failed', terminal: !!result.requiresRunner }
   }
+  // The target accepted the new credential — seal it (retires the old active
+  // version) so the vault and target stay in sync; NOT sealing after a
+  // successful change would strand the target and risk lockout.
   await storeCredentialVersion({ accountId: account.id, plaintext: newCredential, source: 'rotation', createdBy: job.created_by || 'worker' }, db)
-  await db.query("UPDATE pam.accounts SET rotation_status='managed', next_rotation_at=$2 WHERE id=$1",
-    [account.id, nextRotation(platform, account)])
-  return { ok: true, detail: result.detail ?? 'rotated' }
+  // Independently verify the newly-active credential against the target. The
+  // rotation is only reported successful once verification passes; a failure is
+  // surfaced (rotation_status='failed' + risk event), never hidden.
+  let verified = true
+  let verifyDetail = 'verification skipped (connector cannot verify)'
+  if (connector.verify) {
+    const vctx = await buildContext(account, platform, connector, db) // reloads current = the new active version
+    const v = await connector.verify(vctx)
+    verified = v.ok
+    verifyDetail = v.detail ?? (v.ok ? 'verified' : 'verification failed')
+    await db.query("UPDATE pam.credential_versions SET verified_at=$2, verify_result=$3 WHERE account_id=$1 AND active=true",
+      [account.id, nowIso(), verified ? 'ok' : 'failed'])
+  }
+  await db.query("UPDATE pam.accounts SET rotation_status=$2, next_rotation_at=$3, last_verified=$4 WHERE id=$1",
+    [account.id, verified ? 'managed' : 'failed', nextRotation(platform, account), nowIso()])
+  if (!verified) {
+    await recordRisk({ ruleKey: 'reconcile_failure', accountId: account.id, target: account.address, explanation: `Rotation applied + sealed but post-change verification failed: ${verifyDetail}` }, db).catch(() => {})
+    return { ok: false, detail: `rotated but verification failed: ${verifyDetail}`, terminal: true }
+  }
+  return { ok: true, detail: 'rotated and verified' }
 }
 
 async function doVerify(job: any, db: Pool): Promise<JobOutcome> {
@@ -324,11 +348,19 @@ export async function workerTick(worker: string, batch = 4, db: Pool = getPamDb(
   for (let i = 0; i < batch; i++) {
     const job = await claimJob(worker, db)
     if (!job) break
+    // Renew the lease while the job runs so a long (>LEASE_MS) rotation is not
+    // reclaimed and double-executed by another worker. Fenced by lease_owner.
+    const renew = setInterval(() => {
+      db.query('UPDATE pam.credential_jobs SET lease_expires_at=$2, updated_at=$2 WHERE id=$1 AND lease_owner=$3 AND status=\'running\'',
+        [job.id, new Date(Date.now() + LEASE_MS).toISOString(), worker]).catch(() => {})
+    }, Math.max(30_000, Math.floor(LEASE_MS / 3)))
     try {
       const outcome = await runJob(job, db)
       await finalizeJob(job, outcome, worker, db)
     } catch (err: any) {
       await finalizeJob(job, { ok: false, detail: String(err?.message || err) }, worker, db).catch(() => {})
+    } finally {
+      clearInterval(renew)
     }
     processed++
   }

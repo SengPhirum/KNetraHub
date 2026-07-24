@@ -1,0 +1,12 @@
+{
+  "name": "knetrahub-pam-connector-runner",
+  "private": true,
+  "type": "module",
+  "description": "KNetraHub PAM out-of-process connector runner + bundled connectors",
+  "dependencies": {
+    "ldapts": "^8.1.8",
+    "mongodb": "^7.5.0",
+    "mysql2": "^3.23.1",
+    "ssh2": "^1.17.0"
+  }
+}

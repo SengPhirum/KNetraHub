@@ -298,6 +298,10 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // WebSocket support for the PAM browser-terminal proxy (crossws). The proxy
+    // accepts the browser socket, authenticates it, and pipes to the internal
+    // SSH gateway so the gateway is never exposed publicly.
+    experimental: { websocket: true },
     // pg dynamically requires a few optional deps in ways Nitro's bundler
     // can trip on — keep it external rather than bundled. net-snmp and ping
     // (Network monitoring) are kept external too: ping spawns the system binary

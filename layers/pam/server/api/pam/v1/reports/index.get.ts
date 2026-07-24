@@ -1,5 +1,5 @@
 import { requirePamPermission } from '~~/layers/pam/server/utils/pamStore'
-import { PAM_REPORTS } from './[key].get'
+import { PAM_REPORTS } from '~~/layers/pam/server/utils/pamReports'
 
 /** Catalog of available PAM reports (pam.report.view). */
 export default defineEventHandler(async (event) => {

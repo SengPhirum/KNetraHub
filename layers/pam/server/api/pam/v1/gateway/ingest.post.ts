@@ -2,7 +2,6 @@ import { getPamDb } from '~~/server/utils/moduleDb'
 import { verifyGatewayToken } from '~~/layers/pam/server/utils/pamGateway'
 import { newId, nowIso } from '~~/layers/pam/server/utils/pamStore'
 import { appendAudit } from '~~/layers/pam/server/utils/pamAudit'
-import { integritySignature, checksum, activeKeyVersion } from '~~/layers/pam/server/utils/pamCrypto'
 import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
 
 /**
@@ -57,23 +56,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Recording finalization: store metadata + integrity material.
-  if (body?.recording) {
-    const r = body.recording
-    const contentDigest = r.checksum || (r.sample ? checksum(String(r.sample)) : null)
-    const sig = contentDigest ? integritySignature(contentDigest) : null
-    await db.query(
-      `INSERT INTO pam.session_recordings
-        (id, session_id, format, storage_backend, storage_key, size_bytes, duration_ms, encrypted, key_version,
-         checksum, signature, signing_key_version, integrity_ok, integrity_checked_at, retention_until, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [newId(), claims.sessionId, r.format || 'asciicast', r.storage_backend || 'object', r.storage_key || null,
-        r.size_bytes ? Number(r.size_bytes) : null, r.duration_ms ? Number(r.duration_ms) : null,
-        r.encrypted !== false, activeKeyVersion(), contentDigest, sig, activeKeyVersion(),
-        contentDigest ? true : null, contentDigest ? now : null, r.retention_until || null, now]
-    )
-    await db.query("UPDATE pam.sessions SET recording_status='stored' WHERE id=$1", [claims.sessionId])
-  }
+  // Recording bytes are uploaded separately to POST /gateway/recording, which
+  // runs the encrypt→store→independent-verify pipeline (pamRecording). The
+  // control plane NEVER trusts a gateway-supplied checksum as proof of
+  // integrity, so no recording row is created from ingest metadata here.
 
   await appendAudit({ actor: `gateway:${claims.user}`, action: 'session.ingest', objectType: 'session', objectId: claims.sessionId, sessionId: claims.sessionId, result: 'success', details: { events: (body?.events || []).length, commands: commands.length, recording: !!body?.recording } }, db).catch(() => {})
   return { ok: true }

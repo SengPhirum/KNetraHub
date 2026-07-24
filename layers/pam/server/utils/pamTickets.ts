@@ -86,12 +86,16 @@ export async function validateTicket(input: TicketValidationInput, db: Pool = ge
       const r = await callValidator(integ, ticketNumber)
       result = { valid: r.ok, status: r.status, detail: r.detail }
     } else {
-      const acceptUnvalidated = await getPamSetting<boolean>('ticket.accept_unvalidated', true, db)
+      // Secure default: in production, unvalidated tickets are NOT accepted
+      // unless an admin explicitly opts in. (Dev defaults to accept for
+      // convenience.) So a `require_ticket` policy cannot be silently satisfied
+      // by an unverified ticket number in production.
+      const acceptUnvalidated = await getPamSetting<boolean>('ticket.accept_unvalidated', process.env.NODE_ENV !== 'production', db)
       result = {
         valid: acceptUnvalidated,
         detail: acceptUnvalidated
           ? 'Recorded without independent validation (no ticket integration configured)'
-          : 'No ticket integration configured and unvalidated tickets are not accepted'
+          : 'No ticket integration configured and unvalidated tickets are not accepted (configure a ServiceNow/Jira/REST validator or explicitly enable ticket.accept_unvalidated)'
       }
     }
   }

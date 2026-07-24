@@ -51,14 +51,19 @@ export default defineEventHandler(async (event) => {
     for (const aid of accountIds) {
       await client.query('INSERT INTO pam.request_accounts (request_id, account_id) VALUES ($1,$2)', [id, aid])
     }
-    // Approval records per policy level (skipped for no-approval / ticket-only).
+    // Approval slots per policy level. A level requiring quorum N pre-creates N
+    // pending slots, each filled by a DISTINCT eligible approver (enforced on
+    // approve), so a single approval can never satisfy a quorum≥2 level.
     if (policy.approvalType !== 'none' && policy.approvalType !== 'ticket_only') {
       for (const lvl of policy.levels) {
-        await client.query(
-          `INSERT INTO pam.request_approvals (id, request_id, level, approver_ref, decision, created_at)
-           VALUES ($1,$2,$3,$4,'pending',$5)`,
-          [newId(), id, lvl.level, lvl.approverRef, now]
-        )
+        const slots = Math.max(1, Number(lvl.quorum) || 1)
+        for (let s = 0; s < slots; s++) {
+          await client.query(
+            `INSERT INTO pam.request_approvals (id, request_id, level, approver_type, approver_ref, decision, created_at)
+             VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+            [newId(), id, lvl.level, lvl.approverType, lvl.approverRef, now]
+          )
+        }
       }
     }
   })
@@ -80,7 +85,7 @@ export default defineEventHandler(async (event) => {
   // No approval / ticket-only → auto-approve and issue grants immediately.
   let status: string = 'pending'
   if (policy.approvalType === 'none' || policy.approvalType === 'ticket_only') {
-    status = await finalizeIfApproved(id, policy.approvalType, user.username, db)
+    status = await finalizeIfApproved(id, policy, user.username, db)
   } else {
     await pamNotify({ severity: 'info', event: 'approval.requested', title: 'Access approval requested',
       body: `${user.username} requested ${action} access to ${accts.length} account(s).`, objectType: 'request', objectId: id, link: `/pam/requests/${id}` }, db).catch(() => {})

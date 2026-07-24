@@ -40,9 +40,10 @@ async function addMarker() {
     <DataState :status="status" :error="error">
       <div v-if="data" class="space-y-5">
         <PageHeader :title="`Session ${id.slice(0,8)}`" :subtitle="`${data.session.principal} → ${data.session.target || data.session.account_id} (${data.session.protocol})`" icon="i-lucide-monitor-play">
-          <template v-if="canTerminate && isLive" #actions>
-            <UButton color="error" icon="i-lucide-power" size="sm" @click="terminate()">Terminate</UButton>
-            <UButton color="error" variant="soft" icon="i-lucide-rotate-cw" size="sm" @click="terminate({ rotate_credential: true })">Terminate + rotate</UButton>
+          <template v-if="isLive" #actions>
+            <UButton :to="`/pam/sessions/${id}/terminal`" target="_blank" icon="i-lucide-square-terminal" size="sm" variant="soft">Open terminal</UButton>
+            <UButton v-if="canTerminate" color="error" icon="i-lucide-power" size="sm" @click="terminate()">Terminate</UButton>
+            <UButton v-if="canTerminate" color="error" variant="soft" icon="i-lucide-rotate-cw" size="sm" @click="terminate({ rotate_credential: true })">Terminate + rotate</UButton>
           </template>
         </PageHeader>
 
@@ -72,7 +73,10 @@ async function addMarker() {
 
         <div class="grid gap-4 lg:grid-cols-2">
           <section class="panel p-5">
-            <h2 class="mb-2 font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Recordings</h2>
+            <div class="mb-2 flex items-center justify-between">
+              <h2 class="font-display text-sm font-semibold uppercase tracking-wider text-(--color-muted)">Recordings</h2>
+              <UButton v-if="data.recordings?.length" :to="`/pam/sessions/${id}/playback`" target="_blank" size="xs" variant="soft" icon="i-lucide-play">Playback</UButton>
+            </div>
             <ul v-if="data.recordings?.length" class="space-y-2 text-sm">
               <li v-for="r in data.recordings" :key="r.id" class="flex items-center justify-between">
                 <span class="text-foam">{{ r.format }} · {{ r.duration_ms ? Math.round(r.duration_ms/1000)+'s' : '—' }}</span>

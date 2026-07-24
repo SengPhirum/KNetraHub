@@ -243,7 +243,9 @@ const PAM_GROUPS: NavGroup[] = [
   {
     label: 'Discovery',
     items: [
-      { label: 'Pending accounts', to: '/pam/discovery', icon: 'i-lucide-inbox', permission: 'pam.discovery.view' }
+      { label: 'Pending accounts', to: '/pam/discovery',         icon: 'i-lucide-inbox',       permission: 'pam.discovery.view' },
+      { label: 'Sources',          to: '/pam/discovery/sources', icon: 'i-lucide-radar',       permission: 'pam.discovery.view' },
+      { label: 'Onboarding rules', to: '/pam/discovery/rules',   icon: 'i-lucide-list-checks', permission: 'pam.discovery.view' }
     ]
   },
   {
@@ -252,7 +254,9 @@ const PAM_GROUPS: NavGroup[] = [
       { label: 'Requests',      to: '/pam/requests',    icon: 'i-lucide-ticket',      permission: 'pam.request.view' },
       { label: 'Approvals',     to: '/pam/approvals',   icon: 'i-lucide-gavel',       permission: 'pam.request.approve' },
       { label: 'Active grants', to: '/pam/grants',      icon: 'i-lucide-badge-check', permission: 'pam.request.view' },
-      { label: 'Break glass',   to: '/pam/break-glass', icon: 'i-lucide-siren',       permission: 'pam.request.create' }
+      { label: 'Just-in-time',  to: '/pam/jit',         icon: 'i-lucide-timer',       permission: 'pam.request.view' },
+      { label: 'Break glass',   to: '/pam/break-glass', icon: 'i-lucide-siren',       permission: 'pam.request.create' },
+      { label: 'Vendor access', to: '/pam/vendors',     icon: 'i-lucide-handshake',   permission: 'pam.safe.manage' }
     ]
   },
   {
@@ -272,9 +276,11 @@ const PAM_GROUPS: NavGroup[] = [
   {
     label: 'Risk & Compliance',
     items: [
-      { label: 'Risk events',     to: '/pam/risk',    icon: 'i-lucide-shield-alert',   permission: 'pam.audit.view' },
-      { label: 'Reports',         to: '/pam/reports', icon: 'i-lucide-file-bar-chart', permission: 'pam.report.view' },
-      { label: 'Audit integrity', to: '/pam/audit',   icon: 'i-lucide-fingerprint',    permission: 'pam.audit.view' }
+      { label: 'Risk events',     to: '/pam/risk',           icon: 'i-lucide-shield-alert',    permission: 'pam.audit.view' },
+      { label: 'Risk rules',      to: '/pam/risk/rules',     icon: 'i-lucide-sliders-horizontal', permission: 'pam.audit.view' },
+      { label: 'Certifications',  to: '/pam/certifications', icon: 'i-lucide-clipboard-check',  permission: 'pam.certification.view' },
+      { label: 'Reports',         to: '/pam/reports',        icon: 'i-lucide-file-bar-chart',   permission: 'pam.report.view' },
+      { label: 'Audit integrity', to: '/pam/audit',          icon: 'i-lucide-fingerprint',      permission: 'pam.audit.view' }
     ]
   },
   {
@@ -282,6 +288,7 @@ const PAM_GROUPS: NavGroup[] = [
     items: [
       { label: 'Access policies', to: '/pam/policies',   icon: 'i-lucide-scale',       permission: 'pam.policy.view' },
       { label: 'Connectors',      to: '/pam/connectors', icon: 'i-lucide-plug',        permission: 'pam.connector.view' },
+      { label: 'Runners',         to: '/pam/runners',    icon: 'i-lucide-server-cog',  permission: 'pam.connector.view' },
       { label: 'Settings',        to: '/pam/settings',   icon: 'i-lucide-settings',    permission: 'pam.settings' },
       { label: 'Logs',            to: '/pam/logs',       icon: 'i-lucide-scroll-text', permission: 'pam.audit.view' }
     ]

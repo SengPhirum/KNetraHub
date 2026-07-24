@@ -3,6 +3,11 @@
 # Deployed ALONGSIDE the main stack, never replacing it:
 #   docker stack deploy -c docker-compose.yml -c docker-compose.pam.yml knetrahub
 #
+# `docker stack deploy` IGNORES `build:` — images must be built and pushed
+# first. Build & push all PAM images with:
+#   bash scripts/pam-build-images.sh <registry-prefix> <tag>
+# e.g. bash scripts/pam-build-images.sh registry.kdsb.com.kh/knetrahub latest
+#
 # Adds the out-of-process PAM services (credential worker, SSH gateway, guacd
 # browser-session gateway, connector-runner) and an optional MinIO for encrypted
 # recordings. The vault, audit chain and session control-plane run inside the
@@ -11,7 +16,7 @@
 # Security posture (spec §11/§13):
 #   - a dedicated internal overlay network (pam-internal); no public DB/guacd/
 #     worker/runner/gateway ports;
-#   - Docker secrets for the master key, recording-signing key and gateway TLS;
+#   - Docker secrets for the master key, signing keys, runner token and gateway;
 #   - non-root containers, dropped capabilities, read-only rootfs where possible;
 #   - the Docker socket is NEVER mounted into any PAM sidecar.
 version: "3.8"
@@ -29,6 +34,7 @@ services:
       NUXT_JWT_SECRET_FILE: /run/secrets/knetrahub_jwt_secret
       NUXT_PAM_MASTER_KEY_FILE: /run/secrets/knetrahub_pam_master_key
       NUXT_PAM_RECORDING_SIGNING_KEY_FILE: /run/secrets/knetrahub_pam_recording_signing_key
+      NUXT_PAM_CONNECTOR_SIGNING_KEY_FILE: /run/secrets/knetrahub_pam_connector_signing_key
       NUXT_PAM_WORKER_ENABLED: "true"
       NUXT_PAM_WORKER_NAME: "swarm-worker"
       # This replica should not receive public web traffic (route only the app
@@ -38,6 +44,7 @@ services:
       - knetrahub_jwt_secret
       - knetrahub_pam_master_key
       - knetrahub_pam_recording_signing_key
+      - knetrahub_pam_connector_signing_key
     deploy:
       mode: replicated
       replicas: 2
@@ -49,30 +56,39 @@ services:
 
   # SSH session gateway (bastion). Internal only; the app proxies the browser
   # WebSocket to it. Retrieves credentials from the control plane server-side.
+  # Build: scripts/pam-build-images.sh (image below must be pushed before deploy).
   pam-ssh-gateway:
     image: registry.kdsb.com.kh/knetrahub/pam-ssh-gateway:latest
-    build:
-      context: ../services/pam/ssh-gateway
     networks: [net, pam-internal]
     environment:
       PAM_CONTROL_PLANE_URL: http://app:3000
       PAM_GATEWAY_LISTEN: ":4222"
       NUXT_JWT_SECRET_FILE: /run/secrets/knetrahub_jwt_secret
+      # Managed known-hosts file (host <base64-sha256-fp> per line). Unknown host
+      # keys are BLOCKED unless PAM_HOSTKEY_TOFU=true (trust-on-first-use).
+      PAM_KNOWN_HOSTS_FILE: /run/secrets/knetrahub_pam_known_hosts
+      # PAM_HOSTKEY_TOFU: "false"
+      # PAM_GATEWAY_ALLOWED_ORIGINS: "https://portal.example"
+      PAM_GATEWAY_DRAIN_SECONDS: "30"
     secrets:
       - knetrahub_jwt_secret
+      - knetrahub_pam_known_hosts
     healthcheck:
       test: ["CMD", "/pam-ssh-gateway", "-healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 5s
     read_only: true
     cap_drop: [ALL]
     deploy:
       mode: replicated
       replicas: 2
       restart_policy: { condition: on-failure, delay: 5s }
-      # Drain in-flight sessions before replacing a gateway task.
-      update_config: { order: start-first, parallelism: 1, delay: 30s }
+      # start-first + drain: the new task is healthy before the old one is asked
+      # to stop; SIGTERM makes the gateway refuse new sessions and drain
+      # in-flight ones (PAM_GATEWAY_DRAIN_SECONDS) before exit.
+      update_config: { order: start-first, parallelism: 1, delay: 35s }
       resources:
         reservations: { cpus: '0.25', memory: 128M }
         limits: { cpus: '1.00', memory: 512M }
@@ -83,6 +99,12 @@ services:
     networks: [pam-internal]
     read_only: true
     cap_drop: [ALL]
+    healthcheck:
+      # guacd listens on 4822; the image ships /bin/sh + guacd's own liveness.
+      test: ["CMD-SHELL", "guacd -v >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     deploy:
       mode: replicated
       replicas: 1
@@ -91,21 +113,28 @@ services:
         reservations: { cpus: '0.1', memory: 64M }
         limits: { cpus: '0.5', memory: 256M }
 
-  # Connector-runner: isolates custom connectors. NO Docker socket. Read-only
-  # rootfs, all caps dropped, non-root. Mount trusted connector bundles at
-  # /connectors read-only.
+  # Connector-runner: isolates connectors out of the app process. NO Docker
+  # socket. Read-only rootfs + writable tmpfs, all caps dropped, non-root. Trusted
+  # signed connector bundles are mounted read-only at /connectors (populated in
+  # Stage 4 / by scripts/pam-build-images.sh); the runner verifies each bundle's
+  # digest+signature against the control-plane registry before loading it.
+  # Build: scripts/pam-build-images.sh (image below must be pushed before deploy).
   pam-connector-runner:
     image: registry.kdsb.com.kh/knetrahub/pam-connector-runner:latest
-    build:
-      context: ../services/pam/connector-runner
     networks: [pam-internal]
     environment:
       PAM_CONTROL_PLANE_URL: http://app:3000
       PAM_RUNNER_TOKEN_FILE: /run/secrets/knetrahub_pam_runner_token
+      PAM_CONNECTORS_DIR: /connectors
     secrets:
       - knetrahub_pam_runner_token
     read_only: true
     cap_drop: [ALL]
+    volumes:
+      # Signed connector bundles are baked into the image at /connectors; only a
+      # writable tmpfs is needed at runtime (heartbeat file, temp scratch).
+      - type: tmpfs
+        target: /tmp
     deploy:
       mode: replicated
       replicas: 1
@@ -129,6 +158,11 @@ services:
     secrets:
       - knetrahub_pam_minio_user
       - knetrahub_pam_minio_password
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     deploy:
       mode: replicated
       replicas: 1
@@ -160,7 +194,11 @@ secrets:
     external: true
   knetrahub_pam_recording_signing_key:
     external: true
+  knetrahub_pam_connector_signing_key:
+    external: true
   knetrahub_pam_runner_token:
+    external: true
+  knetrahub_pam_known_hosts:
     external: true
   knetrahub_pam_minio_user:
     external: true

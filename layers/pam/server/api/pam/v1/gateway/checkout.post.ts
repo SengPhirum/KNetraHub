@@ -1,8 +1,9 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
-import { verifyGatewayToken } from '~~/layers/pam/server/utils/pamGateway'
+import { verifyGatewayToken, consumeGatewayToken } from '~~/layers/pam/server/utils/pamGateway'
 import { openActiveCredential, createLease } from '~~/layers/pam/server/utils/pamVault'
 import { appendAudit } from '~~/layers/pam/server/utils/pamAudit'
 import { clientIp } from '~~/layers/pam/server/utils/pamStore'
+import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
 
 /**
  * Gateway credential checkout — called ONLY by the session gateway (SSH bastion
@@ -23,6 +24,14 @@ export default defineEventHandler(async (event) => {
   const session = sess.rows[0]
   if (['ended', 'terminated', 'error'].includes(session.state)) {
     throw createError({ statusCode: 409, statusMessage: `Session is ${session.state}` })
+  }
+
+  // Single-use: consume the token's jti. A replayed token is rejected here.
+  const consumed = await consumeGatewayToken(claims.jti, 'gateway:checkout', db)
+  if (!consumed) {
+    await recordRisk({ ruleKey: 'gateway_token_replay', actor: claims.user, sessionId: claims.sessionId, explanation: `Gateway token (jti=${claims.jti || 'none'}) was replayed or is unknown at checkout.` }, db).catch(() => {})
+    await appendAudit({ actor: `gateway:${claims.user}`, action: 'session.credential.checkout', objectType: 'session', objectId: claims.sessionId, sessionId: claims.sessionId, result: 'denied', severity: 'high', reason: 'gateway token replay/unknown jti', sourceIp: clientIp(event) }, db).catch(() => {})
+    throw createError({ statusCode: 403, statusMessage: 'Gateway token already used or invalid' })
   }
 
   // Re-evaluate the grant at connect time (revocation/expiry fail closed).

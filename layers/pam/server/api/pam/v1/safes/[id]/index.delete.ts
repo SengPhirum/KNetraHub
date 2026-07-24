@@ -1,6 +1,6 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
 import { requirePamPermission, assertSafePermission, pamAudit, loadOr404, nowIso, newId } from '~~/layers/pam/server/utils/pamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requirePamStepUp } from '~~/layers/pam/server/utils/pamStepUp'
 
 /**
  * Soft-delete a safe (recoverable). Requires admin tier + manage_safe on the
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const safe = await loadOr404<any>('pam.safes', id, 'Safe not found')
   await assertSafePermission(user, tier, id, 'manage_safe')
-  await requirePasswordConfirm(event)
+  await requirePamStepUp(event)
 
   const db = getPamDb()
   const { rows: acct } = await db.query('SELECT count(*)::int c FROM pam.accounts WHERE safe_id=$1 AND deleted_at IS NULL', [id])

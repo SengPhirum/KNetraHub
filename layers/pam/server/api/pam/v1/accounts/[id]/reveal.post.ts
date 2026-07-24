@@ -3,7 +3,7 @@ import { requirePamPermission, resolveSafePermissions, pamAudit, loadOr404, clie
 import { openActiveCredential, createLease } from '~~/layers/pam/server/utils/pamVault'
 import { enqueueJob } from '~~/layers/pam/server/utils/pamJobs'
 import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requirePamStepUp } from '~~/layers/pam/server/utils/pamStepUp'
 
 /**
  * Reveal a credential — the ONLY metadata endpoint that returns plaintext, and
@@ -30,9 +30,11 @@ export default defineEventHandler(async (event) => {
   const reason = String(body?.reason || '').trim()
   if (!reason) throw createError({ statusCode: 400, statusMessage: 'A reason is required to reveal a credential' })
 
-  // Critical accounts require a fresh step-up (security password) confirmation.
+  // High/critical accounts require a fresh step-up. NOT bypassable by a bearer
+  // token — a machine caller must use an application identity + the workload
+  // secrets path, not the human reveal endpoint.
   if (account.criticality === 'critical' || account.criticality === 'high') {
-    await requirePasswordConfirm(event)
+    await requirePamStepUp(event, `reveal ${account.criticality} credential`)
   }
 
   const db = getPamDb()

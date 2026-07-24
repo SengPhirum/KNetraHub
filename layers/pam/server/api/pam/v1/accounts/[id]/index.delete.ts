@@ -1,6 +1,6 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
 import { requirePamPermission, resolveSafePermissions, pamAudit, loadOr404, newId, nowIso } from '~~/layers/pam/server/utils/pamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requirePamStepUp } from '~~/layers/pam/server/utils/pamStepUp'
 
 /** Soft-delete an account (admin: pam.account.delete + delete_account + step-up). Recoverable. */
 export default defineEventHandler(async (event) => {
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const account = await loadOr404<any>('pam.accounts', id, 'Account not found')
   const perms = await resolveSafePermissions(user, tier, account.safe_id)
   if (!perms.has('delete_account')) throw createError({ statusCode: 403, statusMessage: 'You cannot delete accounts in this safe' })
-  await requirePasswordConfirm(event)
+  await requirePamStepUp(event)
 
   const db = getPamDb()
   const now = nowIso()

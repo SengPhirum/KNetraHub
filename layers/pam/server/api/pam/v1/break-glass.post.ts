@@ -1,6 +1,6 @@
 import { getPamDb } from '~~/server/utils/moduleDb'
 import { requirePamPermission, resolveSafePermissions, pamAudit, newId, nowIso, getPamSetting, withPamTx } from '~~/layers/pam/server/utils/pamStore'
-import { requirePasswordConfirm } from '~~/server/utils/confirmAction'
+import { requirePamStepUp } from '~~/layers/pam/server/utils/pamStepUp'
 import { pamNotify } from '~~/layers/pam/server/utils/pamNotify'
 import { recordRisk } from '~~/layers/pam/server/utils/pamRisk'
 import { enqueueJob } from '~~/layers/pam/server/utils/pamJobs'
@@ -15,7 +15,7 @@ import { enqueueJob } from '~~/layers/pam/server/utils/pamJobs'
  */
 export default defineEventHandler(async (event) => {
   const { user, tier } = await requirePamPermission(event, 'pam.request.create')
-  await requirePasswordConfirm(event) // step-up MFA (security password)
+  await requirePamStepUp(event) // step-up MFA (security password)
   const body = await readBody(event)
   const accountId = String(body?.account_id || '').trim()
   if (!accountId) throw createError({ statusCode: 400, statusMessage: 'account_id is required' })
